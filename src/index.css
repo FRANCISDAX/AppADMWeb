@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;          /* #F8FAFC */
+    --foreground: 222 47% 11%;          /* #0F172A */
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 16 100% 60%;             /* #FF6B35 naranja marca */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 216 12% 91%;           /* slate-200 */
+    --secondary-foreground: 215 25% 23%;/* slate-700 */
+    --muted: 210 40% 96%;               /* slate-100 */
+    --muted-foreground: 215 16% 47%;    /* slate-500 */
+    --accent: 16 100% 93%;              /* naranja suave (hover) */
+    --accent-foreground: 215 25% 23%;
+    --destructive: 0 72% 51%;           /* #DC2626 */
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 12% 90%;              /* slate-200 */
+    --input: 210 12% 90%;
+    --ring: 16 100% 60%;
+    --radius: 0.85rem;
+  }
+
+  .dark {
+    --background: 222 47% 11%;          /* slate-900 */
+    --foreground: 210 40% 98%;          /* slate-50 */
+    --card: 217 33% 15%;                /* slate-800 */
+    --card-foreground: 210 40% 98%;
+    --popover: 217 33% 15%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 16 92% 58%;              /* naranja algo menos brillante */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 33% 20%;           /* slate-700 */
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 33% 19%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 16 60% 26%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 25% 21%;              /* slate-800 */
+    --input: 215 25% 21%;
+    --ring: 16 100% 60%;
+  }
+}
+
+@layer utilities {
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  .brand-grad {
+    background-image: linear-gradient(135deg, hsl(16 100% 60%) 0%, hsl(22 100% 66%) 55%, hsl(30 100% 70%) 100%);
+  }
+  .bg-app {
+    background-image: radial-gradient(1200px 600px at 100% -10%, hsl(16 100% 60% / 0.10), transparent 60%),
+      radial-gradient(1000px 500px at 0% 0%, hsl(215 25% 23% / 0.05), transparent 55%);
+  }
+  .glass {
+    background-color: hsl(0 0% 100% / 0.72);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  }
+  .dark .glass {
+    background-color: hsl(222 47% 11% / 0.72);
+  }
+  .mask-fade-b {
+    -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* Loading square animation */
+@keyframes square1 {
+  0%, 25% { opacity: 1; transform: scale(0); }
+  25%, 100% { opacity: 1; transform: scale(1); }
+}
+@keyframes square2 {
+  0%, 25% { opacity: 0; transform: scale(0); }
+  25%, 50% { opacity: 1; transform: scale(0); }
+  50%, 100% { opacity: 1; transform: scale(1); }
+}
+@keyframes square3 {
+  0%, 50% { opacity: 0; transform: scale(0); }
+  50%, 75% { opacity: 1; transform: scale(0); }
+  75%, 100% { opacity: 1; transform: scale(1); }
+}
+@keyframes square4 {
+  0%, 75% { opacity: 0; transform: scale(0); }
+  75% { opacity: 1; transform: scale(0); }
+  75%, 100% { opacity: 1; transform: scale(1); }
+}
+
+/* Accesibilidad: respetar prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

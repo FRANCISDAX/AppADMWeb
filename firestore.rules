@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    // Acceso autenticado para toda la base: la app (RN) y la web validan permisos en la UI.
+    // No restringe por rol en el servidor para no romper flujos de la app móvil
+    // (CAJERO lee productos, login consulta por email, migración de usuarios).
+    match /{document=**} {
+      allow read, write: if signedIn();
+    }
+  }
+}

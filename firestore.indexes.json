@@ -1,0 +1,98 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "tblHistorialPrecios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "productoId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tblDocumentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tipoDoc", "order": "ASCENDING" },
+        { "fieldPath": "anioMes", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tblDocumentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tipoDoc", "order": "ASCENDING" },
+        { "fieldPath": "anioMes", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tblDocumentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tipoDoc", "order": "ASCENDING" },
+        { "fieldPath": "anioMes", "order": "ASCENDING" },
+        { "fieldPath": "usuarioId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tblDocumentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tipoDoc", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tblDocumentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tipoDoc", "order": "ASCENDING" },
+        { "fieldPath": "usuarioId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tblDocumentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "venta.cliente_dni", "order": "ASCENDING" },
+        { "fieldPath": "usuarioId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tblTurnos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "fechaCierre", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tblTurnos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "usuarioId", "order": "ASCENDING" },
+        { "fieldPath": "fechaApertura", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tblMovimientos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tipoMovimiento", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tblMovimientos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "productoId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
