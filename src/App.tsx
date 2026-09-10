@@ -1,4 +1,4 @@
-import { Banknote, BarChart3, BookOpen, CalendarDays, CalendarRange, ChevronDown, Clock, FileText, LayoutDashboard, LogOut, Menu, Moon, Package, Settings, Shield, ShoppingBag, ShoppingCart, Sun, UserRound, Users, X } from 'lucide-react'
+import { Banknote, BarChart3, BookOpen, CalendarDays, CalendarRange, ChevronDown, Clock, FileText, LayoutDashboard, LogOut, Menu, Moon, Package, RotateCcw, Settings, Shield, ShoppingBag, ShoppingCart, Sun, UserRound, Users, X } from 'lucide-react'
 import * as React from 'react'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
@@ -28,6 +28,7 @@ const VentasPorEmpleado = React.lazy(() => import('@/pages/VentasPorEmpleado').t
 const Egresos = React.lazy(() => import('@/pages/Egresos'))
 const Auditoria = React.lazy(() => import('@/pages/Auditoria'))
 const AuditoriaCaja = React.lazy(() => import('@/pages/AuditoriaCaja'))
+const RotacionInventario = React.lazy(() => import('@/pages/RotacionInventario'))
 
 type NavItem = { id: string; label: string; icon: any; perm: string; always?: boolean }
 
@@ -39,6 +40,7 @@ const MENU: { titulo: string; items: NavItem[] }[] = [
       { id: 'pdv', label: 'Punto de Venta', icon: ShoppingCart, perm: 'ventas' },
       { id: 'turnos', label: 'Turnos', icon: Clock, perm: 'turnos' },
       { id: 'inventario', label: 'Inventario', icon: Package, perm: 'inventario' },
+      { id: 'rotacionInventario', label: 'Rotación de Inventario', icon: RotateCcw, perm: 'rotacionInventario' },
     ],
   },
   {
@@ -260,6 +262,8 @@ function Shell() {
                     <Turnos />
                   ) : seccion === 'inventario' ? (
                     <Inventario />
+                  ) : seccion === 'rotacionInventario' ? (
+                    <RotacionInventario />
                   ) : seccion === 'reportes' ? (
                     <Reportes />
                   ) : seccion === 'reporteTurnos' ? (
