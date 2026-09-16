@@ -38,6 +38,20 @@ export const ICONOS_CATEGORIA: { icono: string; label: string }[] = [
 
 export const ICONO_POR_DEFECTO = 'apps-outline'
 
+/**
+ * Categoría con la que se registran los **items manuales** del PDV (los que no
+ * salen del catálogo: embalaje, hielo, varios). Antes se guardaban con
+ * `categoria: ''` y aparecían como "Sin categoría" en los reportes.
+ */
+export const CATEGORIA_MANUAL = 'VARIOS'
+
+/**
+ * Etiqueta para las ventas **antiguas** que no guardaron categoría (versiones
+ * previas de la app): no se puede saber a qué categoría pertenecían. Se deja
+ * corta porque los reportes la muestran en columnas angostas.
+ */
+export const CATEGORIA_SIN_ASIGNAR = 'Sin categoría'
+
 /** Categorías del catálogo original, para una instalación nueva. */
 export const CATEGORIAS_POR_DEFECTO: { nombre: string; icono: string }[] = [
   { nombre: 'Productos', icono: 'fast-food-outline' },

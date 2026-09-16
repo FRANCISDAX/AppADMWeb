@@ -1,5 +1,6 @@
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
+import { CATEGORIA_SIN_ASIGNAR } from '@/lib/categorias'
 import { db } from '@/lib/firebase'
 
 const TIPOS_VENTA = ['NV', 'BOLETA', 'FACTURA']
@@ -105,7 +106,7 @@ export async function obtenerAnalisisMes(anio: number, mes: number): Promise<Ana
     // Items → margen / top productos / categoría
     for (const it of ven.items || []) {
       const pid = String(it.id || '')
-      const cat = (it as any).categoria || productos.get(pid)?.categoria || 'General'
+      const cat = (it as any).categoria || productos.get(pid)?.categoria || CATEGORIA_SIN_ASIGNAR
       const nombre = it.nombre || productos.get(pid)?.nombre || pid
       const codigo = productos.get(pid)?.codigo || (pid as string)
       const cant = Number(it.cantidad) || 0

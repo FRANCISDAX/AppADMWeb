@@ -1,6 +1,7 @@
 import { collection, doc, increment, getDoc, getDocs, query, runTransaction, updateDoc, where } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
+import { CATEGORIA_MANUAL } from '@/lib/categorias'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
@@ -203,7 +204,9 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
           factorConversion: 1,
           cantidadEnUnidadBase: item.quantity,
           subtotal: (item.precioVenta || 0) * item.quantity,
-          categoria: '',
+          // Los items manuales no tienen producto del catálogo: se agrupan en
+          // VARIOS para que no caigan en "Sin categoría" en los reportes.
+          categoria: CATEGORIA_MANUAL,
           tipoAfectacion: '10',
         })),
       ]

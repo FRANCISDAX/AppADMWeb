@@ -1,4 +1,4 @@
-﻿import { Settings, Check } from 'lucide-react'
+import { Settings, Check } from 'lucide-react'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import * as React from 'react'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
@@ -6,6 +6,7 @@ import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
 import { useProductos } from '@/hooks/use-productos'
+import { CATEGORIA_SIN_ASIGNAR } from '@/lib/categorias'
 import { useDashboardWidgets } from '@/hooks/use-dashboard-widgets'
 import { buscarTurnoAbierto, type Turno } from '@/services/turnos'
 import { signoDoc } from '@/services/reportes'
@@ -161,7 +162,7 @@ export function DashboardOperaciones({ onNavigate }: { onNavigate: (seccion: str
     for (const doc of ventas) {
       const signo = signoDoc(doc)
       for (const it of doc.venta?.items || []) {
-        const cat = it.categoria || 'Sin categor├¡a'
+        const cat = it.categoria || CATEGORIA_SIN_ASIGNAR
         map[cat] = (map[cat] || 0) + signo * (it.subtotal || 0)
       }
     }

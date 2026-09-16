@@ -8,6 +8,23 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 7 — Items manuales del PDV: categoría e aclaraciones en el reporte)
+
+**Objective**: el widget **"Ventas por Categoría"** del Dashboard de Operaciones mostraba una fila "Sin categoría" y no se sabía de dónde salía.
+
+**Important Details**:
+- **Diagnóstico (con datos reales de producción)**: la línea de **S/ 2,00** era un **item manual** del PDV (`id='manual-1789259630490'`, "INCA KOLA PIRAÑITA", 2 × S/1,00) en la NV `NV01-000161` del 13/09. El dashboard la cuenta **una vez** porque descarta las boletas consolidadas (`DashboardOperaciones.tsx` filtra `!d.consolidado`), aunque el mismo item también está en la boleta `B001-000057`.
+- ⚠️ **Los items manuales se guardaban con `categoria: ''` a propósito** (`services/ventas.ts`, rama de `manuales`) **y no descuentan stock** (el bucle de stock solo recorre los productos del catálogo). Además ese producto **ya existía en el catálogo** (`Inka Cola Pirañita 237ML`, id `7126`, categoría BEBIDAS): venderlo desde el catálogo habría dado categoría **y** movimiento de stock. **Recomendación al usuario: vender desde el catálogo, no tipear el manual** (el manual queda para lo que no tiene código: embalaje, hielo, bolsas).
+- **Los otros 20 items sin categoría son de junio/julio y NO son un bug actual**: la RN **sí** escribe `categoria` en el item (`AppAdm/services/ventas.js`, desde `producto.categoria`) y el web también; son de una **versión anterior** de la app que aún no guardaba el campo (tampoco `subtotal`, señal de ese cliente viejo).
+- **Fix (2)**: `CATEGORIA_MANUAL = 'VARIOS'` en `lib/categorias.ts`; los items manuales se registran con esa categoría. El modal **"Embalaje y Otros"** del PDV avisa: *"Se registran en la categoría VARIOS y no descuentan stock"*. ⚠️ **La RN no crea items manuales**, así que este cambio es solo del web.
+- **Fix (3)**: `CATEGORIA_SIN_ASIGNAR = 'Sin categoría'` para las ventas que no guardaron categoría, usada en `DashboardOperaciones.tsx` y en `services/analisis.ts` (que antes decía `'General'`, ahora unificado). `VentasCategoriaWidget` **explica al pie** de dónde sale cada fila especial (`VARIOS` → items manuales; `Sin categoría` → ventas de versiones anteriores) además de `title` en el rótulo — se prefirió la nota al pie y no un tooltip porque **en el celular no hay hover**. La etiqueta se dejó **corta a propósito**: el widget la trunca a 96 px (`w-24 truncate`).
+
+**Work State**: Completed y desplegado en https://appadm-b359e.web.app (commit de esta pasada). `npm run build` ✓, `npm run lint` 0 errores / 80 warnings (baseline). **Sin probar en navegador.**
+
+**Next Move**: opcional — re-etiquetar los **20 items históricos** de junio/julio (script de una pasada) para que dejen de aparecer como "Sin categoría"; no se hizo porque toca documentos históricos y el usuario decidió no reescribir el pasado.
+
+**Relevant Files**: `src/lib/categorias.ts`, `src/services/ventas.ts`, `src/pages/Pdv.tsx`, `src/pages/DashboardOperaciones.tsx`, `src/services/analisis.ts`, `src/components/dashboard/VentasCategoriaWidget.tsx`.
+
 ### (2026-09 · 6 — Categorías administradas (antes fijas en la RN))
 
 **Objective**: dejar de tener categorías fijas en el código y poder administrarlas.

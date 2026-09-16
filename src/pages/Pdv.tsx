@@ -1468,6 +1468,7 @@ export function Pdv() {
             <div className="bg-primary px-5 py-4 text-center text-white">
               <p className="text-lg font-bold">Embalaje y Otros</p>
               <p className="text-sm opacity-90">Seleccioná un producto</p>
+              <p className="mt-1 text-[11px] opacity-80">Se registran en la categoría VARIOS y no descuentan stock</p>
             </div>
             <div className="max-h-[60vh] overflow-y-auto p-5">
               {(cfg?.plantillasManuales ?? []).length === 0 ? (
