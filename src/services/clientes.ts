@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, getDocs, query, runTransaction, setDoc, updateDoc, where, writeBatch, limit, startAfter, type QueryDocumentSnapshot, type DocumentData, type QueryConstraint } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
+import { type EstadoCredito } from '@/lib/credito'
 import { db } from '@/lib/firebase'
 import { consultarDni, consultarRuc } from '@/lib/consultaSunat'
 
@@ -232,6 +233,32 @@ export async function calcularSaldoCredito(clienteId: string): Promise<number> {
   console.table(detalle)
   console.log('[calcularSaldoCredito] saldo total:', saldo)
   return saldo
+}
+
+// Estado de crédito del cliente para decidir una venta a crédito.
+// El acceso a Firestore vive acá (no en el PDV) y la **regla** en `lib/credito.ts`.
+export async function obtenerEstadoCredito(clienteId: string): Promise<EstadoCredito> {
+  const id = String(clienteId || '').trim()
+  if (!id) return { existe: false, activo: false, limite: 0, saldo: 0 }
+  try {
+    const [snap, saldo] = await Promise.all([
+      getDoc(doc(db, COL.CLIENTES, id)),
+      calcularSaldoCredito(id),
+    ])
+    if (!snap.exists()) return { existe: false, activo: false, limite: 0, saldo: 0 }
+    const c = snap.data() as Cliente
+    return {
+      existe: true,
+      activo: c.creditoActivo === true,
+      limite: Number(c.limiteCredito) || 0,
+      saldo,
+    }
+  } catch (e) {
+    console.error('❌ obtenerEstadoCredito:', e)
+    // Ante un fallo de lectura se informa "sin datos" y el PDV bloquea la venta
+    // a crédito: es preferible pedir que se reintente antes que dar crédito a ciegas.
+    return { existe: false, activo: false, limite: 0, saldo: 0 }
+  }
 }
 
 export async function corregirCobrosExcedidos(clienteId: string): Promise<{ corregidos: number; total: number }> {

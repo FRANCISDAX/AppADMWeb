@@ -258,16 +258,22 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
             <span className={cn('rounded-md px-2.5 py-1 text-xs font-bold text-white', form.creditoActivo ? 'bg-emerald-600' : 'bg-slate-400')}>{form.creditoActivo ? 'SÍ' : 'NO'}</span>
           </button>
           {form.creditoActivo && (
-            <div className="mt-2 grid grid-cols-2 gap-3">
-              <div>
-                <Label>Límite de crédito (S/)</Label>
-                <Input value={form.limiteCredito ? String(form.limiteCredito) : ''} onChange={(e) => setF('limiteCredito', parseFloat(e.target.value) || 0)} inputMode="numeric" />
+            <>
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Límite de crédito (S/)</Label>
+                  <Input value={form.limiteCredito ? String(form.limiteCredito) : ''} onChange={(e) => setF('limiteCredito', parseFloat(e.target.value) || 0)} inputMode="numeric" />
+                </div>
+                <div>
+                  <Label>Días de crédito</Label>
+                  <Input value={form.diasCredito ? String(form.diasCredito) : ''} onChange={(e) => setF('diasCredito', parseInt(e.target.value) || 0)} inputMode="numeric" />
+                </div>
               </div>
-              <div>
-                <Label>Días de crédito</Label>
-                <Input value={form.diasCredito ? String(form.diasCredito) : ''} onChange={(e) => setF('diasCredito', parseInt(e.target.value) || 0)} inputMode="numeric" />
-              </div>
-            </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                El PDV <span className="font-semibold">bloquea la venta a crédito</span> cuando el saldo del cliente más la venta supera este límite.{' '}
+                <span className="font-semibold">Dejalo en 0 para no poner límite.</span>
+              </p>
+            </>
           )}
         </div>
 

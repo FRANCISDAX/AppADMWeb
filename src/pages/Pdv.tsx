@@ -17,7 +17,6 @@ import {
   UserRound,
   X,
 } from 'lucide-react'
-import { doc, getDoc } from 'firebase/firestore'
 import * as React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,8 +29,9 @@ import { useProductos, type Producto } from '@/hooks/use-productos'
 import { useCategorias } from '@/hooks/use-categorias'
 import { categoriasParaFiltros } from '@/services/categorias'
 import { consultarDni, consultarRuc } from '@/lib/consultaSunat'
-import { buscarClientes, type Cliente } from '@/services/clientes'
-import { db } from '@/lib/firebase'
+import { buscarClientes, obtenerCliente, obtenerEstadoCredito, type Cliente } from '@/services/clientes'
+import { evaluarVentaCredito, type EstadoCredito } from '@/lib/credito'
+import { CreditoPanel } from '@/components/CreditoPanel'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { registrarVenta } from '@/services/ventas'
 import { abrirPDFComprobante } from '@/lib/pdf'
@@ -67,6 +67,7 @@ export function Pdv() {
   const [clienteDireccion, setClienteDireccion] = React.useState('')
   const [clienteAbierto, setClienteAbierto] = React.useState(false)
   const [dniConsultado, setDniConsultado] = React.useState(false)
+  const [credito, setCredito] = React.useState<{ id: string; estado: EstadoCredito } | null>(null)
   const [manualCliente, setManualCliente] = React.useState(false)
   const [busquedaCliente, setBusquedaCliente] = React.useState('')
   const [resultadosCliente, setResultadosCliente] = React.useState<Cliente[]>([])
@@ -120,6 +121,28 @@ export function Pdv() {
     setCart((prev) => ({ ...prev, [producto.id]: (prev[producto.id] || 0) + 1 }))
     setToast(`✅ ${producto.nombre} agregado`)
   }, [productos, setToast])
+
+  // Crédito: se consulta el estado del cliente al elegir el método, para mostrarle
+  // al cajero el disponible ANTES de confirmar. El estado se guarda con el id del
+  // cliente al que corresponde, así nunca se muestra el de un cliente anterior.
+  React.useEffect(() => {
+    const id = clienteDni.trim()
+    if (metodo !== 'credito') return
+    if (!/^\d{8}$/.test(id) && !/^\d{11}$/.test(id)) return
+    let vigente = true
+    obtenerEstadoCredito(id)
+      .then((estado) => {
+        if (vigente) setCredito({ id, estado })
+      })
+      .catch((e) => console.error('❌ Estado de crédito:', e))
+    return () => {
+      vigente = false
+    }
+  }, [metodo, clienteDni])
+
+  const dniCreditoValido = /^\d{8}$/.test(clienteDni.trim()) || /^\d{11}$/.test(clienteDni.trim())
+  const estadoCredito = credito?.id === clienteDni.trim() ? credito.estado : null
+  const cargandoCredito = metodo === 'credito' && dniCreditoValido && estadoCredito === null
 
   // Filtros: categorías administradas (activas, en su orden) ∪ las que ya usan
   // los productos, para que ningún producto quede inalcanzable.
@@ -450,9 +473,9 @@ export function Pdv() {
     setConsultando(true)
     try {
       // 1) Busca primero en la colección (si ya fue creado).
-      const snap = await getDoc(doc(db, 'tblClientes', docN))
-      if (snap.exists()) {
-        const d = snap.data()
+      const guardado = await obtenerCliente(docN)
+      if (guardado) {
+        const d = guardado
         setClienteNombre(d.razonSocial || d.nombre || '')
         setClienteDireccion(d.direccion || '')
         setDniConsultado(true)
@@ -516,9 +539,11 @@ export function Pdv() {
     } else if (metodo === 'credito') {
       if (!/^\d{8}$/.test(dni) && !/^\d{11}$/.test(dni)) return setToast('⚠️ El crédito requiere DNI o RUC válido')
       if (!dniConsultado) return setToast('⚠️ Presiona Consultar para validar el DNI/RUC')
-      const snap = await getDoc(doc(db, 'tblClientes', dni))
-      const d = snap.exists() ? snap.data() : null
-      if (!d?.creditoActivo) return setToast('⚠️ El cliente no tiene crédito activo')
+      // El estado lo lee el servicio y la REGLA la define lib/credito.ts:
+      // acá solo se muestra el motivo, para que no haya dos verdades distintas.
+      const estado = await obtenerEstadoCredito(dni)
+      const evaluacion = evaluarVentaCredito({ total, estado })
+      if (!evaluacion.permitido) return setToast(`🚫 ${evaluacion.motivo}`)
     } else if (metodo === 'mixto') {
       const tr = parseFloat(pagoMixtoTransf) || 0
       const ef = parseFloat(pagoMixtoEfectivo) || 0
@@ -1270,6 +1295,10 @@ export function Pdv() {
                 </button>
               ))}
             </div>
+
+            {metodo === 'credito' && (
+              <CreditoPanel dni={clienteDni.trim()} estado={estadoCredito} total={total} cargando={cargandoCredito} />
+            )}
 
             {metodo === 'mixto' && (
               (() => {

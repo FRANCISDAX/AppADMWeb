@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { LoadingSquare } from '@/components/loading-square'
 import { CommandPalette } from '@/components/command-palette'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Login } from '@/pages/Login'
 
 const Pdv = React.lazy(() => import('@/pages/Pdv').then((m) => ({ default: m.Pdv })))
@@ -291,7 +292,8 @@ function Shell() {
               <LoadingSquare />
             ) : (
               <React.Suspense fallback={<LoadingSquare />}>
-                <div key={seccion} className="animate-slide-up">
+                <ErrorBoundary key={seccion} contexto={`pantalla:${seccion}`}>
+                  <div key={seccion} className="animate-slide-up">
                   {seccion === 'pdv' ? (
                     <Pdv />
                   ) : seccion === 'turnos' ? (
@@ -339,7 +341,8 @@ function Shell() {
                   ) : (
                     <div className="py-20 text-center text-muted-foreground">🚧 En construcción</div>
                   )}
-                </div>
+                  </div>
+                </ErrorBoundary>
               </React.Suspense>
             )}
           </main>

@@ -8,6 +8,25 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 8 — Base sólida: registro de errores, límite de crédito y arquitectura por capas)
+
+**Objective**: que la app deje de **volar a ciegas** (los errores solo iban a `console.error`, invisibles en producción) y que el **límite de crédito** que ya se guardaba en la ficha del cliente sirva de verdad.
+
+**Important Details**:
+- 🧱 **Convención de capas (respetar de acá en adelante)**: `src/lib/*` = **lógica pura, sin Firebase ni React** (testeable con el runner nativo de Node); `src/services/*` = **acceso a datos** (Firestore); `src/components/*` y `src/pages/*` = UI. Se **eliminaron las llamadas directas a Firestore del PDV** (tenía `getDoc(doc(db,'tblClientes'…))` en dos lugares): ahora usa `obtenerCliente()` (que ya existía en el service, se estaba duplicando la lógica) y `obtenerEstadoCredito()`. Al tocar `Pdv.tsx` quedaron sin uso los imports de `firebase/firestore` y `db` (se quitaron).
+- **Registro de errores**: `services/errores.ts` escribe en **`tblErrores`**; `lib/errores.ts` (puro) normaliza, **filtra ruido** (`ResizeObserver`, `Script error`, chunks viejos tras un deploy), **limita por ventana + dedupe** (si algo falla en bucle se registra **una** vez) y arma el texto para copiar. `registrarError` **nunca lanza** ni bloquea: un fallo al registrar no puede romper una venta. `instalarCapturaGlobal` (engancha `window error` y `unhandledrejection`) se llama **una vez** en `main.tsx`, con el manejador inyectado para no depender de la capa de datos.
+- **Dos niveles de contención**: `ErrorBoundary` envolviendo toda la app en `main.tsx` **y** otro **por pantalla** en `App.tsx` montado con **`key={seccion}`** → si una pantalla revienta, el menú sigue vivo y **cambiar de sección la deja usable** (recuperación por remontaje; se descartó `setState` en `componentDidUpdate` porque además disparaba el warning `no-did-update-set-state`). El fallback (`components/ErrorFallback.tsx`) muestra mensaje claro, **Reintentar**, **Recargar la app**, **Copiar detalle** (para pegar el error en un mensaje) y el detalle técnico plegable.
+- **Visor**: **Auditoría → pestaña "Errores"** (`components/auditoria/ErroresPanel.tsx`, componente aparte para que `Auditoria.tsx` siga siendo solo el log de actividad): búsqueda, filtro por origen, detalle desplegable y limpieza +30 días. `tblErrores` queda cubierto por el comodín de `firestore.rules` (**no** requiere cambio de reglas).
+- **Límite de crédito**: la **regla vive en `lib/credito.ts`** (`evaluarVentaCredito`, `disponibleDe`, `redondear2`) como **única fuente de verdad**, y **la usan el bloqueo del PDV y el panel informativo** (así lo que se ve y lo que se permite no pueden contradecirse). `services/clientes.ts` gana `obtenerEstadoCredito(id)` (ficha + saldo real en paralelo; ante fallo de lectura devuelve "no existe" → el PDV **bloquea** en vez de dar crédito a ciegas). **`components/CreditoPanel.tsx`** muestra al elegir "Crédito": debe, límite, disponible y en cuánto quedaría la venta.
+- ⚠️ **`limiteCredito = 0` significa SIN LÍMITE** (es el valor por defecto de las fichas: interpretarlo como "cero permitido" habría roto **toda** venta a crédito). La política queda documentada en la ficha del cliente (*"Dejalo en 0 para no poner límite"*). Ya existía `creditoActivo`, que sigue bloqueando por su lado.
+- **Tests**: `npm test` corre el **runner nativo de Node** sobre `src/lib/*.test.ts`, **sin instalar nada** (`allowImportingTsExtensions` ya estaba activo → los tests quedan tipados y los verifica `tsc`). **18 casos** (11 de crédito, 7 de errores). Es el **primer test del proyecto**: los módulos puros que ya existían (`series`, `categorias`, `descuentos`, `diagnosticos`) quedan listos para cubrirse igual.
+
+**Work State**: Completed y desplegado en https://appadm-b359e.web.app. `npm test` **18/18 ✓**, `npx tsc -b` ✓, `npm run lint` 0 errores / 80 warnings (baseline). **Sin probar en navegador.**
+
+**Next Move**: (1) probar el boundary en producción (forzar un error en una pantalla y verlo aparecer en Auditoría → Errores); (2) seguir cubriendo con tests los otros módulos puros; (3) **pendiente de la revisión de mejoras: reglas de Firestore por rol** — hoy `allow read, write: if signedIn()` deja que un cajero escriba sus propios `permisos` desde la consola del navegador (los permisos de la app son solo de UI).
+
+**Relevant Files**: `src/lib/errores.ts`, `src/lib/credito.ts`, `src/services/errores.ts`, `src/services/clientes.ts`, `src/components/ErrorBoundary.tsx`, `src/components/ErrorFallback.tsx`, `src/components/CreditoPanel.tsx`, `src/components/auditoria/ErroresPanel.tsx`, `src/main.tsx`, `src/App.tsx`, `src/pages/Auditoria.tsx`, `src/pages/Pdv.tsx`, `src/pages/ClienteDetalle.tsx`, `src/lib/credito.test.ts`, `src/lib/errores.test.ts`, `src/constants/colecciones.ts`, `package.json`.
+
 ### (2026-09 · 7 — Items manuales del PDV: categoría e aclaraciones en el reporte)
 
 **Objective**: el widget **"Ventas por Categoría"** del Dashboard de Operaciones mostraba una fila "Sin categoría" y no se sabía de dónde salía.
@@ -155,6 +174,7 @@ Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `
 - `npm run dev` — Vite dev server (port 5173)
 - `npm run build` — `tsc -b && vite build` (TypeScript check + bundle to `dist/`)
 - `npm run lint` — Oxlint (NOT ESLint). Config: `.oxlintrc.json`
+- `npm test` — **runner nativo de Node** sobre `src/lib/*.test.ts` (`node --test`, sin dependencias ni framework: los módulos de `lib/` son puros). Al agregar un test, sumarlo a la lista del script.
 - `npm run preview` — serve production build locally
 - `npx firebase deploy --only hosting` — deploy to Firebase Hosting
 
@@ -350,4 +370,5 @@ Calculation order: product → volume → coupon → client → global. Each lay
 | HISTORIAL_PRECIOS | tblHistorialPrecios | Price history |
 | CUPONES | tblCupones | Discount coupons |
 | PROMOCIONES_VOLUMEN | tblPromocionesVolumen | Volume-based promotions (incl. monto_fijo) |
+| ERRORES | tblErrores | Errores de la app web: `{ mensaje, stack, contexto, ruta, dispositivo, usuario, fecha }` (ver Auditoría → Errores) |
 | CATEGORIAS | tblCategorias | Categorías de producto administradas: `{ nombre, orden, activo, icono }` (id = slug; el producto guarda el nombre en `categoria`) |

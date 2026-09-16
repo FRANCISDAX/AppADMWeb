@@ -1,9 +1,10 @@
-import { Download, Loader2, Search, Shield, Trash2 } from 'lucide-react'
+import { AlertTriangle, Download, History, Loader2, Search, Shield, Trash2 } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useNotifications } from '@/components/notifications'
 import { usePermisos } from '@/context/permisos'
+import { ErroresPanel } from '@/components/auditoria/ErroresPanel'
 import { obtenerLogs, limpiarLogs, logsToCSV, descargarArchivo, type AuditLog } from '@/lib/audit'
 import { cn } from '@/lib/utils'
 
@@ -71,6 +72,7 @@ export default function Auditoria() {
   const [filtroAccion, setFiltroAccion] = React.useState('')
   const [filtroModulo, setFiltroModulo] = React.useState('')
   const [busqueda, setBusqueda] = React.useState('')
+  const [vista, setVista] = React.useState<'actividad' | 'errores'>('actividad')
 
   const cargar = React.useCallback(async () => {
     setCargando(true)
@@ -154,12 +156,34 @@ export default function Auditoria() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="flex items-center gap-2 text-xl font-bold"><Shield className="h-5 w-5 text-primary" /> Auditoría</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportar} disabled={filtrados.length === 0}><Download className="h-4 w-4" /> Exportar CSV</Button>
-          <Button variant="outline" size="sm" onClick={limpiar}><Trash2 className="h-4 w-4" /> Limpiar +90 días</Button>
-        </div>
+        {vista === 'actividad' && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={exportar} disabled={filtrados.length === 0}><Download className="h-4 w-4" /> Exportar CSV</Button>
+            <Button variant="outline" size="sm" onClick={limpiar}><Trash2 className="h-4 w-4" /> Limpiar +90 días</Button>
+          </div>
+        )}
       </div>
 
+      {/* Actividad (lo que hacen los usuarios) vs Errores (lo que falla) */}
+      <div className="flex gap-1.5 rounded-xl bg-muted p-1">
+        {([{ id: 'actividad', label: 'Actividad', icon: History }, { id: 'errores', label: 'Errores', icon: AlertTriangle }] as const).map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setVista(t.id)}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-bold transition-colors cursor-pointer',
+              vista === t.id ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <t.icon className="h-4 w-4" /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {vista === 'errores' ? (
+        <ErroresPanel />
+      ) : (
+        <>
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/40 p-3">
         <div className="relative flex-1 min-w-[200px]">
@@ -232,6 +256,8 @@ export default function Auditoria() {
             </tbody>
           </table>
         </div>
+      )}
+        </>
       )}
     </div>
   )
