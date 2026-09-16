@@ -1,5 +1,7 @@
 // Configuración de conexión a la API SUNAT (SOLO helpers, nunca se llama a la API).
 // El envío real lo hace el administrador desde la app móvil.
+import { itemsConDescuento } from './sunat-importes.ts'
+
 export function construirUrlApiSunat(base: string, tipo: 'invoices' | 'notes'): string {
   const limpia = String(base || '').trim().replace(/\/+$/, '')
   const sinPath = limpia.replace(/\/v1\/notes\/emitir$/i, '').replace(/\/v1\/invoices\/emitir$/i, '').replace(/\/+$/, '')
@@ -32,7 +34,11 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
   let opGravadas = 0
   let opExoneradas = 0
   let opInafectas = 0
-  const items = (venta.items || []).map((it: any) => {
+  // El comprobante declara **lo que se cobró**: si la venta tiene descuento
+  // (promoción de volumen, cupón, cliente o global), se reparte entre las líneas
+  // y se manda el precio unitario efectivo. Si no se hiciera, el XML declararía
+  // el importe de lista (media docena con promo: cobrado 3.00, declarado 3.60).
+  const items = itemsConDescuento(venta.items || [], venta.descuentoTotal || 0).map((it: any) => {
     const importe = Number(it.subtotal ?? (it.precioVenta ?? 0) * (it.cantidad ?? 1))
     const af = it.tipoAfectacion || '10'
     if (af.startsWith('10') || af.startsWith('11')) opGravadas += importe
@@ -90,7 +96,9 @@ export function construirPayloadNota(doc: any, config: Record<string, any>) {
   let opGravadas = 0
   let opExoneradas = 0
   let opInafectas = 0
-  const items = (venta.items || []).map((it: any) => {
+  // Igual que en el comprobante: la nota declara los importes efectivamente
+  // cobrados (con el descuento de la venta original ya repartido por línea).
+  const items = itemsConDescuento(venta.items || [], venta.descuentoTotal || 0).map((it: any) => {
     const importe = Math.abs(Number(it.subtotal ?? (it.precioVenta ?? 0) * (it.cantidad ?? 1)))
     const af = it.tipoAfectacion || '10'
     if (af.startsWith('10') || af.startsWith('11')) opGravadas += importe

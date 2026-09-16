@@ -74,6 +74,11 @@ export const CONFIG_POR_DEFECTO = {
   serieBoletaND: 'BD01',
   serieFacturaNC: 'FC01',
   serieFacturaND: 'FD01',
+  // Afectación con la que se declaran los items manuales del PDV ("Embalaje y
+  // Otros": hielo, bolsas, embalaje). **Tiene que coincidir con la afectación del
+  // catálogo**: si los productos son exonerados ('20') y el item manual va como
+  // gravado ('10'), el comprobante suma 18% de IGV y declara más de lo cobrado.
+  tipoAfectacionManual: '20',
   // Código de establecimiento anexo (catálogo 22) del emisor. '0000' = casa
   // matriz. Va dentro del XML que se firma, así que entra al hash SUNAT.
   puntoEmision: '0000',

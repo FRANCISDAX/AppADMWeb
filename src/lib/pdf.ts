@@ -1,6 +1,7 @@
 import QRCode from 'qrcode'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { etiquetaPago, formaPagoLabel } from '@/lib/pagos'
+import { itemsConDescuento } from '@/lib/sunat-importes'
 import { esc } from '@/lib/ui-utils'
 
 const TITULOS: Record<string, string> = {
@@ -141,7 +142,15 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   const serieNumero = venta.serie_numero || `${tipoDoc === 'FACTURA' ? 'F001' : tipoDoc === 'BOLETA' ? 'B001' : 'NV'}-${correlativo}`
   const docLabel = tipoDoc === 'FACTURA' ? 'RUC' : 'DNI'
 
-  const totalesCalc = calcularTotales(venta.items || [])
+  // ⚠️ Los totales se calculan sobre los importes COBRADOS: si la venta tiene
+  // descuento (promo de volumen, cupón, cliente o global), se reparte por línea y
+  // el comprobante cuadra con lo que pagó el cliente. Sin esto la tabla de
+  // totales mostraba el importe de lista y no sumaba con el TOTAL.
+  const totalesCalc = calcularTotales(itemsConDescuento(venta.items || [], venta.descuentoTotal || 0))
+  const descuentoDoc = Number(venta.descuentoTotal || 0)
+  const filasDescuento = descuentoDoc > 0
+    ? `<tr><td class="td-r tot-l">Descuento</td><td class="td-r tot-v">- S/ ${descuentoDoc.toFixed(2)}</td></tr>`
+    : ''
   const tieneGravadas = Math.abs(totalesCalc.opGravadas) > 0
   const tieneExoneradas = Math.abs(totalesCalc.opExoneradas) > 0
   const tieneInafectas = Math.abs(totalesCalc.opInafectas) > 0
@@ -227,6 +236,7 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   <div class="c" style="margin-top:1.5mm;font-size:9.5px;color:#555;">Items: ${venta.items.length}</div>
   <hr class="sep">
   <table class="tbl">
+  ${filasDescuento}
   ${filasTotales}
   <tr><td class="td-r tot-l">I.C.B.P.E.R.</td><td class="td-r tot-v">S/ 0.00</td></tr>
   <tr><td class="td-l" style="padding-top:2mm">Moneda: <span class="b">Soles</span></td><td class="td-r tot-total b">TOTAL IMPORTE S/ ${totalStr}</td></tr>

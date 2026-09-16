@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePermisos } from '@/context/permisos'
 import { useNotifications } from '@/components/notifications'
-import { CONFIG_POR_DEFECTO, TIPOS_REGIMEN } from '@/constants/tributario'
+import { AFECTACION_POR_DEFECTO, CONFIG_POR_DEFECTO, TIPO_AFECTACION, TIPOS_REGIMEN } from '@/constants/tributario'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos } from '@/hooks/use-productos'
 import { validarSeriesEmpresa, type SerieOcupada } from '@/lib/series'
@@ -326,6 +326,25 @@ export function Configuracion() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   Código de establecimiento anexo (catálogo 22) del emisor. <span className="font-semibold">0000</span> = casa matriz. Va dentro del XML
                   firmado, así que forma parte del hash SUNAT.
+                </p>
+              </div>
+              <div>
+                <Label>Afectación de los items manuales</Label>
+                <select
+                  value={String(config.tipoAfectacionManual ?? AFECTACION_POR_DEFECTO)}
+                  onChange={(e) => set('tipoAfectacionManual', e.target.value)}
+                  className="mt-1 h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                >
+                  {TIPO_AFECTACION.map((a) => (
+                    <option key={a.codigo} value={a.codigo}>
+                      {a.codigo} · {a.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Con qué afectación se declaran los items manuales del PDV (los de <span className="font-semibold">"Embalaje y Otros"</span>: hielo, bolsas,
+                  embalaje) cuando llevan comprobante. <span className="font-semibold">Tiene que coincidir con la afectación de tu catálogo</span>: si los
+                  productos son exonerados (20) y el manual va gravado (10), el comprobante le suma 18% de IGV y declara más de lo que cobrás.
                 </p>
               </div>
             </div>

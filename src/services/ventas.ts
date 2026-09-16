@@ -2,6 +2,7 @@ import { collection, doc, increment, getDoc, getDocs, query, runTransaction, upd
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
+import { AFECTACION_POR_DEFECTO } from '@/constants/tributario'
 import { bolsilloDe, formaPagoLabel, type PagoGuardado } from '@/lib/pagos'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
@@ -213,7 +214,12 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
           // Los items manuales no tienen producto del catálogo: se agrupan en
           // VARIOS para que no caigan en "Sin categoría" en los reportes.
           categoria: CATEGORIA_MANUAL,
-          tipoAfectacion: '10',
+          // ⚠️ Antes iba fijo en '10' (gravado) mientras todo el catálogo puede
+          // estar exonerado ('20'): ese item sumaba 18% de IGV al comprobante y la
+          // boleta declaraba MÁS de lo cobrado (pasó en la boleta B001-000057:
+          // cobrado S/ 9.20, declarado S/ 9.56). Ahora la afectación de los items
+          // manuales se configura en Configuración → SUNAT.
+          tipoAfectacion: String(config.tipoAfectacionManual || AFECTACION_POR_DEFECTO),
         })),
       ]
       const ventaBase = {
