@@ -8,6 +8,27 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 3 — Series por cajero (incl. NC/ND) + consolidado)
+
+**Objective**: que cada vendedor/cajero pueda tener **sus propias series** (también las de NC/ND) trabajando en **un solo establecimiento**, y que el consolidado de NV no las ignore.
+
+**Important Details**:
+- **7 series por caja** en `tblUsuarios`: `serieBoleta`, `serieFactura`, `seriePrefijo` + **nuevas** `serieBoletaNC`, `serieBoletaND`, `serieFacturaNC`, `serieFacturaND`. `CAMPOS_SERIE` (`lib/series.ts`) ya son las 7 y `Usuario = SeriesUsuario & { uid, email, … }`.
+- **Serie efectiva**: `seriesEfectivas(series, empresa)` = la propia o, si está vacía, la global de empresa. **Toda la validación se calcula sobre ese conjunto**, y así detecta el caso peligroso que antes se escapaba: una caja que **deja las notas vacías** (heredan la global `BC01`) y pone `serieBoleta = 'BC01'` → **bloquea** (mismo contador `sunat_BC01`). Antes eso se evaluaba con una heurística `esNota` sobre las series globales.
+- **Motivos**: bloquean `campo_duplicado` (choca con otra serie **declarada** de la misma caja), `serie_nota` (choca con una **heredada** de la global), `otro_usuario` (otra caja **activa**). Avisan (no bloquean) `serie_empresa` (declarar exactamente la global del mismo campo), `usuario_inactivo` y `formato`. Formato por campo: `^B[A-Z0-9]{3}$` para boletas **y sus NC/ND**, `^F[A-Z0-9]{3}$` para facturas **y las suyas**; el prefijo de NV no tiene formato SUNAT.
+- **`seriesEmpresa`** lleva ahora `campo: CampoSerie` (a qué campo del usuario respalda cada serie global). **`services/usuarios.ts`** maneja las 7 de forma genérica (`seriesDe`, `seriesParaGuardar`) para no repetir campos.
+- **Emisión de NC/ND**: `Reportes.tsx` pasa las 4 series del cajero (`user.sunat` gana `puntoEmision`… ver bloque anterior) → `config: { ...cfg, serieBoletaNC: serieBoletaNC || cfg.serieBoletaNC, … }`. `notas.ts` ya elegía la clave por tipo de comprobante modificado.
+- **Consolidado de NV**: en `Reportes.tsx`, si `miUid` está vacío **no** hay `verTodo` → el cajero consolida **solo sus NV** → se usa **su** `serieBoleta`; un supervisor consolida las de todos y sigue con la **global**. `generarConsolidado` no decide nada: numera con el `config.serieBoleta` que le pasa quien llama.
+- **`permisos.tsx`** expone las 7 series. **`UsuarioDetalle.tsx`** pinta 7 inputs (3 de venta + 4 de notas) generados desde `CAMPOS_SERIE_UI`, con avisos/bloqueos en vivo y Guardar deshabilitado si hay conflictos.
+- **App RN `AppAdm`**: `helper/Series.js` espejo con el mismo modelo + `configConSeriesDeCaja(config, seriesCaja)`; `UserContext` guarda las 7 (objeto `series` + alias planos `serieBoleta/serieFactura/seriePrefijo` para no romper `ventas.jsx`); `RegistroVentas.jsx` emite NC/ND con las series del cajero; `UsuarioDetalle.jsx` con los 7 inputs; `services/usuarios.js` genérico sobre `CAMPOS_SERIE`. **El consolidado de la RN NO se tocó a propósito**: `obtenerNVsPendientesConsolidacion` no filtra por usuario (agrupa las NV de todos), así que ahí la serie global es lo correcto.
+- Aclaración de negocio: **un solo establecimiento** (el punto de emisión sigue siendo global, `'0000'`); lo que se reparte por cajero son las **series**, que es válido y habitual (varias cajas/PDV en un mismo local). En el Registro de Ventas cada serie sale como su propia línea.
+
+**Work State**: Completed y desplegado en https://appadm-b359e.web.app (commit `3533994`). Verificado con scripts temporales (ya eliminados): **25** casos del validador web (14 de regresión + 10 de NC/ND + series efectivas) y **14** del helper de la RN, incluido `configConSeriesDeCaja` (las propias ganan, las vacías dejan la global, no muta el original). `npm run build` ✓, `npm run lint` 0 errores / 80 warnings (baseline). **Sin probar en navegador ni en dispositivo.**
+
+**Next Move**: (1) probar en navegador: crear una 2ª caja con series propias y verificar que boletas/notas numeran por serie; (2) que el admin asigne las series de notas por cajero en Usuarios → Editar; (3) commitear la app RN (el usuario commitea manualmente allí).
+
+**Relevant Files**: `src/lib/series.ts`, `src/services/usuarios.ts`, `src/pages/UsuarioDetalle.tsx`, `src/pages/Reportes.tsx`, `src/context/permisos.tsx`, `src/services/consolidado.ts`. RN: `AppAdm/helper/Series.js`, `AppAdm/services/usuarios.js`, `AppAdm/context/UserContext.js`, `AppAdm/app/(drawer)/UsuarioDetalle.jsx`, `AppAdm/app/(drawer)/RegistroVentas.jsx`.
+
 ### (2026-09 · 2 — Series por caja: duplicados + correlativos de NC/ND)
 
 **Objective**: cerrar los Next Move (a) y (c) de la sesión anterior: impedir que dos cajas guarden la **misma serie** de comprobante (comparten contador → numeración intercalada) y eliminar el riesgo de **correlativo duplicado** en notas de crédito/débito (SUNAT: "el comprobante ya existe").
