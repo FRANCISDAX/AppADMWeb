@@ -1,4 +1,4 @@
-import { Building2, Check, CloudUpload, Loader2, Package, Percent, Printer, Receipt, Tag, Truck, X } from 'lucide-react'
+import { AlertTriangle, Building2, Check, CloudUpload, Loader2, Package, Percent, Printer, Receipt, Tag, Truck, X } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,9 @@ import { useNotifications } from '@/components/notifications'
 import { CONFIG_POR_DEFECTO, TIPOS_REGIMEN } from '@/constants/tributario'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos } from '@/hooks/use-productos'
+import { validarSeriesEmpresa, type SerieOcupada } from '@/lib/series'
 import { cn } from '@/lib/utils'
+import { obtenerSeriesOcupadas } from '@/services/usuarios'
 import { guardarPromocionVolumen, eliminarPromocionVolumen, listarPromocionesVolumen, type PromocionVolumen } from '@/services/promociones-volumen'
 
 const TABS = [
@@ -54,6 +56,28 @@ export function Configuracion() {
   const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora' | 'envio' | 'plantillas' | 'listas' | 'promos'>('empresa')
   const [toast, setToast] = React.useState<string | null>(null)
   const [probando, setProbando] = React.useState(false)
+  const [seriesOcupadas, setSeriesOcupadas] = React.useState<SerieOcupada[]>([])
+
+  // Series globales vs. series por caja: las cajas sin serie propia numeran con
+  // la global, así que un choque significa compartir contador de correlativos.
+  React.useEffect(() => {
+    let vigente = true
+    obtenerSeriesOcupadas()
+      .then((ocupadas) => {
+        if (vigente) setSeriesOcupadas(ocupadas)
+      })
+      .catch((e) => console.error('❌ obtenerSeriesOcupadas:', e))
+    return () => {
+      vigente = false
+    }
+  }, [])
+
+  const conflictosSeries = React.useMemo(
+    () => validarSeriesEmpresa({ config: config as unknown as Record<string, unknown>, ocupadas: seriesOcupadas }),
+    [config, seriesOcupadas]
+  )
+  const erroresSeries = conflictosSeries.filter((c) => c.bloqueante)
+  const avisosSeries = conflictosSeries.filter((c) => !c.bloqueante)
 
   React.useEffect(() => {
     if (!toast) return
@@ -305,6 +329,18 @@ export function Configuracion() {
                 </p>
               </div>
             </div>
+            {erroresSeries.map((c, i) => (
+              <p key={`error-${i}`} className="mt-2 flex items-start gap-1.5 rounded-lg bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{c.mensaje}</span>
+              </p>
+            ))}
+            {avisosSeries.map((c, i) => (
+              <p key={`aviso-${i}`} className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-600 dark:text-amber-500">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{c.mensaje}</span>
+              </p>
+            ))}
           </div>
         </div>
       )}
@@ -413,7 +449,13 @@ export function Configuracion() {
 
       {tab === 'promos' && <PromocionesTab />}
 
-      <Button className="w-full" size="lg" onClick={onGuardar} disabled={saving}>
+      <Button
+        className="w-full"
+        size="lg"
+        onClick={onGuardar}
+        disabled={saving || erroresSeries.length > 0}
+        title={erroresSeries.length > 0 ? 'Corrige las series duplicadas para guardar' : undefined}
+      >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
         {saving ? 'Guardando…' : 'Guardar Configuración'}
       </Button>

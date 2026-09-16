@@ -210,3 +210,91 @@ export function validarSeries({
 export function mensajeConflictos(conflictos: ConflictoSerie[]): string {
   return conflictos.map((c) => c.mensaje).join(' ')
 }
+
+/** Series globales de la empresa, con la etiqueta que se muestra en Configuración. */
+export const CAMPOS_EMPRESA: readonly { clave: string; etiqueta: string; espacio: EspacioSerie; letra: 'B' | 'F' | null }[] = [
+  { clave: 'serieBoleta', etiqueta: 'Serie Boleta', espacio: 'sunat', letra: 'B' },
+  { clave: 'serieFactura', etiqueta: 'Serie Factura', espacio: 'sunat', letra: 'F' },
+  { clave: 'serie_prefijo', etiqueta: 'Prefijo Nota de Venta', espacio: 'notaVenta', letra: null },
+  { clave: 'serieBoletaNC', etiqueta: 'Serie NC Boleta', espacio: 'sunat', letra: null },
+  { clave: 'serieBoletaND', etiqueta: 'Serie ND Boleta', espacio: 'sunat', letra: null },
+  { clave: 'serieFacturaNC', etiqueta: 'Serie NC Factura', espacio: 'sunat', letra: null },
+  { clave: 'serieFacturaND', etiqueta: 'Serie ND Factura', espacio: 'sunat', letra: null },
+]
+
+export type MotivoConflictoEmpresa = 'duplicada' | 'formato' | 'caja_activa' | 'caja_inactiva'
+
+export type ConflictoSerieEmpresa = {
+  clave: string
+  etiqueta: string
+  serie: string
+  motivo: MotivoConflictoEmpresa
+  bloqueante: boolean
+  mensaje: string
+}
+
+/**
+ * Choques entre las series globales (Configuración → Empresa) y las series por
+ * caja. Las cajas sin serie propia usan la global, así que una caja que declare
+ * la misma serie comparte contador con la global; y una global de boletas igual
+ * a una de NC/ND mezcla comprobantes y notas en `sunat_{serie}`.
+ */
+export function validarSeriesEmpresa({
+  config,
+  ocupadas,
+}: {
+  config: Record<string, unknown>
+  ocupadas: SerieOcupada[]
+}): ConflictoSerieEmpresa[] {
+  const conflictos: ConflictoSerieEmpresa[] = []
+  const vistas: { etiqueta: string; serie: string; espacio: EspacioSerie }[] = []
+
+  for (const campo of CAMPOS_EMPRESA) {
+    const serie = normalizarSerie(typeof config[campo.clave] === 'string' ? (config[campo.clave] as string) : '')
+    if (!serie) continue
+
+    const repetida = vistas.find((v) => v.serie === serie && v.espacio === campo.espacio)
+    if (repetida) {
+      conflictos.push({
+        clave: campo.clave,
+        etiqueta: campo.etiqueta,
+        serie,
+        motivo: 'duplicada',
+        bloqueante: true,
+        mensaje: `${campo.etiqueta} repite la serie ${serie} de ${repetida.etiqueta}: comparten el mismo contador de correlativos.`,
+      })
+    }
+    vistas.push({ etiqueta: campo.etiqueta, serie, espacio: campo.espacio })
+
+    if (campo.letra && !new RegExp(`^${campo.letra}[A-Z0-9]{3}$`).test(serie)) {
+      conflictos.push({
+        clave: campo.clave,
+        etiqueta: campo.etiqueta,
+        serie,
+        motivo: 'formato',
+        bloqueante: false,
+        mensaje: `${campo.etiqueta}: SUNAT espera 4 caracteres empezando con "${campo.letra}" (ej. ${campo.letra}001).`,
+      })
+    }
+
+    for (const ocupada of ocupadas) {
+      if (ocupada.serie !== serie || ocupada.espacio !== campo.espacio) continue
+      conflictos.push({
+        clave: campo.clave,
+        etiqueta: campo.etiqueta,
+        serie,
+        motivo: ocupada.activo ? 'caja_activa' : 'caja_inactiva',
+        bloqueante: ocupada.activo,
+        mensaje: `La serie ${serie} de ${campo.etiqueta} ya la usa ${ocupada.usuario} en sus ${ETIQUETA_SERIE[ocupada.campo]}: las cajas sin serie propia numerarían en el mismo contador.`,
+      })
+    }
+  }
+
+  const vistos = new Set<string>()
+  return conflictos.filter((c) => {
+    const clave = `${c.clave}|${c.serie}|${c.motivo}`
+    if (vistos.has(clave)) return false
+    vistos.add(clave)
+    return true
+  })
+}
