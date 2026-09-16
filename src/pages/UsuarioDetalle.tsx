@@ -6,8 +6,19 @@ import { Label } from '@/components/ui/label'
 import { LABELS_PERMISOS, MODULOS, PERMISOS_POR_ROL, ROLES, permisosPorRol } from '@/constants/permisos'
 import { useNotifications } from '@/components/notifications'
 import { crearUsuario, editarUsuario, obtenerUsuarios, resetearPassword, validarSeriesUsuario } from '@/services/usuarios'
-import { type ConflictoSerie, mensajeConflictos } from '@/lib/series'
+import { type ConflictoSerie, type SeriesUsuario, mensajeConflictos } from '@/lib/series'
 import { cn } from '@/lib/utils'
+
+// Campos de serie que el admin configura por caja (7: los 3 de venta + 4 de notas).
+const CAMPOS_SERIE_UI: { campo: keyof SeriesUsuario; label: string; placeholder: string }[] = [
+  { campo: 'serieBoleta', label: 'Serie Boletas', placeholder: 'B001' },
+  { campo: 'serieFactura', label: 'Serie Facturas', placeholder: 'F001' },
+  { campo: 'seriePrefijo', label: 'Serie Nota Venta', placeholder: 'NV01' },
+  { campo: 'serieBoletaNC', label: 'NC Boletas', placeholder: 'BC01' },
+  { campo: 'serieBoletaND', label: 'ND Boletas', placeholder: 'BD01' },
+  { campo: 'serieFacturaNC', label: 'NC Facturas', placeholder: 'FC01' },
+  { campo: 'serieFacturaND', label: 'ND Facturas', placeholder: 'FD01' },
+]
 
 export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack: () => void; onSaved: () => void }) {
   const esEdicion = !!uid
@@ -18,9 +29,7 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
   const [rol, setRol] = React.useState('CAJERO')
   const [permisos, setPermisos] = React.useState<Record<string, boolean>>(permisosPorRol('CAJERO'))
   const [activo, setActivo] = React.useState(true)
-  const [serieBoleta, setSerieBoleta] = React.useState('')
-  const [serieFactura, setSerieFactura] = React.useState('')
-  const [seriePrefijo, setSeriePrefijo] = React.useState('')
+  const [series, setSeries] = React.useState<SeriesUsuario>({})
   const [guardando, setGuardando] = React.useState(false)
   const [reseteando, setReseteando] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -41,9 +50,15 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
         // guardando false (bloquea de verdad) sin romper las claves que ya existían.
         setPermisos({ ...permisosPorRol(u.rol || 'CAJERO'), ...(u.permisos || {}) })
         setActivo(u.activo !== false)
-        setSerieBoleta(u.serieBoleta || '')
-        setSerieFactura(u.serieFactura || '')
-        setSeriePrefijo(u.seriePrefijo || '')
+        setSeries({
+          serieBoleta: u.serieBoleta || '',
+          serieFactura: u.serieFactura || '',
+          seriePrefijo: u.seriePrefijo || '',
+          serieBoletaNC: u.serieBoletaNC || '',
+          serieBoletaND: u.serieBoletaND || '',
+          serieFacturaNC: u.serieFacturaNC || '',
+          serieFacturaND: u.serieFacturaND || '',
+        })
       }
     })()
   }, [uid, esEdicion])
@@ -56,10 +71,7 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
     const timer = setTimeout(() => {
       if (!vigente) return
       setRevisandoSeries(true)
-      validarSeriesUsuario(
-        { serieBoleta: serieBoleta.trim(), serieFactura: serieFactura.trim(), seriePrefijo: seriePrefijo.trim() },
-        uid
-      )
+      validarSeriesUsuario(series, uid)
         .then((c) => {
           if (vigente) setConflictosSeries(c)
         })
@@ -75,10 +87,14 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
       vigente = false
       clearTimeout(timer)
     }
-  }, [serieBoleta, serieFactura, seriePrefijo, uid])
+  }, [series, uid])
 
   const erroresSeries = conflictosSeries.filter((c) => c.bloqueante)
   const avisosSeries = conflictosSeries.filter((c) => !c.bloqueante)
+
+  function setSerie(campo: keyof SeriesUsuario, valor: string) {
+    setSeries((prev) => ({ ...prev, [campo]: valor }))
+  }
 
   function cambiarRol(nuevoRol: string) {
     setRol(nuevoRol)
@@ -104,7 +120,6 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
     if (erroresSeries.length > 0) return setError(mensajeConflictos(erroresSeries))
     setGuardando(true)
     try {
-      const series = { serieBoleta: serieBoleta.trim(), serieFactura: serieFactura.trim(), seriePrefijo: seriePrefijo.trim() }
       const r: { success: boolean; error?: string } =
         esEdicion && uid
           ? await editarUsuario(uid, { nombre: nombre.trim(), rol, permisos, activo, ...series })
@@ -170,20 +185,23 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
           <p className="mb-2 text-sm font-bold">Series de comprobantes (por caja)</p>
           <p className="mb-2 text-[11px] text-muted-foreground">Si se dejan vacías, este usuario usa la serie global de la empresa (Configuración → Empresa). Cada caja debe tener series distintas por tipo.</p>
           <div className="grid grid-cols-3 gap-2">
-            <div>
-              <Label>Serie Boletas</Label>
-              <Input value={serieBoleta} onChange={(e) => setSerieBoleta(e.target.value.toUpperCase())} placeholder="B001" className="mt-1" />
-            </div>
-            <div>
-              <Label>Serie Facturas</Label>
-              <Input value={serieFactura} onChange={(e) => setSerieFactura(e.target.value.toUpperCase())} placeholder="F001" className="mt-1" />
-            </div>
-            <div>
-              <Label>Serie Nota Venta</Label>
-              <Input value={seriePrefijo} onChange={(e) => setSeriePrefijo(e.target.value.toUpperCase())} placeholder="NV01" className="mt-1" />
-            </div>
+            {CAMPOS_SERIE_UI.slice(0, 3).map(({ campo, label, placeholder }) => (
+              <div key={campo}>
+                <Label>{label}</Label>
+                <Input value={series[campo] ?? ''} onChange={(e) => setSerie(campo, e.target.value.toUpperCase())} placeholder={placeholder} className="mt-1" />
+              </div>
+            ))}
           </div>
-          <p className="mt-2 text-[10px] text-muted-foreground">Vacíos → serie global. Ej.: caja admin = B001/F001, caja 2 = B002/F002.</p>
+          <p className="mt-3 mb-2 text-[11px] font-bold text-muted-foreground">Notas de crédito y débito</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {CAMPOS_SERIE_UI.slice(3).map(({ campo, label, placeholder }) => (
+              <div key={campo}>
+                <Label>{label}</Label>
+                <Input value={series[campo] ?? ''} onChange={(e) => setSerie(campo, e.target.value.toUpperCase())} placeholder={placeholder} className="mt-1" />
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-muted-foreground">Vacíos → serie global. Ej.: caja admin = B001/F001, caja 2 = B002/F002 (y BC02/FD02 para sus notas).</p>
           {revisandoSeries && <p className="mt-2 text-[10px] text-muted-foreground">Revisando que las series no choquen con otras cajas…</p>}
           {erroresSeries.map((c, i) => (
             <p key={`error-${i}-${c.motivo}-${c.serie}`} className="mt-2 flex items-start gap-1.5 rounded-lg bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">

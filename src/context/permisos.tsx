@@ -14,6 +14,10 @@ type PermisosValue = {
   serieBoleta: string | null
   serieFactura: string | null
   seriePrefijo: string | null
+  serieBoletaNC: string | null
+  serieBoletaND: string | null
+  serieFacturaNC: string | null
+  serieFacturaND: string | null
   loading: boolean
   tienePermiso: (clave: string) => boolean
 }
@@ -29,6 +33,10 @@ export function PermisosProvider({ children }: { children: React.ReactNode }) {
   const [serieBoleta, setSerieBoleta] = React.useState<string | null>(null)
   const [serieFactura, setSerieFactura] = React.useState<string | null>(null)
   const [seriePrefijo, setSeriePrefijo] = React.useState<string | null>(null)
+  const [serieBoletaNC, setSerieBoletaNC] = React.useState<string | null>(null)
+  const [serieBoletaND, setSerieBoletaND] = React.useState<string | null>(null)
+  const [serieFacturaNC, setSerieFacturaNC] = React.useState<string | null>(null)
+  const [serieFacturaND, setSerieFacturaND] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
@@ -40,6 +48,10 @@ export function PermisosProvider({ children }: { children: React.ReactNode }) {
       setSerieBoleta(null)
       setSerieFactura(null)
       setSeriePrefijo(null)
+      setSerieBoletaNC(null)
+      setSerieBoletaND(null)
+      setSerieFacturaNC(null)
+      setSerieFacturaND(null)
       setLoading(false)
       return
     }
@@ -58,6 +70,10 @@ export function PermisosProvider({ children }: { children: React.ReactNode }) {
           setSerieBoleta(d.serieBoleta ?? null)
           setSerieFactura(d.serieFactura ?? null)
           setSeriePrefijo(d.seriePrefijo ?? null)
+          setSerieBoletaNC(d.serieBoletaNC ?? null)
+          setSerieBoletaND(d.serieBoletaND ?? null)
+          setSerieFacturaNC(d.serieFacturaNC ?? null)
+          setSerieFacturaND(d.serieFacturaND ?? null)
         } else {
           setPermisos({})
           setRol(null)
@@ -66,6 +82,10 @@ export function PermisosProvider({ children }: { children: React.ReactNode }) {
           setSerieBoleta(null)
           setSerieFactura(null)
           setSeriePrefijo(null)
+          setSerieBoletaNC(null)
+          setSerieBoletaND(null)
+          setSerieFacturaNC(null)
+          setSerieFacturaND(null)
         }
         setLoading(false)
       },
@@ -87,8 +107,8 @@ export function PermisosProvider({ children }: { children: React.ReactNode }) {
   }, [permisos, rol])
 
   const value = React.useMemo(
-    () => ({ permisos, rol, nombre, activo, serieBoleta, serieFactura, seriePrefijo, loading, tienePermiso }),
-    [permisos, rol, nombre, activo, serieBoleta, serieFactura, seriePrefijo, loading, tienePermiso]
+    () => ({ permisos, rol, nombre, activo, serieBoleta, serieFactura, seriePrefijo, serieBoletaNC, serieBoletaND, serieFacturaNC, serieFacturaND, loading, tienePermiso }),
+    [permisos, rol, nombre, activo, serieBoleta, serieFactura, seriePrefijo, serieBoletaNC, serieBoletaND, serieFacturaNC, serieFacturaND, loading, tienePermiso]
   )
 
   return <PermisosContext.Provider value={value}>{children}</PermisosContext.Provider>

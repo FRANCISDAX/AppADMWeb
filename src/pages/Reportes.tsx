@@ -77,7 +77,7 @@ function mesDeHoy() {
 
 export function Reportes() {
   const { config: cfg } = useConfiguracion()
-  const { tienePermiso, nombre: nombreUsuario } = usePermisos()
+  const { tienePermiso, nombre: nombreUsuario, serieBoleta, serieBoletaNC, serieBoletaND, serieFacturaNC, serieFacturaND } = usePermisos()
   const { user } = useAuth()
   const { toast, confirm } = useNotifications()
   // Scope por usuario: si no tiene 'verTodo', solo ve sus propios documentos.
@@ -262,7 +262,10 @@ export function Reportes() {
     if (!ok) return
     setConsolidando(true)
     try {
-      const r = await generarConsolidado(nvsDelDia, cfg, nombreUsuario || user?.email || 'sistema', user?.uid || '')
+      // `miUid` vacío = ve las NV de todos (verTodo): ahí consolida con la serie
+      // global. Si solo ve las suyas, la boleta consolidada va con la serie de su caja.
+      const cfgConsolidado = miUid ? { ...cfg, serieBoleta: serieBoleta || cfg.serieBoleta } : cfg
+      const r = await generarConsolidado(nvsDelDia, cfgConsolidado, nombreUsuario || user?.email || 'sistema', user?.uid || '')
       if (r.success) {
         toast(`Consolidado en BOLETA ${r.correlativo} (${r.nvsProcesadas} NV · ${fmt(r.total ?? 0)}).`, 'success')
         setRefreshConsol((v) => v + 1)
@@ -345,7 +348,14 @@ export function Reportes() {
       tipoNota: notaTipo,
       motivo,
       codigoMotivo: notaMotivo,
-      config: cfg,
+      // Series de notas por caja: si el usuario tiene las suyas, emiten con ellas.
+      config: {
+        ...cfg,
+        serieBoletaNC: serieBoletaNC || cfg.serieBoletaNC,
+        serieBoletaND: serieBoletaND || cfg.serieBoletaND,
+        serieFacturaNC: serieFacturaNC || cfg.serieFacturaNC,
+        serieFacturaND: serieFacturaND || cfg.serieFacturaND,
+      },
       afectaStock: notaAfectaStock,
       turnoId: turno.id,
       cajero: nombreUsuario || user?.email || 'sistema',

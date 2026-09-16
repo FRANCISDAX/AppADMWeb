@@ -5,6 +5,8 @@ import { db } from '@/lib/firebase'
 
 // Port de helper/ConsolidadoHelper.js → generarConsolidado (RN): crea una BOLETA
 // que agrupa las Notas de Venta del día y marca cada NV como consolidada.
+// La serie la decide quien llama vía `config.serieBoleta`: el cajero que consolida
+// SUS NV pasa su serie de caja; un supervisor (que ve las de todos) pasa la global.
 export async function generarConsolidado(nvs: any[], config: Record<string, any>, cajero: string | null = null, usuarioId: string | null = null) {
   if (!nvs || nvs.length === 0) return { success: false, error: 'No hay notas de venta pendientes de consolidación.' }
 

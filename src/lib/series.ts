@@ -14,15 +14,37 @@ import { CONFIG_POR_DEFECTO } from '@/constants/tributario'
  */
 
 /** Campos de `tblUsuarios` que definen la serie de comprobantes de una caja. */
-export type CampoSerie = 'serieBoleta' | 'serieFactura' | 'seriePrefijo'
+export type CampoSerie =
+  | 'serieBoleta'
+  | 'serieFactura'
+  | 'seriePrefijo'
+  | 'serieBoletaNC'
+  | 'serieBoletaND'
+  | 'serieFacturaNC'
+  | 'serieFacturaND'
 
-export const CAMPOS_SERIE: readonly CampoSerie[] = ['serieBoleta', 'serieFactura', 'seriePrefijo']
+export const CAMPOS_SERIE: readonly CampoSerie[] = [
+  'serieBoleta',
+  'serieFactura',
+  'seriePrefijo',
+  'serieBoletaNC',
+  'serieBoletaND',
+  'serieFacturaNC',
+  'serieFacturaND',
+]
 
 export const ETIQUETA_SERIE: Record<CampoSerie, string> = {
   serieBoleta: 'boletas',
   serieFactura: 'facturas',
   seriePrefijo: 'notas de venta',
+  serieBoletaNC: 'notas de crédito de boletas',
+  serieBoletaND: 'notas de débito de boletas',
+  serieFacturaNC: 'notas de crédito de facturas',
+  serieFacturaND: 'notas de débito de facturas',
 }
+
+/** Campos cuyo comprobante es una nota de crédito/débito. */
+export const esCampoNota = (campo: CampoSerie): boolean => campo.startsWith('serieBoletaN') || campo.startsWith('serieFacturaN')
 
 export type EspacioSerie = 'sunat' | 'notaVenta'
 
@@ -50,6 +72,8 @@ export type SerieEmpresa = {
   etiqueta: string
   /** Las series de NC/ND comparten el contador `sunat_{serie}` con boletas/facturas. */
   esNota: boolean
+  /** Campo de `tblUsuarios` del que esta serie es el respaldo cuando está vacío. */
+  campo: CampoSerie
 }
 
 export type MotivoConflicto = 'campo_duplicado' | 'otro_usuario' | 'usuario_inactivo' | 'serie_empresa' | 'serie_nota' | 'formato'
@@ -69,8 +93,8 @@ export function normalizarSerie(valor?: string | null): string {
 
 /** Serie de 4 caracteres que SUNAT acepta para boletas (`B`) y facturas (`F`). */
 export function formatoSerieValido(campo: CampoSerie, serie: string): boolean {
-  if (campo === 'serieBoleta') return /^B[A-Z0-9]{3}$/.test(serie)
-  if (campo === 'serieFactura') return /^F[A-Z0-9]{3}$/.test(serie)
+  if (campo === 'serieBoleta' || campo === 'serieBoletaNC' || campo === 'serieBoletaND') return /^B[A-Z0-9]{3}$/.test(serie)
+  if (campo === 'serieFactura' || campo === 'serieFacturaNC' || campo === 'serieFacturaND') return /^F[A-Z0-9]{3}$/.test(serie)
   return serie.length > 0
 }
 
@@ -101,22 +125,37 @@ function leerConfig(config: Record<string, unknown>, clave: string, porDefecto: 
 export function seriesEmpresa(config: Record<string, unknown> = {}): SerieEmpresa[] {
   const c = CONFIG_POR_DEFECTO
   const series: SerieEmpresa[] = [
-    { serie: leerConfig(config, 'serieBoleta', c.serieBoleta), espacio: 'sunat', etiqueta: 'serie global de boletas', esNota: false },
-    { serie: leerConfig(config, 'serieFactura', c.serieFactura), espacio: 'sunat', etiqueta: 'serie global de facturas', esNota: false },
-    { serie: leerConfig(config, 'serie_prefijo', c.serie_prefijo), espacio: 'notaVenta', etiqueta: 'serie global de notas de venta', esNota: false },
-    { serie: leerConfig(config, 'serieBoletaNC', c.serieBoletaNC), espacio: 'sunat', etiqueta: 'serie de notas de crédito de boletas', esNota: true },
-    { serie: leerConfig(config, 'serieBoletaND', c.serieBoletaND), espacio: 'sunat', etiqueta: 'serie de notas de débito de boletas', esNota: true },
-    { serie: leerConfig(config, 'serieFacturaNC', c.serieFacturaNC), espacio: 'sunat', etiqueta: 'serie de notas de crédito de facturas', esNota: true },
-    { serie: leerConfig(config, 'serieFacturaND', c.serieFacturaND), espacio: 'sunat', etiqueta: 'serie de notas de débito de facturas', esNota: true },
+    { serie: leerConfig(config, 'serieBoleta', c.serieBoleta), espacio: 'sunat', etiqueta: 'serie global de boletas', esNota: false, campo: 'serieBoleta' },
+    { serie: leerConfig(config, 'serieFactura', c.serieFactura), espacio: 'sunat', etiqueta: 'serie global de facturas', esNota: false, campo: 'serieFactura' },
+    { serie: leerConfig(config, 'serie_prefijo', c.serie_prefijo), espacio: 'notaVenta', etiqueta: 'serie global de notas de venta', esNota: false, campo: 'seriePrefijo' },
+    { serie: leerConfig(config, 'serieBoletaNC', c.serieBoletaNC), espacio: 'sunat', etiqueta: 'serie de notas de crédito de boletas', esNota: true, campo: 'serieBoletaNC' },
+    { serie: leerConfig(config, 'serieBoletaND', c.serieBoletaND), espacio: 'sunat', etiqueta: 'serie de notas de débito de boletas', esNota: true, campo: 'serieBoletaND' },
+    { serie: leerConfig(config, 'serieFacturaNC', c.serieFacturaNC), espacio: 'sunat', etiqueta: 'serie de notas de crédito de facturas', esNota: true, campo: 'serieFacturaNC' },
+    { serie: leerConfig(config, 'serieFacturaND', c.serieFacturaND), espacio: 'sunat', etiqueta: 'serie de notas de débito de facturas', esNota: true, campo: 'serieFacturaND' },
   ]
   return series.filter((s) => s.serie.length > 0)
 }
 
 /**
+ * Serie con la que la caja emitirá cada tipo: la propia si la definió, si no la
+ * global de la empresa. Es lo que realmente se numera, así que los choques se
+ * calculan sobre este conjunto (no sobre lo declarado).
+ */
+export function seriesEfectivas(series: SeriesUsuario, empresa: SerieEmpresa[]): { campo: CampoSerie; serie: string; espacio: EspacioSerie; declarada: boolean }[] {
+  return CAMPOS_SERIE.map((campo) => {
+    const propia = normalizarSerie(series[campo])
+    const global = empresa.find((e) => e.campo === campo)?.serie ?? ''
+    return { campo, serie: propia || global, espacio: espacioDe(campo), declarada: propia.length > 0 }
+  }).filter((s) => s.serie.length > 0)
+}
+
+/**
  * Choques entre las series que se intentan guardar y las ya existentes.
- * `bloqueante: true` = no se debe permitir guardar (dos cajas numerando en el
- * mismo contador). `bloqueante: false` = aviso (serie de un usuario inactivo,
- * igual a la global, o formato que SUNAT podría rechazar).
+ *
+ * Se calcula sobre las series **efectivas** (la propia de la caja o, si está
+ * vacía, la global): una caja que deja las notas en blanco emite con la serie
+ * global de NC/ND, así que una boleta con esa misma serie sí comparte contador.
+ * `bloqueante: true` = no se debe permitir guardar. `bloqueante: false` = aviso.
  */
 export function validarSeries({
   series,
@@ -130,60 +169,61 @@ export function validarSeries({
   campos?: readonly CampoSerie[]
 }): ConflictoSerie[] {
   const conflictos: ConflictoSerie[] = []
-  const propias: { campo: CampoSerie; serie: string; espacio: EspacioSerie }[] = []
+  const revisar = campos ? new Set<CampoSerie>(campos) : null
+  const efectivas = seriesEfectivas(series, empresa)
 
-  for (const campo of campos ?? CAMPOS_SERIE) {
-    const serie = normalizarSerie(series[campo])
-    if (!serie) continue
-    const espacio = espacioDe(campo)
+  for (const efectiva of efectivas) {
+    const { campo, serie, espacio, declarada } = efectiva
+    // Solo interesa lo que el usuario declara aquí (un campo heredado se valida
+    // como parte del conjunto efectivo, no contra otros usuarios).
+    if (revisar && !revisar.has(campo)) continue
     const etiqueta = ETIQUETA_SERIE[campo]
 
-    const repetida = propias.find((p) => p.serie === serie && p.espacio === espacio)
-    if (repetida) {
-      conflictos.push({
-        campo,
-        serie,
-        motivo: 'campo_duplicado',
-        bloqueante: true,
-        mensaje: `La serie ${serie} ya está puesta en ${ETIQUETA_SERIE[repetida.campo]}; cada tipo necesita su propia serie.`,
-      })
-    }
-    propias.push({ campo, serie, espacio })
+    if (declarada) {
+      // 1) La serie declarada choca con otra serie EFECTIVA de la misma caja
+      //    (declarada por ella o heredada de la global de empresa).
+      const choque = efectivas.find((e) => e.campo !== campo && e.serie === serie && e.espacio === espacio)
+      if (choque) {
+        conflictos.push({
+          campo,
+          serie,
+          motivo: choque.declarada ? 'campo_duplicado' : 'serie_nota',
+          bloqueante: true,
+          mensaje: choque.declarada
+            ? `La serie ${serie} está en ${etiqueta} y en ${ETIQUETA_SERIE[choque.campo]}: cada tipo necesita su propia serie.`
+            : `La serie ${serie} en ${etiqueta} es la que esta caja ya usa en ${ETIQUETA_SERIE[choque.campo]} (serie global de empresa): comparten el mismo contador.`,
+        })
+      }
 
-    if (!formatoSerieValido(campo, serie)) {
-      const letra = campo === 'serieBoleta' ? 'B' : 'F'
-      conflictos.push({
-        campo,
-        serie,
-        motivo: 'formato',
-        bloqueante: false,
-        mensaje: `SUNAT espera 4 caracteres para ${etiqueta} empezando con "${letra}" (ej. ${letra}001).`,
-      })
-    }
+      // 2) La serie declarada es EXACTAMENTE la global del mismo campo: hoy no
+      //    rompe nada (es lo que heredaría), pero conviene que sea explícito.
+      const global = empresa.find((e) => e.campo === campo && e.serie === serie)
+      if (global) {
+        conflictos.push({
+          campo,
+          serie,
+          motivo: 'serie_empresa',
+          bloqueante: false,
+          mensaje: `La serie ${serie} de ${etiqueta} es la misma ${global.etiqueta}: las cajas sin serie propia numeran ahí, compartirían contador.`,
+        })
+      }
 
-    for (const nota of empresa.filter((e) => e.esNota && e.serie === serie && e.espacio === espacio)) {
-      conflictos.push({
-        campo,
-        serie,
-        motivo: 'serie_nota',
-        bloqueante: true,
-        mensaje: `La serie ${serie} es la ${nota.etiqueta}: boletas/facturas y notas comparten el contador ${espacio === 'sunat' ? 'SUNAT' : 'de notas de venta'}, la numeración se pisaría.`,
-      })
-    }
-
-    const global = empresa.find((e) => !e.esNota && e.serie === serie && e.espacio === espacio)
-    if (global) {
-      conflictos.push({
-        campo,
-        serie,
-        motivo: 'serie_empresa',
-        bloqueante: false,
-        mensaje: `La serie ${serie} es la ${global.etiqueta}: las cajas sin serie propia numeran ahí, compartirían contador.`,
-      })
+      if (!formatoSerieValido(campo, serie)) {
+        const letra = campo.startsWith('serieFactura') ? 'F' : 'B'
+        conflictos.push({
+          campo,
+          serie,
+          motivo: 'formato',
+          bloqueante: false,
+          mensaje: `SUNAT espera 4 caracteres para ${etiqueta} empezando con "${letra}" (ej. ${letra}001).`,
+        })
+      }
     }
 
+    // 3) Choque con la misma serie declarada por otra caja.
     for (const ocupada of ocupadas) {
       if (ocupada.serie !== serie || ocupada.espacio !== espacio) continue
+      if (!declarada && ocupada.activo) continue // ambas heredan la global: es lo esperado
       conflictos.push({
         campo,
         serie,
@@ -196,8 +236,7 @@ export function validarSeries({
     }
   }
 
-  // Un mismo choque (p. ej. la misma serie global repetida en boletas y facturas)
-  // se reporta una sola vez: el mensaje no depende del campo.
+  // Un mismo choque se reporta una sola vez: el mensaje no depende del campo.
   const vistos = new Set<string>()
   return conflictos.filter((c) => {
     const clave = `${c.motivo}|${c.serie}`

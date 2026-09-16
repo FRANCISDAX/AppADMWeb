@@ -16,16 +16,14 @@ import {
   validarSeries,
 } from '@/lib/series'
 
-export type Usuario = {
+// Las series (7: boletas, facturas, NV y las 4 de NC/ND) vienen de `SeriesUsuario`.
+export type Usuario = SeriesUsuario & {
   uid: string
   email?: string
   nombre?: string
   rol?: string
   activo?: boolean
   permisos?: Record<string, boolean>
-  serieBoleta?: string
-  serieFactura?: string
-  seriePrefijo?: string
   createdAt?: any
   updatedAt?: any
 }
@@ -81,9 +79,19 @@ export async function validarSeriesUsuario(
   return validarSeries({ series, ocupadas, empresa, campos })
 }
 
-function seriesDe(data: { serieBoleta?: string; serieFactura?: string; seriePrefijo?: string }): SeriesUsuario {
+function seriesDe(data: SeriesUsuario): SeriesUsuario {
   const out: SeriesUsuario = {}
   for (const campo of CAMPOS_SERIE) out[campo] = data[campo] ?? ''
+  return out
+}
+
+/** Solo las series presentes en `data` (nunca escribe `undefined` en Firestore). */
+function seriesParaGuardar(data: SeriesUsuario): SeriesUsuario {
+  const out: SeriesUsuario = {}
+  for (const campo of CAMPOS_SERIE) {
+    const valor = data[campo]
+    if (valor !== undefined) out[campo] = valor.trim()
+  }
   return out
 }
 
@@ -95,12 +103,13 @@ async function errorSeries(series: SeriesUsuario, excluirUid?: string): Promise<
   return mensajeConflictos(bloqueantes)
 }
 
-export async function crearUsuario({ email, password, nombre, rol, permisos, serieBoleta, serieFactura, seriePrefijo }: { email: string; password: string; nombre: string; rol: string; permisos: Record<string, boolean>; serieBoleta?: string; serieFactura?: string; seriePrefijo?: string }) {
+export async function crearUsuario(datos: { email: string; password: string; nombre: string; rol: string; permisos: Record<string, boolean> } & SeriesUsuario) {
+  const { email, password, nombre, rol, permisos } = datos
   try {
     const existente = await getDocs(query(collection(db, COL.USUARIO), where('email', '==', email)))
     if (!existente.empty) return { success: false, error: 'Ya existe un usuario con este email.' }
 
-    const errorSerie = await errorSeries(seriesDe({ serieBoleta, serieFactura, seriePrefijo }))
+    const errorSerie = await errorSeries(seriesDe(datos))
     if (errorSerie) return { success: false, error: errorSerie }
 
     const cred = await createUserWithEmailAndPassword(auth, email, password)
@@ -111,9 +120,7 @@ export async function crearUsuario({ email, password, nombre, rol, permisos, ser
       rol: rol || 'CAJERO',
       activo: true,
       permisos: permisosFinales,
-      serieBoleta: serieBoleta?.trim() || '',
-      serieFactura: serieFactura?.trim() || '',
-      seriePrefijo: seriePrefijo?.trim() || '',
+      ...seriesDe(seriesParaGuardar(datos)),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     })
@@ -129,7 +136,7 @@ export async function crearUsuario({ email, password, nombre, rol, permisos, ser
   }
 }
 
-export async function editarUsuario(uid: string, data: Partial<{ nombre: string; rol: string; permisos: Record<string, boolean>; activo: boolean; serieBoleta: string; serieFactura: string; seriePrefijo: string }>) {
+export async function editarUsuario(uid: string, data: Partial<{ nombre: string; rol: string; permisos: Record<string, boolean>; activo: boolean }> & SeriesUsuario) {
   try {
     // Si se tocan series, se validan contra el resto de cajas antes de escribir.
     const tocaSeries = CAMPOS_SERIE.some((campo) => data[campo] !== undefined)
@@ -137,25 +144,16 @@ export async function editarUsuario(uid: string, data: Partial<{ nombre: string;
       const snap = await getDoc(doc(db, COL.USUARIO, uid))
       if (!snap.exists()) return { success: false, error: 'El usuario ya no existe.' }
       const actual = snap.data() as Usuario
-      const errorSerie = await errorSeries(
-        seriesDe({
-          serieBoleta: data.serieBoleta ?? actual.serieBoleta,
-          serieFactura: data.serieFactura ?? actual.serieFactura,
-          seriePrefijo: data.seriePrefijo ?? actual.seriePrefijo,
-        }),
-        uid
-      )
+      // Lo guardado + lo nuevo: así la validación ve el estado final de las 7 series.
+      const errorSerie = await errorSeries(seriesDe({ ...actual, ...data }), uid)
       if (errorSerie) return { success: false, error: errorSerie }
     }
 
-    const update: Record<string, unknown> = { updatedAt: new Date().toISOString() }
+    const update: Record<string, unknown> = { updatedAt: new Date().toISOString(), ...seriesParaGuardar(data) }
     if (data.nombre !== undefined) update.nombre = data.nombre
     if (data.rol !== undefined) update.rol = data.rol
     if (data.permisos !== undefined) update.permisos = data.permisos
     if (data.activo !== undefined) update.activo = data.activo
-    if (data.serieBoleta !== undefined) update.serieBoleta = data.serieBoleta
-    if (data.serieFactura !== undefined) update.serieFactura = data.serieFactura
-    if (data.seriePrefijo !== undefined) update.seriePrefijo = data.seriePrefijo
     await updateDoc(doc(db, COL.USUARIO, uid), update)
     return { success: true }
   } catch (e) {
