@@ -115,7 +115,7 @@ export function Inventario() {
   const { confirm } = useNotifications()
   const [q, setQ] = React.useState('')
   const [catActiva, setCatActiva] = React.useState('Todos')
-  const [verActivos, setVerActivos] = React.useState(true)
+  const [soloInactivos, setSoloInactivos] = React.useState(false)
   const [soloStockBajo, setSoloStockBajo] = React.useState(false)
   const [sort, setSort] = React.useState<{ key: 'nombre' | 'categoria' | 'precioVenta' | 'stock'; dir: 'asc' | 'desc' }>({ key: 'nombre', dir: 'asc' })
   const [editando, setEditando] = React.useState<Producto | null>(null)
@@ -175,11 +175,15 @@ export function Inventario() {
     return form.categoria && !base.includes(form.categoria) ? [...base, form.categoria] : base
   }, [categoriasAdmin, form.categoria])
 
+  // Filtro de estado: por defecto solo activos; con "Solo desactivados" se ven
+  // ÚNICAMENTE los desactivados (antes ese tilde mostraba todo mezclado, así que
+  // no servía para revisar la lista de lo que se dio de baja). Mismo criterio que
+  // el filtro "Inactivos" de Proveedores.
   const lista = React.useMemo(() => {
     const t = q.trim().toLowerCase()
     const filt = productos.filter(
       (p) =>
-        (verActivos ? p.activo !== false : true) &&
+        (soloInactivos ? p.activo === false : p.activo !== false) &&
         (catActiva === 'Todos' || p.categoria === catActiva) &&
         (!t || p.nombre?.toLowerCase().includes(t) || p.codigo?.toLowerCase().includes(t)) &&
         (!soloStockBajo || (p.stock != null && p.stock > 0 && p.minStock != null && p.stock <= p.minStock) || p.stock === 0)
@@ -196,7 +200,7 @@ export function Inventario() {
       const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
       return sort.dir === 'asc' ? cmp : -cmp
     })
-  }, [productos, q, catActiva, sort, verActivos, soloStockBajo])
+  }, [productos, q, catActiva, sort, soloInactivos, soloStockBajo])
 
   const hayMas = visibles < lista.length
   const paginados = lista.slice(0, visibles)
@@ -716,8 +720,8 @@ export function Inventario() {
 
       <div className="flex flex-wrap items-center gap-4">
         <label className="flex w-fit items-center gap-2 text-sm text-muted-foreground cursor-pointer">
-          <input type="checkbox" checked={!verActivos} onChange={(e) => setVerActivos(!e.target.checked)} className="h-4 w-4 accent-primary" />
-          Mostrar desactivados
+          <input type="checkbox" checked={soloInactivos} onChange={(e) => setSoloInactivos(e.target.checked)} className="h-4 w-4 accent-primary" />
+          Solo desactivados
         </label>
         <label className="flex w-fit items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" checked={soloStockBajo} onChange={(e) => setSoloStockBajo(e.target.checked)} className="h-4 w-4 accent-amber-500" />
@@ -834,7 +838,7 @@ export function Inventario() {
             {lista.length === 0 && (
               <div className="py-16 text-center text-muted-foreground">
                 <Package className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm font-medium">Sin productos</p>
+                <p className="text-sm font-medium">{soloInactivos ? 'Sin productos desactivados' : 'Sin productos'}</p>
               </div>
             )}
           </div>
