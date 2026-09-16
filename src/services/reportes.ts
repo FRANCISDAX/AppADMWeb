@@ -1,6 +1,7 @@
 import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, updateDoc, where, type QueryConstraint } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
+import { desglosarTurno, sumarDesgloses, type DesgloseTurno } from '@/lib/arqueo'
 
 // Una "venta" contable para reportes es un comprobante real (NV/BOLETA/FACTURA), NO anulado,
 // y NO un cobro de crédito ni una nota de crédito/débito (esos no son ventas nuevas).
@@ -93,6 +94,8 @@ export type ArqueoDelDia = {
   diferenciaTotal: number
   totalNeto: number
   numTransacciones: number
+  /** Desglose por origen (ventas / cobranzas / notas) sumado de todos los turnos del día. */
+  desgloseDia: DesgloseTurno
   turnos: any[]
 }
 
@@ -165,6 +168,7 @@ export async function obtenerArqueoDelDia(fecha: Date | string, usuarioFiltro?: 
   let efectivoContadoTotal = 0
   let numCierres = 0
   let numTransacciones = 0
+  const desgloses: DesgloseTurno[] = []
   const turnos: any[] = []
 
   try {
@@ -188,6 +192,15 @@ export async function obtenerArqueoDelDia(fecha: Date | string, usuarioFiltro?: 
       const efectivoContado = cerrado ? (t.montoFinalEfectivo || 0) : 0
       const diferencia = cerrado ? efectivoContado - efectivoEsperado : 0
       const activas = (t.ventasDelTurno || []).filter((v: any) => v.estado !== 'anulada')
+      // Desglose por origen (ventas / cobranzas de crédito / notas) DENTRO de cada
+      // bolsillo. No mueve ningún total: los dos bolsillos son la plata que entró al
+      // cajón y a la billetera, y contra eso se concilia. El desglose explica de dónde
+      // viene cada sol (en el turno del 14/09 "Ventas transferencia" era una cobranza).
+      const desglose = desglosarTurno({
+        totalEfectivo: efectivo,
+        totalTransferencia: transferencia,
+        ventasDelTurno: activas,
+      })
 
       totalVentas += ventas
       totalEfectivo += efectivo
@@ -200,6 +213,7 @@ export async function obtenerArqueoDelDia(fecha: Date | string, usuarioFiltro?: 
       efectivoContadoTotal += efectivoContado
       if (cerrado) numCierres++
       numTransacciones += activas.length
+      desgloses.push(desglose)
 
       turnos.push({
         id: d.id,
@@ -218,6 +232,7 @@ export async function obtenerArqueoDelDia(fecha: Date | string, usuarioFiltro?: 
         efectivoEsperado,
         efectivoContado,
         diferencia,
+        desglose,
         observaciones: t.observaciones || '',
         numVentas: activas.length,
         gastosDelTurno: t.gastosDelTurno || [],
@@ -268,6 +283,7 @@ export async function obtenerArqueoDelDia(fecha: Date | string, usuarioFiltro?: 
     diferenciaTotal,
     totalNeto,
     numTransacciones,
+    desgloseDia: sumarDesgloses(desgloses),
     turnos,
   }
 }

@@ -11,6 +11,7 @@ import { rectificarTurno } from '@/services/turnos'
 import { cn } from '@/lib/utils'
 import { abrirPDFArqueo, type TurnoArqueo } from '@/lib/pdf'
 import { diagnosticarDiferencia, type Diagnostico } from '@/lib/diagnosticos'
+import { lineasDeOrigen, type DesgloseBolsillo, type DesgloseTurno } from '@/lib/arqueo'
 
 const MESES_CORTO = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
 const fmt = (n: number) => 'S/ ' + (n ?? 0).toFixed(2)
@@ -28,7 +29,7 @@ export function ArqueoCaja() {
   const miUid = verTodo ? undefined : (user?.uid || undefined)
   const hoy = new Date()
   const [fechaSel, setFechaSel] = React.useState(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()))
-  const [arqueo, setArqueo] = React.useState<{ numCierres: number; numTurnos: number; totalVentas: number; totalEfectivo: number; totalTransferencia: number; totalGastos: number; totalGastosEfectivo: number; montoInicialTotal: number; efectivoEsperadoTotal: number; efectivoContadoTotal: number; diferenciaTotal: number; totalNeto: number; numTransacciones: number; turnos: TurnoArqueo[] } | null>(null)
+  const [arqueo, setArqueo] = React.useState<{ numCierres: number; numTurnos: number; totalVentas: number; totalEfectivo: number; totalTransferencia: number; totalGastos: number; totalGastosEfectivo: number; montoInicialTotal: number; efectivoEsperadoTotal: number; efectivoContadoTotal: number; diferenciaTotal: number; totalNeto: number; numTransacciones: number; desgloseDia: DesgloseTurno; turnos: TurnoArqueo[] } | null>(null)
   const [cargando, setCargando] = React.useState(true)
   const [expandidos, setExpandidos] = React.useState<Record<string, boolean>>({})
   const [contados, setContados] = React.useState<Record<string, string>>({})
@@ -181,10 +182,12 @@ export function ArqueoCaja() {
         <div className="rounded-2xl border bg-card p-4 shadow-card">
           <div className="text-xs text-muted-foreground">💵 Efectivo</div>
           <div className="num mt-1 font-bold">{fmt(arqueo?.totalEfectivo ?? 0)}</div>
+          <OrigenesCorto desglose={arqueo?.desgloseDia?.efectivo} />
         </div>
         <div className="rounded-2xl border bg-card p-4 shadow-card">
           <div className="text-xs text-muted-foreground">📲 Transferencia</div>
           <div className="num mt-1 font-bold">{fmt(arqueo?.totalTransferencia ?? 0)}</div>
+          <OrigenesCorto desglose={arqueo?.desgloseDia?.transferencia} />
         </div>
         <div className="rounded-2xl border bg-card p-4 shadow-card">
           <div className="text-xs text-muted-foreground">💸 Gastos</div>
@@ -267,8 +270,10 @@ export function ArqueoCaja() {
                         )}
                       </div>
                     </div>
-                    <Row label="Ventas efectivo" value={'+ ' + fmt(turno.totalEfectivo)} valueClass="text-emerald-600" />
-                    <Row label="Ventas transferencia" value={fmt(turno.totalTransferencia)} />
+                    <Row label="Efectivo (cajón)" value={'+ ' + fmt(turno.totalEfectivo)} valueClass="text-emerald-600" />
+                    <Origenes desglose={turno.desglose?.efectivo} className="pl-3" />
+                    <Row label="Transferencia" value={fmt(turno.totalTransferencia)} />
+                    <Origenes desglose={turno.desglose?.transferencia} className="pl-3" />
                     <Row label="Gastos en efectivo" value={'- ' + fmt(turno.totalGastosEfectivo)} valueClass="text-destructive" />
                     {turno.gastosDelTurno.filter((g) => g.tipoPago === 'caja').length > 0 && (
                       <div className="rounded-lg border border-border/60 bg-background px-3 py-2">
@@ -449,6 +454,51 @@ function Row({ label, value, valueClass }: { label: string; value: string; value
     <div className="flex items-center justify-between">
       <span className="text-muted-foreground">{label}</span>
       <span className={cn('num font-semibold', valueClass)}>{value}</span>
+    </div>
+  )
+}
+
+/**
+ * Líneas de origen de un bolsillo (· ventas · cobranza de crédito · notas).
+ *
+ * El total del bolsillo es la plata que entró al cajón o a la billetera (y contra eso se
+ * concilia), pero **no todo es venta del día**: una cobranza de crédito es plata de una
+ * deuda anterior. Los orígenes que están en cero no se muestran, así que en el caso normal
+ * (todo ventas) no aparece ninguna línea extra.
+ */
+function Origenes({ desglose, className }: { desglose?: DesgloseBolsillo; className?: string }) {
+  if (!desglose) return null
+  const lineas = lineasDeOrigen(desglose).filter((l) => l.origen !== 'ventas')
+  if (lineas.length === 0) return null
+  return (
+    <div className={cn('space-y-0.5', className)}>
+      {lineas.map((l) => (
+        <div key={l.origen} className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="text-muted-foreground">
+            {l.origen === 'cobranzas' ? '↳ cobranza de crédito' : '↳ notas (NC/ND)'}
+          </span>
+          <span className={cn('num font-semibold', l.monto < 0 ? 'text-destructive' : 'text-amber-600 dark:text-amber-500')}>
+            {l.monto < 0 ? '- ' : ''}
+            {fmt(Math.abs(l.monto))}
+          </span>
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-2 text-[11px]">
+        <span className="text-muted-foreground/70">↳ ventas del día</span>
+        <span className="num text-muted-foreground">{fmt(desglose.ventas)}</span>
+      </div>
+    </div>
+  )
+}
+
+/** Versión de una línea para las tarjetas del encabezado del día (achicada). */
+function OrigenesCorto({ desglose }: { desglose?: DesgloseBolsillo }) {
+  if (!desglose) return null
+  const partes = lineasDeOrigen(desglose)
+  if (partes.length <= 1) return null
+  return (
+    <div className="mt-0.5 text-[10px] leading-tight text-muted-foreground">
+      {partes.map((p) => `${p.label} ${fmt(p.monto)}`).join(' · ')}
     </div>
   )
 }

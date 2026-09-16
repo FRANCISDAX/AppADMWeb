@@ -96,9 +96,52 @@ export function infoMedio(medio: string): InfoMedio {
   return MEDIOS.find((m) => m.medio === medio) ?? MEDIOS[0]
 }
 
-/** Bolsillo de un medio: en qué total del turno entra. */
+/**
+ * Bolsillo de un medio: en qué total del turno entra.
+ *
+ * ⚠️ **`'credito'` (y cualquier valor desconocido) no entra a NINGÚN bolsillo.** Una
+ * venta al fiado no deja plata en el cajón ni en la billetera: queda **por cobrar**.
+ * Antes esta función caía a `infoMedio`, que ante un medio desconocido devuelve el
+ * primer medio de la lista (**efectivo**), así que `bolsilloDe('credito')` daba
+ * `'efectivo'` y **una venta a crédito inflaba el efectivo de la caja** → el arqueo
+ * mostraba un faltante igual al crédito. Los llamadores comparan con `'efectivo'` /
+ * `'transferencia'`, así que devolver un tercer valor los deja correctos sin tocarlos.
+ */
 export function bolsilloDe(medio: string): BolsilloPago {
-  return infoMedio(medio).bolsillo
+  const clave = String(medio ?? '').trim().toLowerCase()
+  const info = MEDIOS.find((m) => m.medio === clave)
+  return info ? info.bolsillo : 'credito'
+}
+
+/**
+ * Reparto de una venta entre los bolsillos de la caja — **única** implementación de
+ * la regla, para que el alta (`ventas.ts`) y la anulación calculen lo mismo.
+ *
+ * Si la venta trae `pagos` (pago múltiple), cada pago va a su bolsillo. Si no, se cae
+ * a `tipoPago` (documentos viejos y los que escribe la app móvil, que no guarda
+ * `pagos`). Una venta a crédito devuelve **0 y 0**.
+ *
+ * ⚠️ Los **cobros de crédito** que se van agregando a `venta.pagos` usan `tipoPago`
+ * (no `tipo`) y acá se **ignoran a propósito**: no son pagos de esta venta y ya están
+ * contados en el turno como items `cobro_credito`.
+ */
+export function bolsillosDeVenta(entrada: {
+  tipoPago?: string
+  pagos?: readonly PagoGuardado[]
+  total?: number
+}): { efectivo: number; transferencia: number } {
+  const res = { efectivo: 0, transferencia: 0 }
+  const pagos = Array.isArray(entrada.pagos) ? entrada.pagos : []
+  if (pagos.length > 0) {
+    for (const p of pagos) {
+      const b = bolsilloDe(p.medio ?? p.tipo ?? '')
+      if (b !== 'credito') res[b] += Number(p.monto) || 0
+    }
+    return res
+  }
+  const b = bolsilloDe(entrada.tipoPago ?? '')
+  if (b !== 'credito') res[b] = Number(entrada.total) || 0
+  return res
 }
 
 /**

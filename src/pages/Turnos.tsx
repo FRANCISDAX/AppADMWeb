@@ -9,6 +9,7 @@ import { CierreCaja } from '@/components/CierreCaja'
 import { abrirTurno, buscarTurnoAbierto, cerrarTurno, editarMontoInicial, type Turno } from '@/services/turnos'
 import { obtenerEnviosPendientesAnteriores, actualizarEstadoEnvio, type EnvioPendiente, type EnvioEstado } from '@/services/envios'
 import { cn } from '@/lib/utils'
+import { desglosarTurno, lineasDeOrigen, type DesgloseTurno } from '@/lib/arqueo'
 
 const fmt = (n: number) => 'S/ ' + n.toFixed(2)
 
@@ -266,6 +267,7 @@ export function Turnos() {
               <Info label="Total ventas" value={fmt(turno.totalVentas ?? 0)} />
               <Info label="Efectivo" value={fmt(turno.totalEfectivo ?? 0)} />
               <Info label="Transferencia" value={fmt(turno.totalTransferencia ?? 0)} />
+              <OrigenesTurno desglose={desglosarTurno(turno)} />
             </div>
           </div>
 
@@ -446,6 +448,31 @@ function Info({ label, value }: { label: string; value: string }) {
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="num font-semibold">{value}</div>
+    </div>
+  )
+}
+
+/**
+ * Aclara de dónde viene cada bolsillo: "Efectivo" y "Transferencia" son la plata que entró
+ * al cajón y a la billetera (ventas + cobranzas de crédito). Sin esto, una cobranza de
+ * S/ 47 por Yape se lee como si fuera una venta del día.
+ */
+function OrigenesTurno({ desglose }: { desglose: DesgloseTurno }) {
+  const lineas = [
+    { etiqueta: 'Efectivo', d: desglose.efectivo },
+    { etiqueta: 'Transferencia', d: desglose.transferencia },
+  ].flatMap(({ etiqueta, d }) =>
+    lineasDeOrigen(d)
+      .filter((l) => l.origen !== 'ventas')
+      .map((l) => ({ key: `${etiqueta}-${l.origen}`, texto: `${etiqueta}: ${l.label} ${fmt(l.monto)}` })),
+  )
+  if (lineas.length === 0) return null
+  return (
+    <div className="col-span-2 mt-1 space-y-0.5 rounded-lg bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground">
+      <div className="font-semibold">El total incluye:</div>
+      {lineas.map((l) => (
+        <div key={l.key} className="num">• {l.texto}</div>
+      ))}
     </div>
   )
 }

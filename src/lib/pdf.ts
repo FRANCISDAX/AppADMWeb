@@ -3,6 +3,7 @@ import { numeroALetras } from '@/lib/numero-a-letras'
 import { etiquetaPago, formaPagoLabel } from '@/lib/pagos'
 import { itemsConDescuento } from '@/lib/sunat-importes'
 import { esc } from '@/lib/ui-utils'
+import { lineasDeOrigen, type DesgloseTurno } from '@/lib/arqueo'
 
 const TITULOS: Record<string, string> = {
   NV: 'NOTA DE VENTA',
@@ -319,8 +320,23 @@ export type TurnoArqueo = {
   diferencia: number
   observaciones?: string
   numVentas: number
+  /** Desglose por origen dentro de cada bolsillo (ventas del día / cobranzas / notas). */
+  desglose?: DesgloseTurno
   gastosDelTurno: { descripcion: string; monto: number; categoria: string; tipoPago: string; fecha?: string }[]
   comprobantes: { id?: string; serieNumero: string; tipoPago: string; esCobro: boolean; operacion?: string; total: number; fecha?: string; clienteNombre: string }[]
+}
+
+/**
+ * Filas de origen de un bolsillo para el PDF del arqueo (· ventas del día · cobranza de
+ * crédito · notas). No se imprime nada si el bolsillo es todo ventas del día.
+ */
+function origenesHTML(desglose: DesgloseTurno['efectivo'] | undefined, fmt: (n: number) => string): string {
+  if (!desglose) return ''
+  const lineas = lineasDeOrigen(desglose)
+  if (lineas.length <= 1) return ''
+  return lineas
+    .map((l) => `<tr><td style="padding:1px 0 1px 10px;color:#666;">↳ ${l.label}</td><td style="text-align:right;color:#666;">${fmt(l.monto)}</td></tr>`)
+    .join('')
 }
 
 export async function abrirPDFArqueo({ fecha, turnos, resumen }: { fecha: Date; turnos: TurnoArqueo[]; resumen: { totalVentas: number; totalEfectivo: number; totalTransferencia: number; totalGastos: number; totalNeto: number; numTurnos: number; numTransacciones: number; montoInicialTotal: number; efectivoEsperadoTotal: number; efectivoContadoTotal: number; diferenciaTotal: number } }) {
@@ -361,8 +377,10 @@ export async function abrirPDFArqueo({ fecha, turnos, resumen }: { fecha: Date; 
       </div>
       <table style="width:100%;font-size:9px;border-collapse:collapse;">
         <tr><td style="padding:3px 0;">Monto inicial</td><td style="text-align:right;font-weight:bold;">${fmt(turno.montoInicial)}</td></tr>
-        <tr><td style="padding:3px 0;">Ventas efectivo</td><td style="text-align:right;color:#16a34a;font-weight:bold;">+ ${fmt(turno.totalEfectivo)}</td></tr>
-        <tr><td style="padding:3px 0;">Ventas transferencia</td><td style="text-align:right;font-weight:bold;">${fmt(turno.totalTransferencia)}</td></tr>
+        <tr><td style="padding:3px 0;">Efectivo (cajón)</td><td style="text-align:right;color:#16a34a;font-weight:bold;">+ ${fmt(turno.totalEfectivo)}</td></tr>
+        ${origenesHTML(turno.desglose?.efectivo, fmt)}
+        <tr><td style="padding:3px 0;">Transferencia</td><td style="text-align:right;font-weight:bold;">${fmt(turno.totalTransferencia)}</td></tr>
+        ${origenesHTML(turno.desglose?.transferencia, fmt)}
         <tr><td style="padding:3px 0;">Gastos en efectivo</td><td style="text-align:right;color:#dc2626;font-weight:bold;">- ${fmt(turno.totalGastosEfectivo)}</td></tr>
         <tr style="border-top:2px solid #222;"><td style="padding:3px 0;font-weight:bold;color:#2563eb;">Efectivo esperado</td><td style="text-align:right;font-weight:bold;color:#2563eb;">${fmt(turno.efectivoEsperado)}</td></tr>
         ${!esAbierto ? `<tr><td style="padding:3px 0;">Efectivo contado</td><td style="text-align:right;font-weight:bold;">${fmt(turno.efectivoContado)}</td></tr>

@@ -3,7 +3,7 @@ import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
 import { AFECTACION_POR_DEFECTO } from '@/constants/tributario'
-import { bolsilloDe, formaPagoLabel, type PagoGuardado } from '@/lib/pagos'
+import { bolsillosDeVenta, formaPagoLabel, type PagoGuardado } from '@/lib/pagos'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
@@ -257,8 +257,9 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
       const pagos: PagoGuardado[] = venta.pagos && venta.pagos.length > 0
         ? venta.pagos
         : [{ tipo: (venta.tipoPago === 'mixto' ? 'efectivo' : venta.tipoPago) as PagoGuardado['tipo'], monto: venta.total }]
-      const montoEfectivo = pagos.filter((p) => bolsilloDe(p.medio ?? p.tipo) === 'efectivo').reduce((s, p) => s + (p.monto || 0), 0)
-      const montoTransferencia = pagos.filter((p) => bolsilloDe(p.medio ?? p.tipo) === 'transferencia').reduce((s, p) => s + (p.monto || 0), 0)
+      // Reparto por bolsillo: regla única en `lib/pagos.ts`. Una venta a crédito
+      // devuelve 0 y 0 (no deja plata en el cajón: queda por cobrar).
+      const { efectivo: montoEfectivo, transferencia: montoTransferencia } = bolsillosDeVenta({ tipoPago: venta.tipoPago, pagos, total: venta.total })
       const tipoPagoFinal = pagos.length > 1 ? 'mixto' : pagos[0].tipo
       ventaDoc = {
         ...ventaDoc,
@@ -444,14 +445,15 @@ export async function anularNotaVenta({ documentoId, motivo, usuario = 'sistema'
       if (turnoRef && turnoSnap && turnoSnap.exists()) {
         const td = turnoSnap.data()
         const monto = venta.total || 0
-        // Desglose real del cobro. Antes se usaba `venta.tipoPago === 'efectivo'`
-        // a secas: en una venta MIXTA eso daba 0 y 0, así que el efectivo y la
-        // transferencia del turno quedaban inflados (solo se corregía el total).
+        // Desglose real del cobro, con la MISMA regla que el alta (`lib/pagos.ts`).
+        // Antes se usaba `venta.tipoPago === 'efectivo'` a secas (en una venta MIXTA
+        // daba 0 y 0) y después `bolsilloDe`, que ante un medio desconocido devolvía
+        // efectivo: una venta a CRÉDITO se restaba del efectivo que nunca había
+        // sumado. `bolsillosDeVenta` deja el crédito fuera de los dos bolsillos.
         const pagosAnulados: PagoGuardado[] = Array.isArray(venta.pagos) && venta.pagos.length > 0
           ? venta.pagos
           : [{ tipo: venta.tipoPago === 'efectivo' ? 'efectivo' : venta.tipoPago === 'transferencia' ? 'transferencia' : 'credito', monto } as PagoGuardado]
-        const anuladoEfectivo = pagosAnulados.filter((p) => bolsilloDe(p.medio ?? p.tipo) === 'efectivo').reduce((s, p) => s + (p.monto || 0), 0)
-        const anuladoTransferencia = pagosAnulados.filter((p) => bolsilloDe(p.medio ?? p.tipo) === 'transferencia').reduce((s, p) => s + (p.monto || 0), 0)
+        const { efectivo: anuladoEfectivo, transferencia: anuladoTransferencia } = bolsillosDeVenta({ tipoPago: venta.tipoPago, pagos: pagosAnulados, total: monto })
         const nuevasVentas = (td.ventasDelTurno || []).map((v: any) => (v.id === venta.id ? { ...v, estado: 'anulada', anulacion: { fecha: new Date().toISOString(), usuario, motivo } } : v))
         const update: Record<string, any> = { ventasDelTurno: nuevasVentas }
         if (turnoAbierto) {

@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import {
   bolsilloDe,
+  bolsillosDeVenta,
   etiquetaPago,
   formaPagoLabel,
   infoMedio,
@@ -25,13 +26,39 @@ test('el bolsillo manda todo lo electrónico a transferencia y el efectivo a caj
   assert.equal(bolsilloDe('plin'), 'transferencia')
   assert.equal(bolsilloDe('transferencia'), 'transferencia')
   assert.equal(bolsilloDe('tarjeta'), 'transferencia')
-  assert.equal(bolsilloDe('cualquier-cosa'), 'efectivo', 'un medio desconocido no rompe')
+  assert.equal(bolsilloDe('cualquier-cosa'), 'credito', 'un medio desconocido NO entra a la caja: si cayera a efectivo, inflaría el cajón')
 })
 
 test('solo los medios electrónicos piden N° de operación', () => {
   assert.equal(infoMedio('efectivo').pideOperacion, false)
   assert.equal(infoMedio('yape').pideOperacion, true)
   assert.equal(infoMedio('tarjeta').pideOperacion, true)
+})
+
+// ⚠️ Regresión (bug real encontrado el 16/09/2026): `bolsilloDe` caía a `infoMedio`, que
+// ante un medio desconocido devuelve el PRIMER medio de la lista (efectivo). Entonces
+// `bolsilloDe('credito')` daba 'efectivo' y una venta al fiado se sumaba al efectivo de la
+// caja: el arqueo mostraba un faltante igual al crédito. El test viejo lo aprobaba
+// ('un medio desconocido no rompe'), así que la regla equivocada estaba "documentada".
+test('el crédito no entra a ningún bolsillo: no deja plata en el cajón', () => {
+  assert.equal(bolsilloDe('credito'), 'credito')
+  assert.equal(bolsilloDe('CREDITO'), 'credito')
+  assert.equal(bolsilloDe(''), 'credito')
+  assert.equal(bolsilloDe('mixto'), 'credito', 'un mixto sin `pagos` no se puede repartir')
+})
+
+test('bolsillosDeVenta: reparte por `pagos` y deja el crédito fuera', () => {
+  assert.deepEqual(
+    bolsillosDeVenta({ tipoPago: 'mixto', total: 50, pagos: [{ tipo: 'efectivo', monto: 30 }, { tipo: 'transferencia', medio: 'yape', monto: 20 }] }),
+    { efectivo: 30, transferencia: 20 },
+  )
+
+  assert.deepEqual(bolsillosDeVenta({ tipoPago: 'efectivo', total: 12 }), { efectivo: 12, transferencia: 0 })
+  assert.deepEqual(bolsillosDeVenta({ tipoPago: 'transferencia', total: 12 }), { efectivo: 0, transferencia: 12 })
+  assert.deepEqual(bolsillosDeVenta({ tipoPago: 'yape', total: 12 }), { efectivo: 0, transferencia: 12 })
+  assert.deepEqual(bolsillosDeVenta({ tipoPago: 'credito', total: 59 }), { efectivo: 0, transferencia: 0 }, 'una venta a crédito no entra a la caja')
+  assert.deepEqual(bolsillosDeVenta({ tipoPago: 'credito', total: 59, pagos: [{ tipo: 'credito', monto: 59 }] }), { efectivo: 0, transferencia: 0 })
+  assert.deepEqual(bolsillosDeVenta({ total: 0 }), { efectivo: 0, transferencia: 0 })
 })
 
 test('un solo pago en efectivo por el total: cobrable y sin vuelto', () => {
