@@ -160,7 +160,7 @@ export async function obtenerAnalisisMes(anio: number, mes: number): Promise<Ana
     totalValorizacion += stock * costo
     valCat[cat] = (valCat[cat] || 0) + stock * costo
     if (stock === 0) agotados++
-    else if (stock <= (Number(p.minStock) || 0)) stockBajo.push({ nombre: p.nombre || d.id, codigo: p.codigo || d.id, stock, minStock: Number(p.minStock) || 0 })
+    if (stock <= (Number(p.minStock) || 0)) stockBajo.push({ nombre: p.nombre || d.id, codigo: p.codigo || d.id, stock, minStock: Number(p.minStock) || 0 })
   })
   const stockBajoArr = stockBajo.sort((a, b) => a.stock - b.stock).slice(0, 20)
   const valorizacionPorCategoria = Object.entries(valCat).map(([categoria, valor]) => ({ categoria, valor: fmt2(valor) })).sort((a, b) => b.valor - a.valor)

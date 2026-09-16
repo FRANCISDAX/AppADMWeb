@@ -8,5 +8,10 @@ service cloud.firestore {
     match /{document=**} {
       allow read, write: if signedIn();
     }
+    // Sesiones de pantalla del cliente: el cliente lee sin auth, el PDV escribe con auth.
+    match /tblDisplaySessions/{sessionId} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
   }
 }

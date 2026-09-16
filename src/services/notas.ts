@@ -1,17 +1,47 @@
-import { collection, doc, runTransaction } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, runTransaction, where } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
+import { puntoEmisionDe } from '@/lib/sunat'
+import { normalizarSerie } from '@/lib/series'
 import { db } from '@/lib/firebase'
+
+/**
+ * Máximo correlativo ya emitido para una serie (cualquier tipo de documento).
+ * Sirve para sembrar el contador cuando el doc de `tblContadores` no existe:
+ * restauración de la base, contador borrado o notas emitidas por otra app/versión.
+ */
+async function maxCorrelativoEmitido(serie: string): Promise<number> {
+  let max = 0
+  const snap = await getDocs(query(collection(db, COL.DOCUMENTOS), where('serie', '==', serie)))
+  snap.forEach((d) => {
+    const n = Number(d.data().numero ?? d.data().correlativo ?? 0)
+    if (Number.isFinite(n) && n > max) max = n
+  })
+  return max
+}
 
 // Incrementa el contador `sunat_{serie}` y devuelve el próximo correlativo.
 export async function obtenerProximoCorrelativoSunat(serie: string): Promise<number | null> {
-  const contRef = doc(db, COL.CONTADORES, `sunat_${serie}`)
+  const serieNorm = normalizarSerie(serie)
+  const contRef = doc(db, COL.CONTADORES, `sunat_${serieNorm}`)
+
+  // SOLO LECTURA: si el contador aún no existe se arranca desde el máximo
+  // correlativo ya emitido. Sin esto la primera nota volvería a 000001 y SUNAT
+  // la rechazaría por correlativo duplicado ("el comprobante ya existe").
+  let maxExistente = 0
+  try {
+    const snap = await getDoc(contRef)
+    if (!snap.exists()) maxExistente = await maxCorrelativoEmitido(serieNorm)
+  } catch (e) {
+    console.warn('⚠️ Lectura de correlativos emitidos de la serie:', e)
+  }
+
   try {
     return await runTransaction(db, async (tx) => {
       const snap = await tx.get(contRef)
-      const ultimo = snap.exists() ? snap.data().ultimoCorrelativo ?? 0 : 0
+      const ultimo = snap.exists() ? snap.data().ultimoCorrelativo ?? 0 : maxExistente
       const nuevo = ultimo + 1
-      tx.set(contRef, { ultimoCorrelativo: nuevo, serie, updatedAt: new Date().toISOString() }, { merge: true })
+      tx.set(contRef, { ultimoCorrelativo: nuevo, serie: serieNorm, updatedAt: new Date().toISOString() }, { merge: true })
       return nuevo
     })
   } catch (e) {
@@ -50,7 +80,7 @@ export async function crearNotaCreditoDebito({
   const modificaBoleta = (documentoOriginal.tipoDoc || documentoOriginal.tipo) === 'BOLETA'
   const serieKey = modificaBoleta ? (esCredito ? 'serieBoletaNC' : 'serieBoletaND') : esCredito ? 'serieFacturaNC' : 'serieFacturaND'
   const serieDefault = modificaBoleta ? (esCredito ? 'BC01' : 'BD01') : esCredito ? 'FC01' : 'FD01'
-  const prefijoSerie = config[serieKey] || serieDefault
+  const prefijoSerie = normalizarSerie(config[serieKey] || serieDefault)
 
   const nuevoNum = await obtenerProximoCorrelativoSunat(prefijoSerie)
   if (!nuevoNum) return { success: false, error: 'No se pudo obtener el correlativo SUNAT para la nota.' }
@@ -118,7 +148,7 @@ export async function crearNotaCreditoDebito({
     anioMes,
     createdAt: f.toISOString(),
     usuarioId: documentoOriginal.usuarioId || '',
-    sunat: { serie: prefijoSerie, numero: nuevoNum, estado: 'pendiente' },
+    sunat: { serie: prefijoSerie, numero: nuevoNum, puntoEmision: puntoEmisionDe(null, config), estado: 'pendiente' },
   }
 
   const ajustarStock = Boolean(afectaStock) && esCredito && items.length > 0

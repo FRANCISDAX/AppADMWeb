@@ -67,18 +67,40 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
   const activos = productos.filter((p) => p.activo !== false).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
   const filtrados = activos.filter((p) => !q || p.nombre?.toLowerCase().includes(q.toLowerCase()) || p.codigo?.toLowerCase().includes(q.toLowerCase()))
 
-  function agregar(p: Producto) {
-    const pres = getPresCompra(p)
-    const primero = pres[0]
+  // Aplanar productos con sus presentaciones de compra para la lista
+  const itemsBusqueda = React.useMemo(() => {
+    const result: { key: string; producto: Producto; presentacion: Presentacion; label: string }[] = []
+    for (const p of filtrados) {
+      const pres = getPresCompra(p)
+      if (pres.length === 1) {
+        result.push({ key: p.id, producto: p, presentacion: pres[0], label: p.nombre || p.codigo || 'Producto' })
+      } else {
+        for (const pr of pres) {
+          result.push({ key: `${p.id}__${pr.id}`, producto: p, presentacion: pr, label: `${p.nombre || p.codigo || 'Producto'} — ${pr.nombre} (×${pr.factor})` })
+        }
+      }
+    }
+    return result
+  }, [filtrados])
+
+  function agregar(p: Producto, pres?: Presentacion) {
+    const presList = getPresCompra(p)
+    const chosen = pres ?? presList[0]
+    const cartKey = `${p.id}__${chosen.id}`
     setCarrito((prev) => {
-      const ex = prev.find((i) => i.id === p.id)
-      if (ex) return prev.map((i) => (i.id === p.id ? { ...i, cantidad: i.cantidad + 1 } : i))
-      return [...prev, { id: p.id, nombre: p.nombre || p.codigo || 'Producto', cantidad: 1, costoTexto: String(p.precioCompra || 0), factor: primero.factor, presentacionId: primero.id, presentacionNombre: primero.nombre }]
+      const ex = prev.find((i) => i.id === cartKey)
+      if (ex) return prev.map((i) => (i.id === cartKey ? { ...i, cantidad: i.cantidad + 1 } : i))
+      return [...prev, { id: cartKey, nombre: p.nombre || p.codigo || 'Producto', cantidad: 1, costoTexto: String(p.precioCompra || 0), factor: chosen.factor, presentacionId: chosen.id, presentacionNombre: chosen.nombre }]
     })
   }
 
   function cambiarPresentacion(itemId: string, pres: Presentacion) {
-    setCarrito((prev) => prev.map((i) => (i.id === itemId ? { ...i, factor: pres.factor, presentacionId: pres.id, presentacionNombre: pres.nombre } : i)))
+    const prodId = itemId.split('__')[0]
+    const newKey = `${prodId}__${pres.id}`
+    setCarrito((prev) => prev.map((i) => {
+      if (i.id !== itemId) return i
+      return { ...i, id: newKey, factor: pres.factor, presentacionId: pres.id, presentacionNombre: pres.nombre }
+    }))
   }
 
   async function buscarProv() {
@@ -125,10 +147,11 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
     if (!ok) return
     setProcesando(true)
     // Crea/actualiza el proveedor (si no existe lo guarda en la colección Proveedor).
-    await guardarProveedor({ nombre: docProv.nombre, documento: docProv.documento, tipoDocumento: docProv.tipoDocumento, direccion: docProv.direccion, telefono: docProv.telefono, correo: docProv.correo })
+    await guardarProveedor({ id: docProv.documento?.trim() || undefined, nombre: docProv.nombre, documento: docProv.documento, tipoDocumento: docProv.tipoDocumento, direccion: docProv.direccion, telefono: docProv.telefono, correo: docProv.correo })
     const r = await registrarCompra({
-      items: carrito.map((i) => ({ productoId: i.id, productoNombre: i.nombre, cantidad: i.cantidad, costoUnitario: parseDecimal(i.costoTexto), factor: i.factor, presentacionId: i.presentacionId, presentacionNombre: i.presentacionNombre })),
+      items: carrito.map((i) => ({ productoId: i.id.split('__')[0], productoNombre: i.nombre, cantidad: i.cantidad, costoUnitario: parseDecimal(i.costoTexto), factor: i.factor, presentacionId: i.presentacionId, presentacionNombre: i.presentacionNombre })),
       proveedor: docProv.nombre,
+      proveedorId: docProv.documento?.trim() || docProv.nombre.trim().toLowerCase().replace(/\s+/g, '_'),
       proveedorDireccion: docProv.direccion,
       nota,
       tipoPago,
@@ -161,10 +184,10 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto…" className="pl-10" />
             </div>
             <div className="mt-2 max-h-40 overflow-y-auto rounded-xl border">
-              {filtrados.length === 0 ? <p className="p-4 text-center text-xs text-muted-foreground">Sin productos</p> : filtrados.map((p) => (
-                <button key={p.id} onClick={() => agregar(p)} className="flex w-full items-center justify-between gap-2 border-b px-3 py-2 text-left text-sm last:border-0 hover:bg-muted/40 cursor-pointer">
-                  <span className="min-w-0 truncate">{p.nombre}{p.codigo ? ` · #${p.codigo}` : ''}{getPresCompra(p).length > 1 ? ' 🎁' : ''}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">costo {fmt(p.precioCompra || 0)}</span>
+              {itemsBusqueda.length === 0 ? <p className="p-4 text-center text-xs text-muted-foreground">Sin productos</p> : itemsBusqueda.map((item) => (
+                <button key={item.key} onClick={() => agregar(item.producto, item.presentacion)} className="flex w-full items-center justify-between gap-2 border-b px-3 py-2 text-left text-sm last:border-0 hover:bg-muted/40 cursor-pointer">
+                  <span className="min-w-0 truncate">{item.label}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">costo {fmt(item.producto.precioCompra || 0)}</span>
                 </button>
               ))}
             </div>
@@ -178,7 +201,8 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
             ) : (
               <div className="divide-y rounded-xl border">
                 {carrito.map((i) => {
-                  const prod = activos.find((a) => a.id === i.id)
+                  const prodId = i.id.split('__')[0]
+                  const prod = activos.find((a) => a.id === prodId)
                   const pres = prod ? getPresCompra(prod) : []
                   const hayPres = pres.length > 1
                   return (

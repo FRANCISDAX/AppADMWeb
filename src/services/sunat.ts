@@ -1,7 +1,7 @@
 import { doc as fsDoc, updateDoc } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
-import { construirPayloadComprobante, construirPayloadNota, endpointSunat } from '@/lib/sunat'
+import { construirPayloadComprobante, construirPayloadNota, endpointSunat, puntoEmisionDe } from '@/lib/sunat'
 
 const TIMEOUT_SUNAT = 60000
 
@@ -61,7 +61,9 @@ export async function enviarDocumentoASunat(
     return { success: false, error: 'Ya aceptado', yaAceptado: true }
   }
 
-  const sunatBase = { serie, numero }
+  // `actualizar` reescribe el objeto `sunat` completo: el punto de emisión se
+  // conserva aquí para no perderlo en el primer envío.
+  const sunatBase = { serie, numero, puntoEmision: puntoEmisionDe(doc, config) }
   const docRef = fsDoc(db, COL.DOCUMENTOS, doc.id)
   const actualizar = async (data: Record<string, any>, extra: Record<string, any> = {}) => {
     await updateDoc(docRef, { sunat: { ...data, ...extra, ultimoEnvio: new Date().toISOString() } })
@@ -148,7 +150,7 @@ export async function enviarNotaASunat(
     return { success: false, error: 'Ya aceptado', yaAceptado: true }
   }
 
-  const sunatBase = { tipo, serie, numero }
+  const sunatBase = { tipo, serie, numero, puntoEmision: puntoEmisionDe(doc, config) }
   const docRef = fsDoc(db, COL.DOCUMENTOS, doc.id)
   const actualizar = async (data: Record<string, any>, extra: Record<string, any> = {}) => {
     await updateDoc(docRef, { sunat: { ...data, ...extra, ultimoEnvio: new Date().toISOString() } })

@@ -49,6 +49,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "tipoDoc", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tblDocumentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tipoDoc", "order": "ASCENDING" },
         { "fieldPath": "usuarioId", "order": "ASCENDING" },
         { "fieldPath": "fecha", "order": "DESCENDING" }
       ]

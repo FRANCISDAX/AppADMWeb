@@ -38,6 +38,10 @@ export const CLAVES_PERMISOS = {
   sire: 'sire',
   ventasPorEmpleado: 'ventasPorEmpleado',
   rotacionInventario: 'rotacionInventario',
+  dashboardOperaciones: 'dashboardOperaciones',
+  editarMontoInicial: 'editarMontoInicial',
+  rectificarTurno: 'rectificarTurno',
+  proveedores: 'proveedores',
 } as const
 
 const ALL_TRUE = Object.fromEntries(Object.values(CLAVES_PERMISOS).map((k) => [k, true]))
@@ -45,12 +49,13 @@ const ALL_FALSE = Object.fromEntries(Object.values(CLAVES_PERMISOS).map((k) => [
 
 export const PERMISOS_POR_ROL: Record<string, Record<string, boolean>> = {
   ADMIN: { ...ALL_TRUE },
-  GERENTE: { ...ALL_TRUE, usuarios: false, configuracion: false, eliminarProducto: false },
+  GERENTE: { ...ALL_TRUE, usuarios: false, configuracion: false, eliminarProducto: false, rectificarTurno: false, proveedores: false },
   CAJERO: {
     ...ALL_FALSE,
     ventas: true,
     turnos: true,
     dashboard: true,
+    dashboardOperaciones: true,
     clientes: true,
     notasVenta: true,
     reportes: true,
@@ -67,9 +72,10 @@ export const PERMISOS_POR_ROL: Record<string, Record<string, boolean>> = {
 }
 
 export const MODULOS = [
-  { key: 'modulos', label: 'Módulos (Tabs)', permisos: ['inventario', 'turnos', 'reportes', 'ventas', 'dashboard'] },
-  { key: 'drawer', label: 'Opciones del Menú', permisos: ['clientes', 'estadoCuenta', 'compras', 'reporteTurnos', 'reporteFechas', 'arqueoCaja', 'estadisticas', 'notasVenta', 'consolidado', 'registroVentas', 'kardex', 'comandosVoz', 'configuracion', 'informacion', 'usuarios', 'egresos', 'auditoria', 'sire', 'ventasPorEmpleado', 'rotacionInventario'] },
-  { key: 'funciones', label: 'Funciones', permisos: ['crearProducto', 'editarProducto', 'eliminarProducto', 'ajustarStock', 'verCostos', 'anularVenta', 'cobrarCredito', 'imprimirTicket', 'abrirTurno', 'cerrarTurno', 'rectificarCaja', 'corregirPago'] },
+  { key: 'dashboards', label: 'Dashboards', permisos: ['dashboard', 'dashboardOperaciones'] },
+  { key: 'modulos', label: 'Módulos (Tabs)', permisos: ['inventario', 'turnos', 'reportes', 'ventas'] },
+  { key: 'drawer', label: 'Opciones del Menú', permisos: ['clientes', 'estadoCuenta', 'compras', 'proveedores', 'reporteTurnos', 'reporteFechas', 'arqueoCaja', 'estadisticas', 'notasVenta', 'consolidado', 'registroVentas', 'kardex', 'comandosVoz', 'configuracion', 'informacion', 'usuarios', 'egresos', 'auditoria', 'sire', 'ventasPorEmpleado', 'rotacionInventario'] },
+  { key: 'funciones', label: 'Funciones', permisos: ['crearProducto', 'editarProducto', 'eliminarProducto', 'ajustarStock', 'verCostos', 'anularVenta', 'cobrarCredito', 'imprimirTicket', 'abrirTurno', 'cerrarTurno', 'rectificarCaja', 'corregirPago', 'editarMontoInicial', 'rectificarTurno'] },
   { key: 'accesos', label: 'Acceso Especial', permisos: ['verTodo'] },
 ]
 
@@ -78,7 +84,7 @@ export const LABELS_PERMISOS: Record<string, string> = {
   turnos: 'Turnos',
   reportes: 'Reportes',
   ventas: 'Ventas',
-  dashboard: 'Dashboard',
+  dashboard: 'Dashboard Gerencial',
   clientes: 'Clientes',
   estadoCuenta: 'Estado de Cuenta',
   compras: 'Compras por Fecha',
@@ -112,6 +118,10 @@ export const LABELS_PERMISOS: Record<string, string> = {
   sire: 'Registro SIRE',
   ventasPorEmpleado: 'Ventas por Empleado',
   rotacionInventario: 'Rotación de Inventario',
+  dashboardOperaciones: 'Dashboard Operaciones',
+  editarMontoInicial: 'Editar Monto Inicial',
+  rectificarTurno: 'Rectificar Turno Cerrado',
+  proveedores: 'Proveedores',
 }
 
 export const ROLES = ['ADMIN', 'GERENTE', 'CAJERO', 'PERSONALIZADO']

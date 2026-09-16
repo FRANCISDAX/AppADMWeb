@@ -74,7 +74,24 @@ export const CONFIG_POR_DEFECTO = {
   serieBoletaND: 'BD01',
   serieFacturaNC: 'FC01',
   serieFacturaND: 'FD01',
+  // Código de establecimiento anexo (catálogo 22) del emisor. '0000' = casa
+  // matriz. Va dentro del XML que se firma, así que entra al hash SUNAT.
+  puntoEmision: '0000',
   topeBoletaDni: 700,
   servidor: '',
+  envioHabilitado: false,
+  zonasEnvio: [
+    { id: 'centro', nombre: 'Centro', costo: 3 },
+    { id: 'norte', nombre: 'Norte', costo: 5 },
+    { id: 'sur', nombre: 'Sur', costo: 5 },
+    { id: 'este', nombre: 'Este', costo: 7 },
+    { id: 'fuera', nombre: 'Fuera de la ciudad', costo: 10 },
+  ],
+  plantillasManuales: [] as { id: string; nombre: string; precio: number }[],
+  listasPrecios: [
+    { id: 'general', nombre: 'General', defecto: true },
+    { id: 'mayorista', nombre: 'Mayorista', defecto: false },
+    { id: 'preferencial', nombre: 'Preferencial', defecto: false },
+  ] as { id: string; nombre: string; defecto: boolean }[],
 }
 

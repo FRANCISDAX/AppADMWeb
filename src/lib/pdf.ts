@@ -309,7 +309,7 @@ export type TurnoArqueo = {
   observaciones?: string
   numVentas: number
   gastosDelTurno: { descripcion: string; monto: number; categoria: string; tipoPago: string; fecha?: string }[]
-  comprobantes: { id?: string; serieNumero: string; tipoPago: string; esCobro: boolean; total: number; fecha?: string; clienteNombre: string }[]
+  comprobantes: { id?: string; serieNumero: string; tipoPago: string; esCobro: boolean; operacion?: string; total: number; fecha?: string; clienteNombre: string }[]
 }
 
 export async function abrirPDFArqueo({ fecha, turnos, resumen }: { fecha: Date; turnos: TurnoArqueo[]; resumen: { totalVentas: number; totalEfectivo: number; totalTransferencia: number; totalGastos: number; totalNeto: number; numTurnos: number; numTransacciones: number; montoInicialTotal: number; efectivoEsperadoTotal: number; efectivoContadoTotal: number; diferenciaTotal: number } }) {
@@ -332,7 +332,11 @@ export async function abrirPDFArqueo({ fecha, turnos, resumen }: { fecha: Date; 
       : ''
     const comprobantesHTML = turno.comprobantes.length > 0
       ? `<div style="margin-top:6px;font-size:9px;"><b>Comprobantes (${turno.comprobantes.length}):</b><br/>
-          ${turno.comprobantes.map(c => `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ddd;"><span>${esc(c.serieNumero || 'S/C')} · ${esc(c.clienteNombre)}</span><b>${fmt(c.total)}</b></div>`).join('')}</div>`
+          ${turno.comprobantes.map(c => {
+            const tipoLabel = c.tipoPago === 'efectivo' ? '💵 Efectivo' : c.tipoPago === 'transferencia' ? '📲 Transferencia' : c.tipoPago === 'yape' ? '📱 Yape' : c.tipoPago === 'plin' ? '📱 Plin' : c.esCobro ? '💳 Crédito' : c.tipoPago
+            const cobroInfo = c.esCobro ? ` · Op: ${c.operacion || 'SN'}` : ''
+            return `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ddd;"><span>${esc(c.serieNumero || 'S/C')} · ${esc(c.clienteNombre)}<br/><span style="font-size:8px;color:#888;">${tipoLabel}${cobroInfo}</span></span><b>${fmt(c.total)}</b></div>`
+          }).join('')}</div>`
       : ''
 
     return `<div style="border:1px solid #ddd;border-radius:6px;padding:10px;margin-bottom:10px;">

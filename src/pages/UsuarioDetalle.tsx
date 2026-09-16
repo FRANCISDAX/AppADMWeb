@@ -1,11 +1,12 @@
-import { KeyRound, Loader2 } from 'lucide-react'
+import { AlertTriangle, KeyRound, Loader2 } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LABELS_PERMISOS, MODULOS, PERMISOS_POR_ROL, ROLES, permisosPorRol } from '@/constants/permisos'
 import { useNotifications } from '@/components/notifications'
-import { crearUsuario, editarUsuario, obtenerUsuarios, resetearPassword } from '@/services/usuarios'
+import { crearUsuario, editarUsuario, obtenerUsuarios, resetearPassword, validarSeriesUsuario } from '@/services/usuarios'
+import { type ConflictoSerie, mensajeConflictos } from '@/lib/series'
 import { cn } from '@/lib/utils'
 
 export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack: () => void; onSaved: () => void }) {
@@ -23,6 +24,8 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
   const [guardando, setGuardando] = React.useState(false)
   const [reseteando, setReseteando] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [conflictosSeries, setConflictosSeries] = React.useState<ConflictoSerie[]>([])
+  const [revisandoSeries, setRevisandoSeries] = React.useState(false)
 
   React.useEffect(() => {
     if (!esEdicion) return
@@ -45,6 +48,38 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
     })()
   }, [uid, esEdicion])
 
+  // Series: cada caja debe numerar con su propia serie. Dos cajas con la misma
+  // serie comparten el contador `sunat_{serie}` / `notaVenta_{serie}` de
+  // Firestore, así que se avisa (y se bloquea) antes de guardar.
+  React.useEffect(() => {
+    let vigente = true
+    const timer = setTimeout(() => {
+      if (!vigente) return
+      setRevisandoSeries(true)
+      validarSeriesUsuario(
+        { serieBoleta: serieBoleta.trim(), serieFactura: serieFactura.trim(), seriePrefijo: seriePrefijo.trim() },
+        uid
+      )
+        .then((c) => {
+          if (vigente) setConflictosSeries(c)
+        })
+        .catch((e) => {
+          console.error('❌ validarSeriesUsuario:', e)
+          if (vigente) setConflictosSeries([])
+        })
+        .finally(() => {
+          if (vigente) setRevisandoSeries(false)
+        })
+    }, 300)
+    return () => {
+      vigente = false
+      clearTimeout(timer)
+    }
+  }, [serieBoleta, serieFactura, seriePrefijo, uid])
+
+  const erroresSeries = conflictosSeries.filter((c) => c.bloqueante)
+  const avisosSeries = conflictosSeries.filter((c) => !c.bloqueante)
+
   function cambiarRol(nuevoRol: string) {
     setRol(nuevoRol)
     if (nuevoRol !== 'PERSONALIZADO') setPermisos({ ...PERMISOS_POR_ROL[nuevoRol] })
@@ -66,12 +101,17 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
     if (!nombre.trim()) return setError('Ingresa el nombre')
     if (!email.trim()) return setError('Ingresa el email')
     if (!esEdicion && password.length < 6) return setError('La contraseña debe tener al menos 6 caracteres')
+    if (erroresSeries.length > 0) return setError(mensajeConflictos(erroresSeries))
     setGuardando(true)
     try {
-      if (esEdicion && uid) {
-        await editarUsuario(uid, { nombre: nombre.trim(), rol, permisos, activo, serieBoleta: serieBoleta.trim(), serieFactura: serieFactura.trim(), seriePrefijo: seriePrefijo.trim() })
-      } else {
-        await crearUsuario({ email: email.trim().toLowerCase(), password, nombre: nombre.trim(), rol, permisos, serieBoleta: serieBoleta.trim(), serieFactura: serieFactura.trim(), seriePrefijo: seriePrefijo.trim() })
+      const series = { serieBoleta: serieBoleta.trim(), serieFactura: serieFactura.trim(), seriePrefijo: seriePrefijo.trim() }
+      const r: { success: boolean; error?: string } =
+        esEdicion && uid
+          ? await editarUsuario(uid, { nombre: nombre.trim(), rol, permisos, activo, ...series })
+          : await crearUsuario({ email: email.trim().toLowerCase(), password, nombre: nombre.trim(), rol, permisos, ...series })
+      if (!r.success) {
+        setError(r.error || 'No se pudo guardar el usuario.')
+        return
       }
       onSaved()
       onBack()
@@ -144,6 +184,19 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
             </div>
           </div>
           <p className="mt-2 text-[10px] text-muted-foreground">Vacíos → serie global. Ej.: caja admin = B001/F001, caja 2 = B002/F002.</p>
+          {revisandoSeries && <p className="mt-2 text-[10px] text-muted-foreground">Revisando que las series no choquen con otras cajas…</p>}
+          {erroresSeries.map((c, i) => (
+            <p key={`error-${i}-${c.motivo}-${c.serie}`} className="mt-2 flex items-start gap-1.5 rounded-lg bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{c.mensaje}</span>
+            </p>
+          ))}
+          {avisosSeries.map((c, i) => (
+            <p key={`aviso-${i}-${c.motivo}-${c.serie}`} className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-600 dark:text-amber-500">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{c.mensaje}</span>
+            </p>
+          ))}
         </div>
 
         <div className="space-y-3 pt-2">
@@ -184,7 +237,7 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
 
         <div className="flex gap-2 pt-1">
           <Button variant="outline" className="flex-1" onClick={onBack}>Cancelar</Button>
-          <Button className="flex-1" onClick={guardar} disabled={guardando}>
+          <Button className="flex-1" onClick={guardar} disabled={guardando || erroresSeries.length > 0} title={erroresSeries.length > 0 ? 'Corrige las series duplicadas para guardar' : undefined}>
             {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {guardando ? 'Guardando…' : esEdicion ? 'Guardar Cambios' : 'Crear Usuario'}
           </Button>

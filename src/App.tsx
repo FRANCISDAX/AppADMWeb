@@ -1,4 +1,4 @@
-import { Banknote, BarChart3, BookOpen, CalendarDays, CalendarRange, ChevronDown, Clock, FileText, LayoutDashboard, LogOut, Menu, Moon, Package, RotateCcw, Settings, Shield, ShoppingBag, ShoppingCart, Sun, UserRound, Users, X } from 'lucide-react'
+import { Banknote, BarChart3, BookOpen, CalendarDays, CalendarRange, ChevronDown, Clock, FileText, LogOut, Menu, Moon, Package, RotateCcw, Settings, Shield, ShoppingBag, ShoppingCart, Sun, Truck, UserRound, Users, WifiOff, X } from 'lucide-react'
 import * as React from 'react'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils'
 import { LoadingSquare } from '@/components/loading-square'
 import { CommandPalette } from '@/components/command-palette'
 import { Login } from '@/pages/Login'
-import { Dashboard } from '@/pages/Dashboard'
 
 const Pdv = React.lazy(() => import('@/pages/Pdv').then((m) => ({ default: m.Pdv })))
 const Inventario = React.lazy(() => import('@/pages/Inventario').then((m) => ({ default: m.Inventario })))
@@ -29,6 +28,10 @@ const Egresos = React.lazy(() => import('@/pages/Egresos'))
 const Auditoria = React.lazy(() => import('@/pages/Auditoria'))
 const AuditoriaCaja = React.lazy(() => import('@/pages/AuditoriaCaja'))
 const RotacionInventario = React.lazy(() => import('@/pages/RotacionInventario'))
+const DashboardGerencial = React.lazy(() => import('@/pages/Dashboard'))
+const DashboardOperaciones = React.lazy(() => import('@/pages/DashboardOperaciones').then((m) => ({ default: m.DashboardOperaciones })))
+const PantallaCliente = React.lazy(() => import('@/pages/PantallaCliente').then((m) => ({ default: m.PantallaCliente })))
+const Proveedores = React.lazy(() => import('@/pages/Proveedores').then((m) => ({ default: m.Proveedores })))
 
 type NavItem = { id: string; label: string; icon: any; perm: string; always?: boolean }
 
@@ -36,8 +39,8 @@ const MENU: { titulo: string; items: NavItem[] }[] = [
   {
     titulo: 'Operación',
     items: [
-      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, perm: 'dashboard' },
       { id: 'pdv', label: 'Punto de Venta', icon: ShoppingCart, perm: 'ventas' },
+      { id: 'dashboardOperaciones', label: 'Dashboard Operaciones', icon: BarChart3, perm: 'dashboardOperaciones' },
       { id: 'turnos', label: 'Turnos', icon: Clock, perm: 'turnos' },
       { id: 'inventario', label: 'Inventario', icon: Package, perm: 'inventario' },
       { id: 'rotacionInventario', label: 'Rotación de Inventario', icon: RotateCcw, perm: 'rotacionInventario' },
@@ -59,9 +62,11 @@ const MENU: { titulo: string; items: NavItem[] }[] = [
     ],
   },
   { titulo: 'Clientes', items: [{ id: 'clientes', label: 'Clientes', icon: UserRound, perm: 'clientes' }] },
+  { titulo: 'Proveedores', items: [{ id: 'proveedores', label: 'Proveedores', icon: Truck, perm: 'proveedores' }] },
   {
     titulo: 'Administración',
     items: [
+      { id: 'dashboard', label: 'Dashboard Gerencial', icon: BarChart3, perm: 'dashboard' },
       { id: 'usuarios', label: 'Usuarios', icon: Users, perm: 'usuarios' },
       { id: 'configuracion', label: 'Configuración', icon: Settings, perm: 'configuracion' },
       { id: 'auditoria', label: 'Auditoría General', icon: Shield, perm: 'auditoria' },
@@ -83,6 +88,7 @@ function Shell() {
   const [menuAbierto, setMenuAbierto] = React.useState(false)
   const [infoAbierto, setInfoAbierto] = React.useState(false)
   const [desvaneciendo, setDesvaneciendo] = React.useState(false)
+  const [online, setOnline] = React.useState(navigator.onLine)
 
   const handleLogout = React.useCallback(() => {
     setDesvaneciendo(true)
@@ -121,6 +127,17 @@ function Shell() {
     return () => clearTimeout(t)
   }, [toast])
 
+  React.useEffect(() => {
+    const onOnline = () => setOnline(true)
+    const onOffline = () => setOnline(false)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
+  }, [])
+
   // Cierre de sesión por inactividad: si no hay actividad (mouse/teclado/touch)
   // durante N minutos, se hace logout y vuelve a pedir login.
   React.useEffect(() => {
@@ -139,6 +156,12 @@ function Shell() {
       events.forEach((e) => window.removeEventListener(e, reset))
     }
   }, [user, logout])
+
+  // Customer display: if ?session=XXX is present, render the display page directly (no auth).
+  const customerSession = React.useMemo(() => new URLSearchParams(window.location.search).get('session'), [])
+  if (customerSession) {
+    return <PantallaCliente />
+  }
 
   if (loading || permisosLoading) {
     return (
@@ -191,11 +214,11 @@ function Shell() {
                           key={item.id}
                           onClick={() => setSeccion(item.id)}
                           className={cn(
-                            'flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all cursor-pointer',
+                            'flex w-full items-start gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-semibold transition-all cursor-pointer',
                             seccion === item.id ? 'brand-grad text-white shadow-glow' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                           )}
                         >
-                          <item.icon className="h-[18px] w-[18px]" />
+                          <item.icon className="mt-0.5 h-[18px] w-[18px] shrink-0" />
                           {item.label}
                         </button>
                       ))}
@@ -233,6 +256,12 @@ function Shell() {
               {labelDe(seccion ?? '') ?? 'AppADM'}
             </h1>
             <div className="ml-auto flex items-center gap-2">
+              {!online && (
+                <div className="flex items-center gap-1.5 rounded-full border border-amber-300/60 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                  <WifiOff className="h-3.5 w-3.5" />
+                  <span>Sin conexión</span>
+                </div>
+              )}
               <button onClick={() => setInfoAbierto(true)} className="hidden items-center gap-2 rounded-full border border-emerald-200/60 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-100 cursor-pointer md:flex dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" /> CiberSoft
               </button>
@@ -249,14 +278,21 @@ function Shell() {
           </header>
 
           <main className="flex-1 overflow-y-auto p-4 md:p-6">
+            {!online && (
+              <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                <WifiOff className="h-4 w-4 shrink-0" />
+                <div>
+                  <span className="font-semibold">Sin conexión a internet.</span>{' '}
+                  Podés consultar productos y clientes. Las ventas requieren conexión.
+                </div>
+              </div>
+            )}
             {seccion === null ? (
               <LoadingSquare />
             ) : (
               <React.Suspense fallback={<LoadingSquare />}>
                 <div key={seccion} className="animate-slide-up">
-                  {seccion === 'dashboard' ? (
-                    <Dashboard onNavigate={setSeccion} />
-                  ) : seccion === 'pdv' ? (
+                  {seccion === 'pdv' ? (
                     <Pdv />
                   ) : seccion === 'turnos' ? (
                     <Turnos />
@@ -286,10 +322,16 @@ function Shell() {
                     <Egresos />
                   ) : seccion === 'clientes' ? (
                     <Clientes />
+                  ) : seccion === 'proveedores' ? (
+                    <Proveedores />
                   ) : seccion === 'usuarios' ? (
                     <Usuarios />
                   ) : seccion === 'configuracion' ? (
                     <Configuracion />
+                  ) : seccion === 'dashboard' ? (
+                    <DashboardGerencial />
+                  ) : seccion === 'dashboardOperaciones' ? (
+                    <DashboardOperaciones onNavigate={(s) => setSeccion(s)} />
                   ) : seccion === 'auditoria' ? (
                     <Auditoria />
                   ) : seccion === 'auditoriaCaja' ? (
@@ -341,11 +383,11 @@ function Shell() {
                             key={item.id}
                             onClick={() => { setSeccion(item.id); setMenuAbierto(false) }}
                             className={cn(
-                              'flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-semibold transition-all cursor-pointer',
+                              'flex w-full items-start gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-semibold transition-all cursor-pointer',
                               seccion === item.id ? 'brand-grad text-white shadow-glow' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                             )}
                           >
-                            <item.icon className="h-[18px] w-[18px]" />
+                            <item.icon className="mt-0.5 h-[18px] w-[18px] shrink-0" />
                             {item.label}
                           </button>
                         ))}

@@ -5,9 +5,11 @@ import {
   Landmark,
   Loader2,
   Minus,
+  Monitor,
   Pause,
   Plus,
   Printer,
+  QrCode,
   ScanBarcode,
   Search,
   ShoppingCart,
@@ -35,6 +37,10 @@ import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento } from '@/lib/ui-utils'
 import { listarVentasPausadas, guardarVentaPausada, eliminarVentaPausada, type VentaPausada } from '@/lib/ventas-pausadas'
 import { EscanearCodigo } from '@/components/EscanearCodigo'
+import { broadcastCart, closeSession } from '@/lib/customer-display'
+import { calcularDescuentos } from '@/lib/descuentos'
+import { promocionesAplicables, type PromocionVolumen } from '@/services/promociones-volumen'
+import QRCode from 'qrcode'
 
 // Un producto tiene precio especial (promo) si su valor es > 0.
 const tienePromo = (p: Producto) => p?.precioEspecial != null && p.precioEspecial > 0
@@ -71,13 +77,19 @@ export function Pdv() {
   const [ventaOk, setVentaOk] = React.useState<{ correlativo: string; total: number; vuelto: number; documento: Record<string, unknown> } | null>(null)
   const [imprimiendo, setImprimiendo] = React.useState(false)
   const [manualOpen, setManualOpen] = React.useState(false)
-  const [manualNombre, setManualNombre] = React.useState('')
-  const [manualPrecio, setManualPrecio] = React.useState('')
-  const [manualCantidad, setManualCantidad] = React.useState('1')
   const [manualItems, setManualItems] = React.useState<Record<string, { nombre: string; precio: number; qty: number }>>({})
   const [pausadasAbierto, setPausadasAbierto] = React.useState(false)
   const [pausadasLista, setPausadasLista] = React.useState<VentaPausada[]>([])
   const [scannerOpen, setScannerOpen] = React.useState(false)
+  const [envio, setEnvio] = React.useState({ tipo: 'tienda' as 'tienda' | 'domicilio', direccion: '', referencia: '', zonaId: '', costo: 0, notas: '' })
+  const [displaySession, setDisplaySession] = React.useState<string | null>(null)
+  const [qrDataUrl, setQrDataUrl] = React.useState<string | null>(null)
+  const [qrOpen, setQrOpen] = React.useState(false)
+  const displayUrlRef = React.useRef<string | null>(null)
+  const [descuentoGlobalTipo, setDescuentoGlobalTipo] = React.useState<'porcentaje' | 'monto'>('monto')
+  const [descuentoGlobalValor, setDescuentoGlobalValor] = React.useState('')
+  const [reglasVolumen, setReglasVolumen] = React.useState<PromocionVolumen[]>([])
+  const [listaPrecioSel, setListaPrecioSel] = React.useState('')
 
   const handleBarcodeDetectado = React.useCallback((codigo: string) => {
     const codigoLimpio = codigo.replace(/[\s\-]/g, '').trim()
@@ -123,9 +135,42 @@ export function Pdv() {
 
   // Precio aplicado a una línea del carrito: si el producto tiene promo y no fue
   // desactivada manualmente (usarPromo=false), se usa el especial; si no, el normal.
-  const precioFinal = (p: Producto) => (((usarPromo[p.id] ?? true) && tienePromo(p)) ? p.precioEspecial ?? 0 : (p.precioVenta ?? 0))
+  // Cargar promociones de volumen al montar
+  React.useEffect(() => {
+    import('@/services/promociones-volumen').then((mod) => {
+      mod.listarPromocionesVolumen().then(setReglasVolumen).catch(() => {})
+    }).catch(() => {})
+  }, [])
 
-  const total = React.useMemo(() => {
+  // Cliente seleccionado para descuento
+  const clienteDescuento = React.useMemo(() => {
+    if (!clienteDni) return 0
+    const c = resultadosCliente.find((cl) => cl.numeroDoc === clienteDni || cl.id === clienteDni)
+    return c?.descuentoPorcentaje ?? 0
+  }, [clienteDni, resultadosCliente])
+
+  // Lista de precio activa: override manual > lista del cliente > 'general'
+  const listaPrecioActiva = React.useMemo(() => {
+    if (listaPrecioSel) return listaPrecioSel
+    if (!clienteDni) return 'general'
+    const c = resultadosCliente.find((cl) => cl.numeroDoc === clienteDni || cl.id === clienteDni)
+    return c?.listaPrecio || 'general'
+  }, [listaPrecioSel, clienteDni, resultadosCliente])
+
+  // Resetear lista override cuando cambia el cliente
+  React.useEffect(() => {
+    setListaPrecioSel('')
+  }, [clienteDni])
+
+  const precioFinal = (p: Producto) => {
+    if ((usarPromo[p.id] ?? true) && tienePromo(p)) return p.precioEspecial ?? 0
+    if (listaPrecioActiva !== 'general' && p.preciosPorLista?.[listaPrecioActiva] != null && p.preciosPorLista[listaPrecioActiva] > 0) {
+      return p.preciosPorLista[listaPrecioActiva]
+    }
+    return p.precioVenta ?? 0
+  }
+
+  const totalBruto = React.useMemo(() => {
     const invTotal = Object.entries(cart).reduce((s, [id, c]) => {
       const p = productos.find((x) => x.id === id)
       if (!p) return s
@@ -135,8 +180,59 @@ export function Pdv() {
       return s + precioFinal(p) * factor * c
     }, 0)
     const manTotal = Object.values(manualItems).reduce((s, it) => s + it.precio * it.qty, 0)
-    return invTotal + manTotal
-  }, [cart, productos, usarPromo, manualItems, presentacionesSel])
+    const envioCosto = envio.tipo === 'domicilio' ? envio.costo : 0
+    return invTotal + manTotal + envioCosto
+  }, [cart, productos, usarPromo, manualItems, presentacionesSel, envio])
+
+  // Calcular descuentos
+  const descuentosCalc = React.useMemo(() => {
+    const itemsCarrito = Object.entries(cart).map(([id, qty]) => {
+      const p = productos.find((x) => x.id === id)
+      if (!p) return null
+      const presId = presentacionesSel[id]
+      const pres = presId ? p.presentaciones?.find((pr) => pr.id === presId) : null
+      const factor = pres?.factor ?? 1
+      return {
+        productoId: id,
+        nombre: p.nombre ?? '',
+        precioUnitario: precioFinal(p) * factor,
+        cantidad: qty,
+        tienePromo: (usarPromo[id] ?? true) && tienePromo(p),
+        precioEspecial: p.precioEspecial ?? 0,
+        descuentoPorcentaje: p.descuentoPorcentaje ?? 0,
+      }
+    }).filter(Boolean) as { productoId: string; nombre: string; precioUnitario: number; cantidad: number; tienePromo: boolean; precioEspecial: number; descuentoPorcentaje: number }[]
+    const itemsManuales = Object.entries(manualItems).map(([id, it]) => ({
+      productoId: id,
+      nombre: it.nombre,
+      precioUnitario: it.precio,
+      cantidad: it.qty,
+      tienePromo: false,
+      precioEspecial: 0,
+      descuentoPorcentaje: 0,
+    }))
+    const todosItems = [...itemsCarrito, ...itemsManuales]
+
+    // Promociones de volumen aplicables
+    const idsEnCarrito = todosItems.map((it) => it.productoId)
+    const volumenes = promocionesAplicables(reglasVolumen, idsEnCarrito).map((pv) => ({
+      promocionId: pv.id ?? '',
+      nombre: pv.nombre,
+      tipo: pv.tipo as '3x2' | '2da_50' | 'lleva_paga' | 'porcentaje' | 'monto_fijo',
+      valor: pv.valor,
+      descuento: pv.descuento ?? pv.valor ?? 0,
+      productos: pv.productoIds,
+    }))
+
+    return calcularDescuentos(todosItems, {
+      reglasVolumen: volumenes,
+      descuentoClientePorcentaje: clienteDescuento,
+      descuentoGlobalTipo,
+      descuentoGlobalValor: parseFloat(descuentoGlobalValor) || 0,
+    })
+  }, [cart, productos, usarPromo, manualItems, presentacionesSel, reglasVolumen, clienteDescuento, descuentoGlobalTipo, descuentoGlobalValor])
+
+  const total = descuentosCalc.totalFinal
 
   // Stock efectivo: para kits se calcula desde los componentes
   const kitStock = React.useCallback((p: Producto) => {
@@ -199,21 +295,6 @@ export function Pdv() {
     })
   }
 
-  function agregarManual() {
-    const nombre = manualNombre.trim()
-    const precio = parseFloat(manualPrecio)
-    const qty = parseInt(manualCantidad, 10) || 1
-    if (!nombre) return setToast('⚠️ Ingresá el nombre del producto')
-    if (!precio || precio <= 0) return setToast('⚠️ Ingresá un precio válido')
-    if (qty <= 0) return setToast('⚠️ La cantidad debe ser mayor a 0')
-    const id = `manual-${Date.now()}`
-    setManualItems((c) => ({ ...c, [id]: { nombre, precio, qty } }))
-    setManualOpen(false)
-    setManualNombre('')
-    setManualPrecio('')
-    setManualCantidad('1')
-  }
-
   function delManual(id: string) {
     setManualItems((c) => {
       const { [id]: _, ...rest } = c
@@ -248,6 +329,7 @@ export function Pdv() {
     setDniConsultado(false)
     setRecibido('')
     setReferencia('')
+    setListaPrecioSel('')
     setToast('⏸️ Venta pausada')
   }
 
@@ -284,6 +366,54 @@ export function Pdv() {
     ...items.map(({ id, p, qty }) => ({ id, nombre: p.nombre ?? '', precio: precioFinal(p), qty, manual: false })),
     ...Object.entries(manualItems).map(([id, it]) => ({ id, nombre: it.nombre, precio: it.precio, qty: it.qty, manual: true })),
   ]
+
+  // Customer display: broadcast cart data to Firestore for cross-device sync.
+  React.useEffect(() => {
+    if (!displaySession) return
+    const bizName = cfg?.nombre || 'JorFel'
+    broadcastCart(displaySession, {
+      businessName: bizName,
+      items: allItems.map((it) => ({
+        nombre: it.nombre,
+        cantidad: it.qty,
+        precioUnitario: it.precio,
+        subtotal: it.precio * it.qty,
+        esManual: it.manual,
+      })),
+      descuento: descuentosCalc.totalDescuento,
+      envioCosto: envio.tipo === 'domicilio' ? envio.costo : 0,
+      total,
+    }).catch(() => {})
+  }, [displaySession, allItems, total, envio, cfg])
+
+  // Cleanup session on unmount
+  React.useEffect(() => {
+    return () => {
+      if (displaySession) closeSession(displaySession).catch(() => {})
+    }
+  }, [displaySession])
+
+  function toggleDisplay() {
+    if (displaySession) {
+      closeSession(displaySession).catch(() => {})
+      setDisplaySession(null)
+      setQrDataUrl(null)
+      setQrOpen(false)
+      displayUrlRef.current = null
+      return
+    }
+    const sid = crypto.randomUUID()
+    const baseUrl = window.location.origin + window.location.pathname
+    const url = baseUrl + '?session=' + sid
+    displayUrlRef.current = url
+    setDisplaySession(sid)
+    // Open display tab
+    window.open(url, 'jorfel-display')
+    // Generate QR and show modal
+    QRCode.toDataURL(url, { width: 240, margin: 1, color: { dark: '#1a1a2e', light: '#ffffff' } })
+      .then((dataUrl) => { setQrDataUrl(dataUrl); setQrOpen(true) })
+      .catch(() => setQrOpen(true))
+  }
 
   // Busca clientes existentes por nombre / DNI / RUC (solo para autocompletar).
   React.useEffect(() => {
@@ -396,6 +526,50 @@ export function Pdv() {
     const turno = await buscarTurnoAbierto(user?.uid, tienePermiso('verTodo'))
     if (!turno) return setToast('🚫 No hay un turno abierto. Abrí un turno antes de vender.')
 
+    // --- Protección de margen mínimo ---
+    const hoy = new Date()
+    const productosBloqueados: string[] = []
+    const productosDebajoCosto: string[] = []
+
+    for (const [id, qty] of Object.entries(cart)) {
+      const p = productos.find((x) => x.id === id)
+      if (!p) continue
+      const presId = presentacionesSel[id]
+      const pres = presId ? p.presentaciones?.find((pr) => pr.id === presId) : null
+      const factor = pres?.factor ?? 1
+      const precioItem = precioFinal(p) * factor
+      if (qty <= 0 || precioItem <= 0) continue
+
+      // ¿Producto por vencer o vencido? (≤7 días)
+      const expiraEn = p.fechaVencimiento ? Math.ceil((new Date(p.fechaVencimiento).getTime() - hoy.getTime()) / 86400000) : Infinity
+      const porVencer = expiraEn <= 7
+
+      // ¿Debajo del costo?
+      const costo = p.precioCompra ?? 0
+      if (costo > 0 && precioItem < costo) {
+        productosDebajoCosto.push(p.nombre ?? id)
+      }
+
+      // ¿Debajo del precio mínimo (y no es por vencer)?
+      const minimo = p.precioMinimo ?? 0
+      if (minimo > 0 && precioItem < minimo && !porVencer) {
+        productosBloqueados.push(`${p.nombre ?? id} (mínimo: ${fmt(minimo)}, actual: ${fmt(precioItem)})`)
+      }
+    }
+
+    if (productosBloqueados.length > 0) {
+      return setToast(`🚫 Precio bajo piso: ${productosBloqueados.join(', ')}`)
+    }
+
+    if (productosDebajoCosto.length > 0) {
+      const ok2 = await confirm({
+        title: '⚠️ Venta por debajo del costo',
+        message: `Estás vendiendo por debajo del costo en: ${productosDebajoCosto.join(', ')}. ¿Confirmar venta?`,
+        okText: 'Vender',
+      })
+      if (!ok2) return
+    }
+
     const methodLabel = metodo === 'efectivo' ? '💵 Efectivo' : metodo === 'transferencia' ? '📲 Transferencia' : metodo === 'credito' ? '💳 Crédito' : '🪙 Mixto'
     const itemsCount = Object.keys(cart).reduce((s, id) => s + cart[id], 0)
     const ok = await confirm({
@@ -454,6 +628,9 @@ export function Pdv() {
               })()
             : undefined,
           total,
+          descuentoTotal: descuentosCalc.totalDescuento,
+          descuentoGlobalTipo: descuentoGlobalValor ? descuentoGlobalTipo : undefined,
+          descuentoGlobalValor: parseFloat(descuentoGlobalValor) || undefined,
           cliente_dni: dni || '',
           cliente_nombre: clienteNombre || '',
           cliente_direccion: clienteDireccion || '',
@@ -466,6 +643,15 @@ export function Pdv() {
           cajero: nombreUsuario || user?.email || 'sistema',
           usuarioId: user?.uid || '',
           turnoId: turno?.id || null,
+          envio: envio.tipo === 'domicilio' ? {
+            tipo: 'domicilio',
+            direccion: envio.direccion,
+            referencia: envio.referencia,
+            zonaId: envio.zonaId,
+            costo: envio.costo,
+            notas: envio.notas,
+            estado: 'pendiente',
+          } : undefined,
         },
         // Series por caja del usuario: si el usuario tiene series propias, sobreescriben la global.
         config: {
@@ -485,6 +671,9 @@ export function Pdv() {
         setClienteNombre('')
         setDniConsultado(false)
         setManualItems({})
+        setEnvio({ tipo: 'tienda', direccion: '', referencia: '', zonaId: '', costo: 0, notas: '' })
+        setDescuentoGlobalValor('')
+        setListaPrecioSel('')
       } else {
         setToast('❌ ' + (res.error || 'Error al registrar la venta'))
       }
@@ -537,9 +726,63 @@ export function Pdv() {
           </Button>
           <Button variant="secondary" size="sm" onClick={() => setManualOpen(true)} className="shrink-0 gap-1.5">
             <Plus className="h-4 w-4" />
-            Agregar producto
+            Embalajes
           </Button>
         </div>
+
+        {/* Venta rápida — favoritos del admin o más vendidos */}
+        {React.useMemo(() => {
+          const activos = productos.filter((p) => p.activo !== false && (p.stock ?? 0) > 0)
+          const favs = activos.filter((p) => p.esFavorito)
+          // Si el admin marcó favoritos, usar esos. Si no, usar los más vendidos (al menos 1 venta).
+          const rapidos = favs.length > 0
+            ? favs
+            : [...activos].filter((p) => (p.vecesVendido ?? 0) > 0).sort((a, b) => (b.vecesVendido ?? 0) - (a.vecesVendido ?? 0)).slice(0, 12)
+          if (rapidos.length === 0) return null
+          const esAuto = favs.length === 0
+          return (
+            <div className="mb-4">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-xs font-bold text-primary">⚡ VENTA RÁPIDA</span>
+                {esAuto && <span className="text-[10px] text-muted-foreground">(más vendidos)</span>}
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {rapidos.map((p) => {
+                  const enCaja = cart[p.id] ?? 0
+                  const stock = stockEnPresentacion(p)
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => add(p.id)}
+                      disabled={enCaja >= stock}
+                      className={cn(
+                        'relative flex w-[88px] shrink-0 flex-col items-center gap-1 rounded-xl border-2 p-2.5 text-center transition-all cursor-pointer',
+                        enCaja > 0
+                          ? 'border-primary bg-primary/10 shadow-sm'
+                          : 'border-border hover:border-primary/50 hover:bg-accent',
+                        enCaja >= stock && 'opacity-50 cursor-not-allowed'
+                      )}
+                    >
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-lg">
+                        {p.imagen ? (
+                          <img src={p.imagen} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                        ) : (
+                          '📦'
+                        )}
+                      </div>
+                      <span className="w-full truncate text-[11px] font-semibold leading-tight">{p.nombre}</span>
+                      <span className="text-[11px] font-bold text-primary">{fmt(precioFinal(p))}</span>
+                      {enCaja > 0 && (
+                        <span className="absolute -right-1 -top-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-white">{enCaja}</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        }, [productos, cart, add, stockEnPresentacion, precioFinal])}
 
         <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
           {categorias.map((c) => (
@@ -646,9 +889,31 @@ export function Pdv() {
           <div className="flex items-center gap-2 border-b px-5 py-4">
             <ShoppingCart className="h-5 w-5 text-primary" />
             <span className="text-[15px] font-bold">Nueva Venta</span>
-            <Button variant="ghost" size="sm" onClick={abrirPausadas} className="ml-auto gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground">
+            <Button variant="ghost" size="sm" onClick={abrirPausadas} className="gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground">
               <Pause className="h-3.5 w-3.5" />
               Pausadas
+            </Button>
+            <Button
+              variant={displaySession ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => {
+                if (displaySession) {
+                  // Already active — show QR modal again
+                  if (!qrDataUrl && displayUrlRef.current) {
+                    QRCode.toDataURL(displayUrlRef.current.toUpperCase(), { width: 240, margin: 1, color: { dark: '#1a1a2e', light: '#ffffff' } })
+                      .then((d) => { setQrDataUrl(d); setQrOpen(true) })
+                      .catch(() => setQrOpen(true))
+                  } else {
+                    setQrOpen(true)
+                  }
+                } else {
+                  toggleDisplay()
+                }
+              }}
+              className={cn('gap-1.5 text-xs font-semibold', displaySession ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'text-muted-foreground hover:text-foreground')}
+            >
+              {displaySession ? <Monitor className="h-3.5 w-3.5" /> : <QrCode className="h-3.5 w-3.5" />}
+              {displaySession ? 'En vivo' : 'Pantalla'}
             </Button>
             <span className="num text-xs font-semibold text-muted-foreground">
               {allItems.length} item{allItems.length !== 1 ? 's' : ''}
@@ -787,6 +1052,25 @@ export function Pdv() {
                 placeholder="Dirección del cliente (opcional)"
                 className="mt-1.5"
               />
+              {(cfg.listasPrecios ?? []).length > 1 && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground">Lista:</span>
+                  <div className="flex gap-1">
+                    {(cfg.listasPrecios ?? []).map((l) => (
+                      <button
+                        key={l.id}
+                        onClick={() => setListaPrecioSel(listaPrecioActiva === l.id ? '' : l.id)}
+                        className={cn(
+                          'rounded-md px-2 py-0.5 text-[10px] font-bold cursor-pointer',
+                          listaPrecioActiva === l.id ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-accent'
+                        )}
+                      >
+                        {l.nombre}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             )}
           </div>
@@ -808,7 +1092,18 @@ export function Pdv() {
                   return (
                   <div key={p.id} className="flex items-center gap-2 py-2.5">
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-semibold">{p.nombre}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-[13px] font-semibold">{p.nombre}</span>
+                        {(p.precioCompra ?? 0) > 0 && precioFinal(p) * factorActual < (p.precioCompra ?? 0) && (
+                          <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-600">BAJO COSTO</span>
+                        )}
+                        {p.fechaVencimiento && (() => {
+                          const dias = Math.ceil((new Date(p.fechaVencimiento).getTime() - Date.now()) / 86400000)
+                          if (dias <= 0) return <span className="shrink-0 rounded bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold text-red-600">VENCIDO</span>
+                          if (dias <= 7) return <span className="shrink-0 rounded bg-orange-500/15 px-1.5 py-0.5 text-[9px] font-bold text-orange-600">{dias}d</span>
+                          return null
+                        })()}
+                      </div>
                       <div className="num text-[11px] text-muted-foreground">
                         {fmt(precioFinal(p) * factorActual)} c/u
                         {tienePromo(p) && <span className="ml-1 line-through">{fmt((p.precioVenta ?? 0) * factorActual)}</span>}
@@ -865,7 +1160,7 @@ export function Pdv() {
                       <div className="truncate text-[13px] font-semibold">{it.nombre}</div>
                       <div className="num text-[11px] text-muted-foreground">{fmt(it.precio)} c/u</div>
                       <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                        Producto del momento
+                        Embalaje y Otros
                       </span>
                     </div>
                     <span className="num w-9 text-center text-sm font-bold">{it.qty}</span>
@@ -880,6 +1175,82 @@ export function Pdv() {
           </div>
 
           <div className="space-y-3 border-t px-5 pt-3 pb-5">
+            {/* Envío */}
+            {cfg?.envioHabilitado && (
+              <div className="space-y-2 rounded-xl border border-dashed p-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-primary">🚚 ENVÍO</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEnvio({ ...envio, tipo: 'tienda' })}
+                    className={cn(
+                      'flex-1 rounded-lg border-2 py-2 text-xs font-semibold transition-colors cursor-pointer',
+                      envio.tipo === 'tienda' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent'
+                    )}
+                  >
+                    🏪 Recoge en tienda
+                  </button>
+                  <button
+                    onClick={() => setEnvio({ ...envio, tipo: 'domicilio' })}
+                    className={cn(
+                      'flex-1 rounded-lg border-2 py-2 text-xs font-semibold transition-colors cursor-pointer',
+                      envio.tipo === 'domicilio' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent'
+                    )}
+                  >
+                    🚚 Envío a domicilio
+                  </button>
+                </div>
+                {envio.tipo === 'domicilio' && (
+                  <div className="space-y-2">
+                    <input
+                      value={envio.direccion}
+                      onChange={(e) => setEnvio({ ...envio, direccion: e.target.value })}
+                      placeholder="Dirección (Jr., Av., Calle + N°)"
+                      className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+                    />
+                    <input
+                      value={envio.referencia}
+                      onChange={(e) => setEnvio({ ...envio, referencia: e.target.value })}
+                      placeholder="Referencia (opcional)"
+                      className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <select
+                        value={envio.zonaId}
+                        onChange={(e) => {
+                          const zona = (cfg.zonasEnvio ?? []).find((z: any) => z.id === e.target.value)
+                          setEnvio({ ...envio, zonaId: e.target.value, costo: zona?.costo ?? 0 })
+                        }}
+                        className="h-9 flex-1 rounded-lg border border-input bg-background px-2 text-sm"
+                      >
+                        <option value="">Seleccionar zona</option>
+                        {(cfg.zonasEnvio ?? []).map((z: any) => (
+                          <option key={z.id} value={z.id}>{z.nombre} — {fmt(z.costo)}</option>
+                        ))}
+                      </select>
+                      <div className="relative w-24">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">S/</span>
+                        <input
+                          type="number"
+                          value={envio.costo}
+                          onChange={(e) => setEnvio({ ...envio, costo: Number(e.target.value) || 0 })}
+                          className="h-9 w-full rounded-lg border border-input bg-background pl-7 pr-2 text-sm"
+                          inputMode="decimal"
+                        />
+                      </div>
+                    </div>
+                    <input
+                      value={envio.notas}
+                      onChange={(e) => setEnvio({ ...envio, notas: e.target.value })}
+                      placeholder="Notas (opcional): sin cebolla, llamar al llegar..."
+                      className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-4 gap-1.5">
               {(['efectivo', 'transferencia', 'credito', 'mixto'] as const).map((m) => (
                 <button
@@ -986,9 +1357,49 @@ export function Pdv() {
               </div>
             )}
 
+            {/* Descuentos */}
+            <div className="space-y-2 rounded-xl border p-3">
+              <p className="text-xs font-bold text-muted-foreground">Descuentos</p>
+
+              {/* Global */}
+              <div className="flex gap-2">
+                <select value={descuentoGlobalTipo} onChange={(e) => setDescuentoGlobalTipo(e.target.value as typeof descuentoGlobalTipo)} className="h-8 rounded-lg border px-2 text-xs">
+                  <option value="monto">S/ </option>
+                  <option value="porcentaje">%</option>
+                </select>
+                <Input type="number" inputMode="decimal" placeholder="0" value={descuentoGlobalValor} onChange={(e) => setDescuentoGlobalValor(e.target.value)} className="h-8 flex-1 text-xs" />
+              </div>
+
+              {/* Resumen descuentos */}
+              {descuentosCalc.totalDescuento > 0 && (
+                <div className="space-y-1 rounded-lg bg-emerald-50 p-2 text-[11px] dark:bg-emerald-500/10">
+                  {descuentosCalc.porProducto.filter((d) => d.porcentaje > 0).map((d, i) => (
+                    <div key={i} className="flex justify-between"><span className="text-emerald-700 dark:text-emerald-400">Dto. producto ({d.porcentaje}%)</span><span className="font-semibold text-emerald-700 dark:text-emerald-400">-{fmt(d.subtotalSinDescuento - d.subtotalConDescuento)}</span></div>
+                  ))}
+                  {descuentosCalc.volumen.map((v, i) => (
+                    <div key={i} className="flex justify-between"><span className="text-emerald-700 dark:text-emerald-400">Volumen: {v.nombre}</span><span className="font-semibold text-emerald-700 dark:text-emerald-400">-{fmt(v.descuento)}</span></div>
+                  ))}
+                  {descuentosCalc.cliente && (
+                    <div className="flex justify-between"><span className="text-emerald-700 dark:text-emerald-400">Cliente ({descuentosCalc.cliente.porcentaje}%)</span><span className="font-semibold text-emerald-700 dark:text-emerald-400">-{fmt(descuentosCalc.cliente.descuento)}</span></div>
+                  )}
+                  {descuentosCalc.global && (
+                    <div className="flex justify-between"><span className="text-emerald-700 dark:text-emerald-400">Descuento global</span><span className="font-semibold text-emerald-700 dark:text-emerald-400">-{fmt(descuentosCalc.global.descuento)}</span></div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="flex items-end justify-between">
               <span className="text-sm text-muted-foreground">Total</span>
-              <span className="num text-3xl font-extrabold">{fmt(total)}</span>
+              <div className="text-right">
+                {descuentosCalc.totalDescuento > 0 && (
+                  <span className="num text-sm text-muted-foreground line-through">{fmt(totalBruto)}</span>
+                )}
+                <span className="num text-3xl font-extrabold">{fmt(total)}</span>
+                {descuentosCalc.totalDescuento > 0 && (
+                  <p className="text-[11px] font-semibold text-emerald-600">Ahorro: {fmt(descuentosCalc.totalDescuento)}</p>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2 pt-1">
@@ -1045,46 +1456,43 @@ export function Pdv() {
         </div>
       )}
 
-      {/* Modal: agregar producto del momento */}
+      {/* Modal: plantillas de productos sin stock */}
       {manualOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-card shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setManualOpen(false)}>
+          <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="bg-primary px-5 py-4 text-center text-white">
-              <p className="text-lg font-bold">Producto del momento</p>
-              <p className="text-sm opacity-90">Producto sin registro en inventario</p>
+              <p className="text-lg font-bold">Embalaje y Otros</p>
+              <p className="text-sm opacity-90">Seleccioná un producto</p>
             </div>
-            <div className="space-y-3 p-5">
-              <Input
-                value={manualNombre}
-                onChange={(e) => setManualNombre(e.target.value)}
-                placeholder="Nombre del producto"
-                autoFocus
-              />
-              <Input
-                type="number"
-                inputMode="decimal"
-                placeholder="Precio (S/)"
-                value={manualPrecio}
-                onChange={(e) => setManualPrecio(e.target.value)}
-                className="num"
-              />
-              <Input
-                type="number"
-                inputMode="numeric"
-                placeholder="Cantidad"
-                value={manualCantidad}
-                onChange={(e) => setManualCantidad(e.target.value)}
-                className="num"
-              />
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <Button variant="outline" onClick={() => { setManualOpen(false); setManualNombre(''); setManualPrecio(''); setManualCantidad('1') }}>
-                  Cancelar
-                </Button>
-                <Button onClick={agregarManual} disabled={!manualNombre.trim() || !manualPrecio || parseFloat(manualPrecio) <= 0}>
-                  <Plus className="h-4 w-4" />
-                  Agregar
-                </Button>
-              </div>
+            <div className="max-h-[60vh] overflow-y-auto p-5">
+              {(cfg?.plantillasManuales ?? []).length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  No hay plantillas configuradas.<br />
+                  Pedile al admin que las cree en Configuración → Plantillas.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {(cfg!.plantillasManuales as { id: string; nombre: string; precio: number }[]).map((tmpl) => (
+                    <button
+                      key={tmpl.id}
+                      onClick={() => {
+                        const id = `tmpl-${tmpl.id}`
+                        setManualItems((prev) => ({
+                          ...prev,
+                          [id]: { nombre: tmpl.nombre, precio: tmpl.precio, qty: (prev[id]?.qty ?? 0) + 1 },
+                        }))
+                        setManualOpen(false)
+                        setToast(`✅ ${tmpl.nombre} agregado`)
+                      }}
+                      className="flex flex-col items-center gap-1 rounded-xl border-2 border-border p-3 text-center transition-all hover:border-primary/50 hover:bg-accent cursor-pointer"
+                    >
+                      <span className="text-lg">📦</span>
+                      <span className="w-full truncate text-xs font-semibold">{tmpl.nombre}</span>
+                      <span className="text-xs font-bold text-primary">S/ {tmpl.precio.toFixed(2)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1131,6 +1539,41 @@ export function Pdv() {
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* QR modal: pantalla del cliente */}
+      {qrOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setQrOpen(false)}>
+          <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="brand-grad px-5 py-4 text-center text-white">
+              <Monitor className="mx-auto mb-1 h-6 w-6" />
+              <p className="text-lg font-bold">Pantalla del Cliente</p>
+              <p className="text-xs opacity-80">Escaneá el QR con tu celular</p>
+            </div>
+            <div className="flex flex-col items-center gap-4 p-5">
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="QR Pantalla Cliente" className="h-56 w-56 rounded-xl" />
+              ) : (
+                <div className="h-56 w-56 animate-pulse rounded-xl bg-muted" />
+              )}
+              <p className="text-center text-xs text-muted-foreground">
+                Abrí la cámara del celular y escaneá el código para ver tu compra en tiempo real.
+              </p>
+              {displayUrlRef.current && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(displayUrlRef.current || '')
+                    setToast('📋 URL copiada')
+                  }}
+                  className="text-xs font-semibold text-primary underline cursor-pointer"
+                >
+                  Copiar enlace
+                </button>
+              )}
+              <Button onClick={() => setQrOpen(false)} className="w-full">Cerrar</Button>
+            </div>
           </div>
         </div>
       )}

@@ -3,8 +3,9 @@ import * as React from 'react'
 import { collection, getDocs, query, where, limit, startAfter, type QueryDocumentSnapshot, type DocumentData, type QueryConstraint } from 'firebase/firestore'
 import { usePermisos } from '@/context/permisos'
 import { useConfiguracion } from '@/hooks/use-configuracion'
-import { buscarClientes, type Cliente } from '@/services/clientes'
+import { buscarClientes, cargarClientesPagina, type Cliente } from '@/services/clientes'
 import { ClienteDetalle } from './ClienteDetalle'
+import { RankingClientes } from '@/components/RankingClientes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { InfiniteScroll } from '@/components/ui/infinite-scroll'
@@ -62,12 +63,46 @@ function Lista({ onAbrir, onNuevo }: { onAbrir: (id: string) => void; onNuevo: (
   const [cargando, setCargando] = React.useState(false)
   const [soloDeuda, setSoloDeuda] = React.useState(false)
   const [actualizandoRFM, setActualizandoRFM] = React.useState(false)
+  const [modoTodos, setModoTodos] = React.useState(false)
 
-  // Infinite scroll para deudas
+  // Infinite scroll
   const [cargandoMas, setCargandoMas] = React.useState(false)
   const [hayMas, setHayMas] = React.useState(true)
   const ultimoDocRef = React.useRef<QueryDocumentSnapshot<DocumentData> | null>(null)
   const PAGE_SIZE = 25
+
+  // Cargar primera página de "Todos"
+  async function cargarTodos() {
+    setModoTodos(true)
+    setSoloDeuda(false)
+    setBusqueda('')
+    setCargando(true)
+    ultimoDocRef.current = null
+    try {
+      const { clientes: primera, ultimoDoc, hayMas: mas } = await cargarClientesPagina(PAGE_SIZE)
+      setClientes(primera)
+      ultimoDocRef.current = ultimoDoc
+      setHayMas(mas)
+    } catch {
+      setClientes([])
+    }
+    setCargando(false)
+  }
+
+  // Cargar más (scroll)
+  async function cargarMas() {
+    if (cargandoMas || !hayMas || !ultimoDocRef.current) return
+    setCargandoMas(true)
+    try {
+      const { clientes: nuevos, ultimoDoc, hayMas: mas } = await cargarClientesPagina(PAGE_SIZE, ultimoDocRef.current)
+      setClientes((prev) => [...prev, ...nuevos])
+      ultimoDocRef.current = ultimoDoc
+      setHayMas(mas)
+    } catch {
+      setHayMas(false)
+    }
+    setCargandoMas(false)
+  }
 
   const cargarDeudasPagina = React.useCallback(async (afterDoc?: QueryDocumentSnapshot<DocumentData>, append = false) => {
     try {
@@ -83,7 +118,6 @@ function Lista({ onAbrir, onNuevo }: { onAbrir: (id: string) => void; onNuevo: (
         setClientes(nuevos)
       }
     } catch {
-      // Fallback: query sin where si falta índice
       try {
         const snap = await getDocs(collection(db, COL.CLIENTES))
         const todos: Cliente[] = []
@@ -112,7 +146,11 @@ function Lista({ onAbrir, onNuevo }: { onAbrir: (id: string) => void; onNuevo: (
       await actualizarClasificacionesRFM()
       if (busqueda.trim().length >= 2) {
         const results = await buscarClientes(busqueda)
-        setClientes(soloDeuda ? results.filter((c) => (c.saldoPendiente ?? 0) > 0) : results)
+        let filtrados = results
+        if (soloDeuda) filtrados = results.filter((c) => (c.saldoPendiente ?? 0) > 0)
+        setClientes(filtrados)
+      } else if (modoTodos) {
+        await cargarTodos()
       }
     } catch (e) {
       console.error('Error actualizando RFM:', e)
@@ -122,6 +160,7 @@ function Lista({ onAbrir, onNuevo }: { onAbrir: (id: string) => void; onNuevo: (
   }
 
   React.useEffect(() => {
+    if (modoTodos) return // modo todos no usa búsqueda
     if (soloDeuda && busqueda.trim().length < 2) {
       setCargando(true)
       ultimoDocRef.current = null
@@ -141,7 +180,7 @@ function Lista({ onAbrir, onNuevo }: { onAbrir: (id: string) => void; onNuevo: (
       setCargando(false)
     }, 300)
     return () => clearTimeout(t)
-  }, [busqueda, soloDeuda, cargarDeudasPagina])
+  }, [busqueda, soloDeuda, modoTodos, cargarDeudasPagina])
 
   async function exportarExcelClientes() {
     if (clientes.length === 0) return
@@ -163,6 +202,8 @@ function Lista({ onAbrir, onNuevo }: { onAbrir: (id: string) => void; onNuevo: (
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
+      <RankingClientes />
+
       <div className="flex items-center gap-3">
         <h1 className="text-xl font-extrabold">Clientes</h1>
         <div className="ml-auto flex gap-2">
@@ -173,42 +214,55 @@ function Lista({ onAbrir, onNuevo }: { onAbrir: (id: string) => void; onNuevo: (
             {actualizandoRFM ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {actualizandoRFM ? 'Actualizando…' : 'RFM'}
           </Button>
+          <Button variant="outline" size="sm" onClick={cargarTodos} disabled={cargando}>
+            {cargando && modoTodos ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Todos
+          </Button>
           <Button onClick={onNuevo}><Plus className="h-4 w-4" /> Nuevo</Button>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Buscar por DNI, RUC o nombre…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-10" />
-          {busqueda && (
-            <button onClick={() => setBusqueda('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer" aria-label="Limpiar">
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-        <label className="flex shrink-0 items-center gap-2 text-sm cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={soloDeuda}
-            onChange={(e) => setSoloDeuda(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 accent-orange-500"
-          />
-          <span className="whitespace-nowrap text-muted-foreground">Con deuda</span>
-        </label>
-      </div>
-
-      {cargando && (
-        <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Buscando…
+      {!modoTodos && (
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Buscar por DNI, RUC o nombre…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-10" />
+            {busqueda && (
+              <button onClick={() => setBusqueda('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer" aria-label="Limpiar">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <label className="flex shrink-0 items-center gap-2 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={soloDeuda}
+              onChange={(e) => setSoloDeuda(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 accent-orange-500"
+            />
+            <span className="whitespace-nowrap text-muted-foreground">Con deuda</span>
+          </label>
         </div>
       )}
 
-      {!cargando && busqueda.trim().length < 2 && !soloDeuda && (
+      {modoTodos && (
+        <div className="flex items-center justify-between rounded-xl bg-muted/60 px-3 py-2 text-sm">
+          <span className="font-semibold">Mostrando {clientes.length} cliente(s)</span>
+          <button onClick={() => { setModoTodos(false); setClientes([]) }} className="text-xs text-muted-foreground hover:text-foreground cursor-pointer">Cerrar listado</button>
+        </div>
+      )}
+
+      {cargando && (
+        <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> {modoTodos ? 'Cargando clientes…' : 'Buscando…'}
+        </div>
+      )}
+
+      {!cargando && !modoTodos && busqueda.trim().length < 2 && !soloDeuda && (
         <div className="py-16 text-center text-muted-foreground">
           <UserRound className="mx-auto mb-2 h-9 w-9 text-muted-foreground/40" />
           <p className="text-sm font-medium">Buscar clientes</p>
-          <p className="text-xs text-muted-foreground/70">Ingresa al menos 2 caracteres para buscar</p>
+          <p className="text-xs text-muted-foreground/70">Usá la búsqueda o tocá «Todos» para ver el listado completo</p>
         </div>
       )}
 
@@ -220,7 +274,7 @@ function Lista({ onAbrir, onNuevo }: { onAbrir: (id: string) => void; onNuevo: (
         </div>
       )}
 
-      {!cargando && busqueda.trim().length >= 2 && clientes.length === 0 && (
+      {!cargando && !modoTodos && busqueda.trim().length >= 2 && clientes.length === 0 && (
         <div className="py-16 text-center text-muted-foreground">
           <Search className="mx-auto mb-2 h-9 w-9 text-muted-foreground/40" />
           <p className="text-sm font-medium">Sin resultados</p>
@@ -228,7 +282,15 @@ function Lista({ onAbrir, onNuevo }: { onAbrir: (id: string) => void; onNuevo: (
         </div>
       )}
 
-      {soloDeuda && busqueda.trim().length < 2 ? (
+      {modoTodos && !cargando ? (
+        <InfiniteScroll hayMas={hayMas} cargandoMas={cargandoMas} onCargarMas={cargarMas}>
+          <div className="space-y-2.5">
+            {clientes.map((item) => (
+              <ClienteRow key={item.id} item={item} onAbrir={onAbrir} />
+            ))}
+          </div>
+        </InfiniteScroll>
+      ) : soloDeuda && busqueda.trim().length < 2 ? (
         <InfiniteScroll hayMas={hayMas} cargandoMas={cargandoMas} onCargarMas={cargarMasDeudas}>
           <div className="space-y-2.5">
             {clientes.map((item) => (

@@ -12,6 +12,13 @@ export function endpointSunat(config: Record<string, any>, tipo: 'invoices' | 'n
   return construirUrlApiSunat(test ? config.sunatApiUrlTest || base : base, tipo)
 }
 
+// Código de establecimiento anexo (catálogo 22) con el que se emite: entra al
+// XML firmado (cbc:AddressTypeCode) y por tanto al hash SUNAT. '0000' = matriz.
+export function puntoEmisionDe(doc: any, config: Record<string, any>): string {
+  const codigo = String(doc?.sunat?.puntoEmision ?? config?.puntoEmision ?? '0000').trim()
+  return /^\d{4}$/.test(codigo) ? codigo : '0000'
+}
+
 // Construye el payload de un comprobante para SUNAT (SOLO construcción; nunca se envía).
 export function construirPayloadComprobante(doc: any, config: Record<string, any>) {
   const venta = doc.venta || {}
@@ -48,6 +55,7 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
     tipo: tipoComprobante,
     serie,
     numero,
+    punto_emision: puntoEmisionDe(doc, config),
     fecha_emision: (() => {
       const d = new Date(venta.fecha || doc.fecha || new Date())
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -105,6 +113,7 @@ export function construirPayloadNota(doc: any, config: Record<string, any>) {
     tipo_nota: tipoNotaApi,
     serie,
     numero,
+    punto_emision: puntoEmisionDe(doc, config),
     fecha_emision: (() => {
       const d = new Date(venta.fecha || doc.fecha || new Date())
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

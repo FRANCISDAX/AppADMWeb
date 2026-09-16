@@ -4,10 +4,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { actualizarCliente, crearOCargarCliente, obtenerCliente, obtenerVentasDelCliente, registrarCobro, actualizarSaldoCredito, validarSunatCliente, type Cliente } from '@/services/clientes'
+import { actualizarCliente, crearOCargarCliente, obtenerCliente, obtenerVentasDelCliente, registrarCobro, actualizarSaldoCredito, corregirCobrosExcedidos, validarSunatCliente, type Cliente } from '@/services/clientes'
 import { useNotifications } from '@/components/notifications'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
+import { useConfiguracion } from '@/hooks/use-configuracion'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { cn } from '@/lib/utils'
 
@@ -31,8 +32,8 @@ function filtrarPorMes(docs: VentaDoc[], mes: string): VentaDoc[] {
   })
 }
 
-type Form = { razonSocial: string; tipoDoc: string; numeroDoc: string; direccion: string; email: string; telefono: string; tipoDocDefecto: string; listaPrecio: string; creditoActivo: boolean; limiteCredito: number; diasCredito: number; notas: string }
-const VACIO: Form = { razonSocial: '', tipoDoc: 'dni', numeroDoc: '', direccion: '', email: '', telefono: '', tipoDocDefecto: 'boleta', listaPrecio: 'general', creditoActivo: false, limiteCredito: 0, diasCredito: 0, notas: '' }
+type Form = { razonSocial: string; tipoDoc: string; numeroDoc: string; direccion: string; email: string; telefono: string; tipoDocDefecto: string; listaPrecio: string; creditoActivo: boolean; limiteCredito: number; diasCredito: number; notas: string; descuentoPorcentaje: number }
+const VACIO: Form = { razonSocial: '', tipoDoc: 'dni', numeroDoc: '', direccion: '', email: '', telefono: '', tipoDocDefecto: 'boleta', listaPrecio: 'general', creditoActivo: false, limiteCredito: 0, diasCredito: 0, notas: '', descuentoPorcentaje: 0 }
 
 type VentaItem = { id?: string; nombre?: string; cantidad?: number; unidad?: string; precioVenta?: number; subtotal?: number }
 type VentaDoc = { id: string; serieNumero?: string; createdAt?: string; fecha?: string; venta?: { total?: number; tipoPago?: string; cobrado?: number; pagos?: any[]; fecha?: string; serie_numero?: string; cliente_nombre?: string; items?: VentaItem[] }; sunat?: { estado?: string } }
@@ -42,6 +43,7 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
   const { toast } = useNotifications()
   const { user } = useAuth()
   const { tienePermiso } = usePermisos()
+  const { config: cfg } = useConfiguracion()
   const [cliente, setCliente] = React.useState<Cliente | null>(null)
   const [editando, setEditando] = React.useState(esNuevo)
   const [cargando, setCargando] = React.useState(true)
@@ -54,8 +56,10 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
   const [cobroDoc, setCobroDoc] = React.useState<VentaDoc | null>(null)
   const [cobroMonto, setCobroMonto] = React.useState('')
   const [cobroTipo, setCobroTipo] = React.useState('efectivo')
+  const [cobroOperacion, setCobroOperacion] = React.useState('')
   const [cobrando, setCobrando] = React.useState(false)
   const [detalleVenta, setDetalleVenta] = React.useState<VentaDoc | null>(null)
+  const [recalculandoSaldo, setRecalculandoSaldo] = React.useState(false)
 
   // Ventas filtradas por mes seleccionado
   const ventasFiltradas = React.useMemo(() => filtrarPorMes(ventas, mesFiltro), [ventas, mesFiltro])
@@ -89,7 +93,7 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
         razonSocial: c.razonSocial ?? '', tipoDoc: c.tipoDoc ?? 'dni', numeroDoc: c.numeroDoc ?? '',
         direccion: c.direccion ?? '', email: c.email ?? '', telefono: c.telefono ?? '',
         tipoDocDefecto: c.tipoDocDefecto ?? 'boleta', listaPrecio: c.listaPrecio ?? 'general',
-        creditoActivo: !!c.creditoActivo, limiteCredito: c.limiteCredito ?? 0, diasCredito: c.diasCredito ?? 0, notas: c.notas ?? '',
+        creditoActivo: !!c.creditoActivo, limiteCredito: c.limiteCredito ?? 0, diasCredito: c.diasCredito ?? 0, notas: c.notas ?? '', descuentoPorcentaje: c.descuentoPorcentaje ?? 0,
       })
       setVentas(await obtenerVentasDelCliente(id, 15))
     }
@@ -158,10 +162,10 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
     try {
       const turno = await buscarTurnoAbierto(user?.uid, tienePermiso('verTodo'))
       if (!turno) { toast('🚫 No hay un turno abierto. Abrí un turno antes de cobrar.', 'error'); return }
-      const r = await registrarCobro(cobroDoc.id, monto, cobroTipo, turno.id)
+      const r = await registrarCobro(cobroDoc.id, monto, cobroTipo, turno.id, cobroOperacion || undefined)
       if (r.success) {
         if (cliente) await actualizarSaldoCredito(cliente.id as string)
-        setCobroDoc(null); setCobroMonto('')
+        setCobroDoc(null); setCobroMonto(''); setCobroOperacion('')
         toast('Cobro registrado', 'success')
         if (cliente) cargar(cliente.id as string)
       } else {
@@ -169,6 +173,24 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
       }
     } finally {
       setCobrando(false)
+    }
+  }
+
+  async function handleRecalcularSaldo() {
+    if (!cliente?.id) return
+    setRecalculandoSaldo(true)
+    try {
+      const { corregidos } = await corregirCobrosExcedidos(cliente.id)
+      if (corregidos > 0) toast(`Corregidos ${corregidos} cobro(s) excedido(s)`, 'success')
+      const r = await actualizarSaldoCredito(cliente.id)
+      if (r.success) {
+        toast(`Saldo recalculado: ${fmt(r.saldo ?? 0)}`, 'success')
+        cargar(cliente.id)
+      } else {
+        toast(r.error || 'Error al recalcular', 'error')
+      }
+    } finally {
+      setRecalculandoSaldo(false)
     }
   }
 
@@ -221,9 +243,9 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
             ))}
           </div>
           <div className="mt-1.5 flex gap-1.5 rounded-xl bg-muted p-1">
-            {['general', 'mayorista', 'preferencial'].map((k) => (
-              <button key={k} onClick={() => setF('listaPrecio', k)} className={cn('flex-1 rounded-lg py-1.5 text-xs font-bold cursor-pointer', form.listaPrecio === k ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground')}>
-                {k.charAt(0).toUpperCase() + k.slice(1)}
+            {(cfg.listasPrecios ?? []).map((l) => (
+              <button key={l.id} onClick={() => setF('listaPrecio', l.id)} className={cn('flex-1 rounded-lg py-1.5 text-xs font-bold cursor-pointer', form.listaPrecio === l.id ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground')}>
+                {l.nombre}
               </button>
             ))}
           </div>
@@ -247,6 +269,12 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
               </div>
             </div>
           )}
+        </div>
+
+        <div>
+          <Label>Descuento frecuente (%)</Label>
+          <Input value={form.descuentoPorcentaje ? String(form.descuentoPorcentaje) : ''} onChange={(e) => setF('descuentoPorcentaje', Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))} inputMode="decimal" placeholder="0" />
+          <p className="mt-0.5 text-[11px] text-muted-foreground">Se aplica automáticamente en el PDV al seleccionar este cliente</p>
         </div>
 
         <Input value={form.notas} onChange={(e) => setF('notas', e.target.value)} placeholder="Notas" />
@@ -289,6 +317,13 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
 
           {cliente.creditoActivo && (
             <div className="mt-3 rounded-xl bg-muted/60 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Crédito</span>
+                <Button variant="ghost" size="sm" className="h-6 text-[11px] text-muted-foreground hover:text-foreground" onClick={handleRecalcularSaldo} disabled={recalculandoSaldo}>
+                  {recalculandoSaldo ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                  Recalcular saldo
+                </Button>
+              </div>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div><div className="text-[11px] text-muted-foreground">Límite</div><div className="font-bold">{fmt(limite)}</div></div>
                 <div><div className="text-[11px] text-muted-foreground">Saldo</div><div className={cn('font-bold', saldo > 0 && 'text-red-600')}>{fmt(saldo)}</div></div>
@@ -491,10 +526,16 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
                 <Label>Tipo de pago</Label>
                 <div className="flex gap-1.5 rounded-xl bg-muted p-1">
                   {['efectivo', 'transferencia', 'yape', 'plin'].map((k) => (
-                    <button key={k} onClick={() => setCobroTipo(k)} className={cn('flex-1 rounded-lg py-1.5 text-xs font-bold cursor-pointer', cobroTipo === k ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground')}>{k}</button>
+                    <button key={k} onClick={() => { setCobroTipo(k); if (k === 'efectivo') setCobroOperacion('') }} className={cn('flex-1 rounded-lg py-1.5 text-xs font-bold cursor-pointer', cobroTipo === k ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground')}>{k}</button>
                   ))}
                 </div>
               </div>
+              {cobroTipo !== 'efectivo' && (
+                <div>
+                  <Label>N° de operación</Label>
+                  <Input value={cobroOperacion} onChange={(e) => setCobroOperacion(e.target.value)} placeholder="Ej: 123456789" />
+                </div>
+              )}
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setCobroDoc(null)}>Cancelar</Button>
                 <Button className="flex-1" onClick={handleCobrar} disabled={cobrando}>

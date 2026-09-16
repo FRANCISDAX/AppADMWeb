@@ -7,6 +7,7 @@ type ItemCompra = { productoId: string; productoNombre: string; codigo?: string;
 export async function registrarCompra({
   items,
   proveedor,
+  proveedorId,
   proveedorDireccion,
   nota,
   usuario = 'sistema',
@@ -15,6 +16,7 @@ export async function registrarCompra({
 }: {
   items: ItemCompra[]
   proveedor: string
+  proveedorId?: string
   proveedorDireccion?: string
   nota?: string
   usuario?: string
@@ -79,6 +81,7 @@ export async function registrarCompra({
           metadata: {
             compraId,
             proveedor,
+            proveedorId: proveedorId || '',
             proveedorDireccion: proveedorDireccion || '',
             totalPagado,
             precioUnitario: item.costoUnitario,

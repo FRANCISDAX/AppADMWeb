@@ -20,6 +20,7 @@ import { fmt, useToast, estadoVencimiento, esc } from '@/lib/ui-utils'
 import { exportarExcel } from '@/lib/excel'
 import { logActividad } from '@/lib/audit'
 import { registrarCambioPrecio, obtenerHistorialPrecios } from '@/services/historial-precios'
+import { cargarProveedores, type Proveedor } from '@/services/proveedores'
 
 type PresForm = { nombre: string; factor: string; esVenta: boolean; esCompra: boolean }
 type KitItemForm = { productoId: string; cantidad: string }
@@ -33,6 +34,7 @@ type FormState = {
   stock: string
   minStock: string
   activo: boolean
+  esFavorito: boolean
   imagen: string
   tipoAfectacion: string
   unidadBase: string
@@ -40,18 +42,22 @@ type FormState = {
   isKit: boolean
   kitItems: KitItemForm[]
   presentaciones: PresForm[]
+  proveedorId: string
+  proveedorNombre: string
+  preciosPorLista: Record<string, string>
+  precioMinimo: string
 }
 
 const VACIO: FormState = {
   nombre: '', codigo: '', categoria: 'Productos', precioCompra: '', precioVenta: '', precioEspecial: '', stock: '', minStock: '',
-  activo: true, imagen: '', tipoAfectacion: AFECTACION_POR_DEFECTO, unidadBase: 'unidad', fechaVencimiento: '', isKit: false, kitItems: [], presentaciones: [],
+  activo: true, esFavorito: false, imagen: '', tipoAfectacion: AFECTACION_POR_DEFECTO, unidadBase: 'unidad', fechaVencimiento: '', isKit: false, kitItems: [], presentaciones: [], proveedorId: '', proveedorNombre: '', preciosPorLista: {}, precioMinimo: '',
 }
 
 function toForm(p: Producto): FormState {
   return {
     nombre: p.nombre ?? '', codigo: p.codigo ?? '', categoria: p.categoria ?? 'Productos',
     precioCompra: String(p.precioCompra ?? ''), precioVenta: String(p.precioVenta ?? ''), precioEspecial: String(p.precioEspecial ?? ''),
-    stock: String(p.stock ?? ''), minStock: String(p.minStock ?? ''), activo: p.activo !== false,
+    stock: String(p.stock ?? ''), minStock: String(p.minStock ?? ''), activo: p.activo !== false, esFavorito: p.esFavorito === true,
     imagen: p.imagen ?? '', tipoAfectacion: p.tipoAfectacion ?? AFECTACION_POR_DEFECTO,
     unidadBase: p.unidadBase ?? 'unidad', fechaVencimiento: p.fechaVencimiento ?? '',
     isKit: p.isKit === true,
@@ -59,6 +65,12 @@ function toForm(p: Producto): FormState {
     presentaciones: (p.presentaciones ?? []).map((pr) => ({
       nombre: pr.nombre ?? '', factor: String(pr.factor ?? 1), esVenta: pr.esVenta !== false, esCompra: pr.esCompra !== false,
     })),
+    proveedorId: p.proveedorId ?? '',
+    proveedorNombre: p.proveedorNombre ?? '',
+    preciosPorLista: Object.fromEntries(
+      Object.entries(p.preciosPorLista ?? {}).map(([k, v]) => [k, String(v ?? '')])
+    ),
+    precioMinimo: String(p.precioMinimo ?? ''),
   }
 }
 
@@ -105,6 +117,11 @@ export function Inventario() {
   const [sort, setSort] = React.useState<{ key: 'nombre' | 'categoria' | 'precioVenta' | 'stock'; dir: 'asc' | 'desc' }>({ key: 'nombre', dir: 'asc' })
   const [editando, setEditando] = React.useState<Producto | null>(null)
   const [modal, setModal] = React.useState(false)
+  const [proveedoresLista, setProveedoresLista] = React.useState<Proveedor[]>([])
+
+  React.useEffect(() => {
+    if (modal) cargarProveedores().then(setProveedoresLista).catch(() => setProveedoresLista([]))
+  }, [modal])
   const [form, setForm] = React.useState<FormState>(VACIO)
   const [saving, setSaving] = React.useState(false)
   const { toast, setToast } = useToast()
@@ -543,6 +560,7 @@ export function Inventario() {
       stock: parseInt(form.stock) || 0,
       minStock: parseInt(form.minStock) || 0,
       activo: form.activo,
+      esFavorito: form.esFavorito,
       imagen: form.imagen,
       tipoAfectacion: form.tipoAfectacion || AFECTACION_POR_DEFECTO,
       unidadBase: form.unidadBase.trim() || 'unidad',
@@ -555,8 +573,17 @@ export function Inventario() {
           esVenta: p.esVenta,
           esCompra: p.esCompra,
         })),
+      proveedorId: form.proveedorId || '',
+      proveedorNombre: form.proveedorNombre || '',
+      preciosPorLista: Object.fromEntries(
+        Object.entries(form.preciosPorLista)
+          .filter(([, v]) => v !== '' && parseFloat(v) > 0)
+          .map(([k, v]) => [k, parseFloat(v)])
+      ),
     }
     if (precioEspecialVal > 0) raw.precioEspecial = precioEspecialVal
+    const precioMinimoVal = parseFloat(form.precioMinimo)
+    if (precioMinimoVal > 0) raw.precioMinimo = precioMinimoVal
     if (form.fechaVencimiento) raw.fechaVencimiento = form.fechaVencimiento
     if (form.isKit) {
       raw.isKit = true
@@ -892,6 +919,35 @@ export function Inventario() {
                 <Input type="number" inputMode="decimal" value={form.precioEspecial} onChange={(e) => setForm({ ...form, precioEspecial: e.target.value })} placeholder="Vacío = sin promo" />
                 <p className="mt-1 text-[11px] text-muted-foreground">Este precio se usa en el punto de venta para promociones. Si está definido, se cobra este monto sin cambiar el precio de venta real.</p>
               </div>
+              <div>
+                <Label>Precio mínimo (piso de seguridad)</Label>
+                <Input type="number" inputMode="decimal" value={form.precioMinimo} onChange={(e) => setForm({ ...form, precioMinimo: e.target.value })} placeholder="Vacío = sin protección" />
+                <p className="mt-1 text-[11px] text-muted-foreground">Piso de seguridad: si el precio final baja de este monto se bloquea la venta. Si el producto vence en ≤7 días, se permite vender por debajo.</p>
+              </div>
+              {(cfg.listasPrecios ?? []).length > 1 && (
+                <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
+                  <Label className="text-xs font-bold text-primary">Precios por Lista</Label>
+                  <p className="mb-2 text-[10px] text-muted-foreground">Precio específico para cada lista. Si se deja vacío, usa el precio general.</p>
+                  <div className="space-y-2">
+                    {(cfg.listasPrecios ?? []).filter((l) => !l.defecto).map((l) => (
+                      <div key={l.id} className="flex items-center gap-2">
+                        <span className="w-28 truncate text-xs font-medium">{l.nombre}</span>
+                        <div className="relative flex-1">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">S/</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={form.preciosPorLista[l.id] ?? ''}
+                            onChange={(e) => setForm({ ...form, preciosPorLista: { ...form.preciosPorLista, [l.id]: e.target.value } })}
+                            placeholder="Usar precio general"
+                            className="h-8 w-full rounded-lg border border-input bg-background pl-7 pr-2 text-sm"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Stock</Label>
@@ -933,6 +989,22 @@ export function Inventario() {
                 >
                   {TIPO_AFECTACION.map((a) => (
                     <option key={a.codigo} value={a.codigo}>{a.codigo} · {a.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>Proveedor Preferido</Label>
+                <select
+                  value={form.proveedorId}
+                  onChange={(e) => {
+                    const prov = proveedoresLista.find((p) => p.id === e.target.value)
+                    setForm({ ...form, proveedorId: e.target.value, proveedorNombre: prov?.nombre || '' })
+                  }}
+                  className="mt-1 h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Sin proveedor</option>
+                  {proveedoresLista.filter((p) => p.activo !== false).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((p) => (
+                    <option key={p.id} value={p.id}>{p.nombre} — {p.documento}</option>
                   ))}
                 </select>
               </div>
@@ -991,6 +1063,11 @@ export function Inventario() {
               <label className="flex cursor-pointer items-center gap-2 text-sm">
                 <input type="checkbox" checked={form.activo} onChange={(e) => setForm({ ...form, activo: e.target.checked })} className="h-4 w-4 accent-primary" />
                 Producto activo
+              </label>
+
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.esFavorito} onChange={(e) => setForm({ ...form, esFavorito: e.target.checked })} className="h-4 w-4 accent-primary" />
+                ⭐ Favorito (se muestra en venta rápida)
               </label>
 
               <div className="rounded-xl border p-3">

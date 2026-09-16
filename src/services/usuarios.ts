@@ -1,8 +1,20 @@
-import { collection, doc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore'
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
 import { COL } from '@/constants/colecciones'
 import { auth, db } from '@/lib/firebase'
 import { permisosPorRol } from '@/constants/permisos'
+import {
+  CAMPOS_SERIE,
+  type CampoSerie,
+  type ConflictoSerie,
+  type SerieEmpresa,
+  type SerieOcupada,
+  type SeriesUsuario,
+  mensajeConflictos,
+  seriesDeUsuario,
+  seriesEmpresa,
+  validarSeries,
+} from '@/lib/series'
 
 export type Usuario = {
   uid: string
@@ -28,10 +40,68 @@ export async function obtenerUsuarios(): Promise<Usuario[]> {
   }
 }
 
+/** Series ya tomadas por los demás usuarios (se excluye el que se está editando). */
+export async function obtenerSeriesOcupadas(excluirUid?: string): Promise<SerieOcupada[]> {
+  try {
+    const snap = await getDocs(collection(db, COL.USUARIO))
+    return snap.docs.flatMap((d) =>
+      seriesDeUsuario({ uid: d.id, ...(d.data() as Omit<Usuario, 'uid'>) }, excluirUid)
+    )
+  } catch (e) {
+    console.error('❌ obtenerSeriesOcupadas:', e)
+    return []
+  }
+}
+
+/** Series configuradas a nivel empresa (globales + NC/ND) desde `tblConfiguracion/empresa`. */
+export async function obtenerSeriesEmpresa(): Promise<SerieEmpresa[]> {
+  try {
+    const snap = await getDoc(doc(db, COL.CONFIGURACION, 'empresa'))
+    return seriesEmpresa(snap.exists() ? (snap.data() as Record<string, unknown>) : {})
+  } catch (e) {
+    console.error('❌ obtenerSeriesEmpresa:', e)
+    return seriesEmpresa({})
+  }
+}
+
+/**
+ * Valida las series de una caja contra las de los demás usuarios y las de la
+ * empresa. Los conflictos `bloqueante: true` comparten contador de correlativos
+ * y NO deben guardarse.
+ */
+export async function validarSeriesUsuario(
+  series: SeriesUsuario,
+  excluirUid?: string,
+  campos?: readonly CampoSerie[]
+): Promise<ConflictoSerie[]> {
+  const [ocupadas, empresa] = await Promise.all([
+    obtenerSeriesOcupadas(excluirUid),
+    obtenerSeriesEmpresa(),
+  ])
+  return validarSeries({ series, ocupadas, empresa, campos })
+}
+
+function seriesDe(data: { serieBoleta?: string; serieFactura?: string; seriePrefijo?: string }): SeriesUsuario {
+  const out: SeriesUsuario = {}
+  for (const campo of CAMPOS_SERIE) out[campo] = data[campo] ?? ''
+  return out
+}
+
+/** Devuelve el primer mensaje de error si hay conflictos bloqueantes, o `null`. */
+async function errorSeries(series: SeriesUsuario, excluirUid?: string): Promise<string | null> {
+  const conflictos = await validarSeriesUsuario(series, excluirUid)
+  const bloqueantes = conflictos.filter((c) => c.bloqueante)
+  if (bloqueantes.length === 0) return null
+  return mensajeConflictos(bloqueantes)
+}
+
 export async function crearUsuario({ email, password, nombre, rol, permisos, serieBoleta, serieFactura, seriePrefijo }: { email: string; password: string; nombre: string; rol: string; permisos: Record<string, boolean>; serieBoleta?: string; serieFactura?: string; seriePrefijo?: string }) {
   try {
     const existente = await getDocs(query(collection(db, COL.USUARIO), where('email', '==', email)))
     if (!existente.empty) return { success: false, error: 'Ya existe un usuario con este email.' }
+
+    const errorSerie = await errorSeries(seriesDe({ serieBoleta, serieFactura, seriePrefijo }))
+    if (errorSerie) return { success: false, error: errorSerie }
 
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     const permisosFinales = Object.keys(permisos).length ? permisos : permisosPorRol(rol)
@@ -61,7 +131,24 @@ export async function crearUsuario({ email, password, nombre, rol, permisos, ser
 
 export async function editarUsuario(uid: string, data: Partial<{ nombre: string; rol: string; permisos: Record<string, boolean>; activo: boolean; serieBoleta: string; serieFactura: string; seriePrefijo: string }>) {
   try {
-    const update: Record<string, any> = { updatedAt: new Date().toISOString() }
+    // Si se tocan series, se validan contra el resto de cajas antes de escribir.
+    const tocaSeries = CAMPOS_SERIE.some((campo) => data[campo] !== undefined)
+    if (tocaSeries) {
+      const snap = await getDoc(doc(db, COL.USUARIO, uid))
+      if (!snap.exists()) return { success: false, error: 'El usuario ya no existe.' }
+      const actual = snap.data() as Usuario
+      const errorSerie = await errorSeries(
+        seriesDe({
+          serieBoleta: data.serieBoleta ?? actual.serieBoleta,
+          serieFactura: data.serieFactura ?? actual.serieFactura,
+          seriePrefijo: data.seriePrefijo ?? actual.seriePrefijo,
+        }),
+        uid
+      )
+      if (errorSerie) return { success: false, error: errorSerie }
+    }
+
+    const update: Record<string, unknown> = { updatedAt: new Date().toISOString() }
     if (data.nombre !== undefined) update.nombre = data.nombre
     if (data.rol !== undefined) update.rol = data.rol
     if (data.permisos !== undefined) update.permisos = data.permisos
@@ -71,7 +158,8 @@ export async function editarUsuario(uid: string, data: Partial<{ nombre: string;
     if (data.seriePrefijo !== undefined) update.seriePrefijo = data.seriePrefijo
     await updateDoc(doc(db, COL.USUARIO, uid), update)
     return { success: true }
-  } catch {
+  } catch (e) {
+    console.error('❌ editarUsuario:', e)
     return { success: false, error: 'Error al actualizar usuario.' }
   }
 }

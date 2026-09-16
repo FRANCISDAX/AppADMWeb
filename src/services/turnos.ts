@@ -11,8 +11,12 @@ export type Turno = {
   usuarioNombre?: string
   tipoTurno?: string
   fechaApertura?: string
+  fechaCierre?: string
   estado?: 'abierto' | 'cerrado'
   montoInicial?: number
+  montoFinalEfectivo?: number
+  efectivoEsperado?: number
+  diferencia?: number
   ventasDelTurno?: any[]
   gastosDelTurno?: any[]
   totalVentas?: number
@@ -21,6 +25,8 @@ export type Turno = {
   totalGastos?: number
   totalGastosEfectivo?: number
   totalGastosTransferencia?: number
+  vueltoTransferencia?: number
+  rectificacion?: any
 }
 
 export async function buscarTurnoAbierto(usuarioId?: string | null, permiteOtros = false): Promise<Turno | null> {
@@ -151,5 +157,66 @@ export async function refrescarTurno(turnoId: string) {
   } catch (e) {
     console.error('❌ Error refrescando turno:', e)
     return null
+  }
+}
+
+export async function editarMontoInicial({ turnoId, montoInicial, usuarioId }: { turnoId: string; montoInicial: number; usuarioId: string }) {
+  exigirRateLimit('editar_monto_inicial')
+  try {
+    const turnoRef = doc(db, COL.TURNOS, turnoId)
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(turnoRef)
+      if (!snap.exists()) throw new Error('El turno no existe.')
+      const t = snap.data()
+      if (t.estado !== 'abierto') throw new Error('Solo se puede editar el monto inicial en turnos abiertos.')
+      transaction.update(turnoRef, { montoInicial })
+    })
+    logActividad({ accion: 'editar_monto_inicial', entidad: COL.TURNOS, entidadId: turnoId, detalle: { montoInicial, usuarioId } })
+    return { success: true }
+  } catch (e) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+export async function rectificarTurno({ turnoId, montoInicialReal, motivo, usuarioId, usuarioNombre }: { turnoId: string; montoInicialReal: number; motivo: string; usuarioId: string; usuarioNombre: string }) {
+  exigirRateLimit('rectificar_turno')
+  try {
+    const turnoRef = doc(db, COL.TURNOS, turnoId)
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(turnoRef)
+      if (!snap.exists()) throw new Error('El turno no existe.')
+      const t = snap.data()
+      if (t.estado !== 'cerrado') throw new Error('Solo se pueden rectificar turnos cerrados.')
+
+      const montoInicialOriginal = t.montoInicial || 0
+      const ajuste = montoInicialReal - montoInicialOriginal
+      const totalEfectivo = t.totalEfectivo || 0
+      const totalGastosEfectivo = t.totalGastosEfectivo || 0
+      const vueltoTransferencia = t.vueltoTransferencia || 0
+      const efectivoEsperado = montoInicialReal + totalEfectivo - totalGastosEfectivo - vueltoTransferencia
+      const montoFinalEfectivo = t.montoFinalEfectivo || 0
+      const diferencia = montoFinalEfectivo - efectivoEsperado
+
+      const rectificacion = {
+        fecha: new Date().toISOString(),
+        usuarioId,
+        usuarioNombre,
+        montoInicialOriginal,
+        montoInicialReal,
+        ajuste,
+        motivo,
+      }
+
+      transaction.update(turnoRef, {
+        montoInicial: montoInicialReal,
+        efectivoEsperado,
+        diferencia,
+        rectificacion,
+      })
+    })
+    logActividad({ accion: 'rectificar_turno', entidad: COL.TURNOS, entidadId: turnoId, detalle: { montoInicialReal, motivo, usuarioId } })
+    return { success: true }
+  } catch (e) {
+    return { success: false, error: (e as Error).message }
   }
 }

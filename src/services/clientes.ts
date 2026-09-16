@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, runTransaction, setDoc, updateDoc, where } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, runTransaction, setDoc, updateDoc, where, writeBatch, limit, startAfter, type QueryDocumentSnapshot, type DocumentData, type QueryConstraint } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { consultarDni, consultarRuc } from '@/lib/consultaSunat'
@@ -16,6 +16,7 @@ export type Cliente = {
   fechaRegistro?: string
   ultimaCompra?: string | null
   totalCompras?: number
+  montoTotal?: number
   frecuencia?: string
   tipoDocDefecto?: string
   listaPrecio?: string
@@ -28,7 +29,8 @@ export type Cliente = {
   sunatValido?: boolean
   sunatEstado?: string
   nombre?: string
-  [key: string]: any
+  descuentoPorcentaje?: number
+  [key: string]: unknown
 }
 
 const sanitizeString = (v: any, max: number) => String(v ?? '').trim().slice(0, max)
@@ -136,6 +138,48 @@ export async function obtenerClientesConDeuda(): Promise<Cliente[]> {
   }
 }
 
+export async function obtenerTodosLosClientes(): Promise<Cliente[]> {
+  try {
+    const snap = await getDocs(collection(db, COL.CLIENTES))
+    const results: Cliente[] = []
+    snap.forEach((d) => results.push({ id: d.id, ...d.data() as Cliente }))
+    return results
+  } catch (e) {
+    console.error('❌ Error al obtener todos los clientes:', e)
+    return []
+  }
+}
+
+export async function cargarClientesPagina(
+  pageSize: number,
+  afterDoc?: QueryDocumentSnapshot<DocumentData>,
+  filtro?: { soloConDeuda?: boolean; ordenarPor?: 'razonSocial' | 'saldoPendiente' | 'ultimaCompra' },
+): Promise<{ clientes: Cliente[]; ultimoDoc: QueryDocumentSnapshot<DocumentData> | null; hayMas: boolean }> {
+  try {
+    const constraints: QueryConstraint[] = []
+    if (filtro?.soloConDeuda) constraints.push(where('saldoPendiente', '>', 0))
+    if (filtro?.ordenarPor === 'saldoPendiente' && !filtro?.soloConDeuda) {
+      constraints.push(where('saldoPendiente', '>', 0))
+    }
+    constraints.push(limit(pageSize))
+    if (afterDoc) constraints.push(startAfter(afterDoc))
+    const snap = await getDocs(query(collection(db, COL.CLIENTES), ...constraints))
+    const clientes = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Cliente))
+    const ultimoDoc = snap.docs[snap.docs.length - 1] ?? null
+    const hayMas = snap.docs.length === pageSize
+    return { clientes, ultimoDoc, hayMas }
+  } catch {
+    // Fallback sin where si falta índice
+    const constraints: QueryConstraint[] = [limit(pageSize)]
+    if (afterDoc) constraints.push(startAfter(afterDoc))
+    const snap = await getDocs(query(collection(db, COL.CLIENTES), ...constraints))
+    const clientes = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Cliente))
+    const ultimoDoc = snap.docs[snap.docs.length - 1] ?? null
+    const hayMas = snap.docs.length === pageSize
+    return { clientes, ultimoDoc, hayMas }
+  }
+}
+
 export async function obtenerCliente(id: string): Promise<Cliente | null> {
   try {
     const snap = await getDoc(doc(db, COL.CLIENTES, id))
@@ -148,7 +192,7 @@ export async function obtenerCliente(id: string): Promise<Cliente | null> {
 
 export async function actualizarCliente(id: string, data: Partial<Cliente>): Promise<{ success: boolean; error?: string }> {
   try {
-    const updateData: Record<string, any> = {
+    const updateData: Record<string, unknown> = {
       razonSocial: sanitizeString(data.razonSocial, 200),
       direccion: sanitizeString(data.direccion, 300),
       email: sanitizeString(data.email, 100),
@@ -157,9 +201,10 @@ export async function actualizarCliente(id: string, data: Partial<Cliente>): Pro
       creditoActivo: !!data.creditoActivo,
       limiteCredito: sanitizeNumber(data.limiteCredito, 0, 999999),
       diasCredito: sanitizeNumber(data.diasCredito, 0, 999),
+      descuentoPorcentaje: sanitizeNumber(data.descuentoPorcentaje ?? 0, 0, 100),
       updatedAt: new Date().toISOString(),
     }
-    if (data.razonSocial && data.razonSocial.trim()) updateData.razonSocialLower = updateData.razonSocial.toLowerCase()
+    if (data.razonSocial && data.razonSocial.trim()) updateData.razonSocialLower = (updateData.razonSocial as string).toLowerCase()
     await updateDoc(doc(db, COL.CLIENTES, id), updateData)
     return { success: true }
   } catch (e) {
@@ -172,11 +217,45 @@ export async function actualizarCliente(id: string, data: Partial<Cliente>): Pro
 export async function calcularSaldoCredito(clienteId: string): Promise<number> {
   const docsSnap = await getDocs(query(collection(db, COL.DOCUMENTOS), where('venta.cliente_dni', '==', clienteId)))
   let saldo = 0
+  const detalle: { id: string; total: number; cobrado: number; pendiente: number; pagado?: boolean }[] = []
   docsSnap.forEach((d) => {
     const v = d.data().venta || {}
-    if (v.tipoPago === 'credito') saldo += (v.total || 0) - (v.cobrado || 0)
+    if (v.tipoPago === 'credito') {
+      const total = v.total || 0
+      const cobrado = v.cobrado || 0
+      const pendiente = total - cobrado
+      saldo += pendiente
+      detalle.push({ id: d.id, total, cobrado, pendiente, pagado: v.pagado })
+    }
   })
+  console.log('[calcularSaldoCredito] clienteId:', clienteId)
+  console.table(detalle)
+  console.log('[calcularSaldoCredito] saldo total:', saldo)
   return saldo
+}
+
+export async function corregirCobrosExcedidos(clienteId: string): Promise<{ corregidos: number; total: number }> {
+  const docsSnap = await getDocs(query(collection(db, COL.DOCUMENTOS), where('venta.cliente_dni', '==', clienteId)))
+  let corregidos = 0
+  let total = 0
+  const batch = writeBatch(db)
+  docsSnap.forEach((d) => {
+    const v = d.data().venta || {}
+    if (v.tipoPago === 'credito') {
+      total++
+      const cobrado = v.cobrado || 0
+      const t = v.total || 0
+      if (cobrado > t) {
+        batch.update(doc(db, COL.DOCUMENTOS, d.id), {
+          'venta.cobrado': t,
+          'venta.pagado': true,
+        })
+        corregidos++
+      }
+    }
+  })
+  if (corregidos > 0) await batch.commit()
+  return { corregidos, total }
 }
 
 export async function actualizarSaldoCredito(clienteId: string): Promise<{ success: boolean; saldo?: number; error?: string }> {
@@ -195,7 +274,7 @@ export async function actualizarSaldoCredito(clienteId: string): Promise<{ succe
   }
 }
 
-export async function registrarCobro(documentoId: string, monto: number, tipoPago: string = 'efectivo', turnoId?: string): Promise<{ success: boolean; error?: string }> {
+export async function registrarCobro(documentoId: string, monto: number, tipoPago: string = 'efectivo', turnoId?: string, operacion?: string): Promise<{ success: boolean; error?: string }> {
   const ref = doc(db, COL.DOCUMENTOS, documentoId)
   try {
     await runTransaction(db, async (tx) => {
@@ -213,7 +292,8 @@ export async function registrarCobro(documentoId: string, monto: number, tipoPag
       const venta = snap.data().venta || {}
       const nuevoCobrado = (venta.cobrado || 0) + monto
       const total = venta.total || 0
-      const pago = { monto, tipoPago, fecha: new Date().toISOString() }
+      const pago: Record<string, unknown> = { monto, tipoPago, fecha: new Date().toISOString() }
+      if (operacion) pago.operacion = operacion
       const pagos = [...(Array.isArray(venta.pagos) ? venta.pagos : []), pago]
       tx.set(ref, {
         venta: { ...venta, cobrado: nuevoCobrado, cobradoFecha: pago.fecha, pagos },
@@ -229,6 +309,7 @@ export async function registrarCobro(documentoId: string, monto: number, tipoPag
           monto,
           total: monto,
           tipoPago,
+          operacion: operacion || 'SN',
           fecha: new Date().toISOString(),
           serie_numero: `COBRO-${documentoId}`,
         }

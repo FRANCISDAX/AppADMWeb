@@ -1,6 +1,7 @@
-import { collection, doc, getDoc, getDocs, query, runTransaction, updateDoc, where } from 'firebase/firestore'
+import { collection, doc, increment, getDoc, getDocs, query, runTransaction, updateDoc, where } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
+import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
 import { exigirRateLimit } from '@/lib/rate-limit'
@@ -27,11 +28,24 @@ export type VentaItem = {
   kitItems?: { productoId: string; cantidad: number }[]
 }
 
+export type EnvioData = {
+  tipo: 'domicilio'
+  direccion: string
+  referencia?: string
+  zonaId?: string
+  costo: number
+  notas?: string
+  estado?: 'pendiente' | 'en_camino' | 'entregado' | 'cancelado'
+}
+
 export type VentaData = {
   tipoDoc: 'NV' | 'BOLETA' | 'FACTURA'
   tipoPago: 'efectivo' | 'transferencia' | 'credito' | 'mixto'
   pagos?: { tipo: 'efectivo' | 'transferencia' | 'credito'; monto: number }[]
   total: number
+  descuentoTotal?: number
+  descuentoGlobalTipo?: 'porcentaje' | 'monto'
+  descuentoGlobalValor?: number
   cliente_dni?: string
   cliente_nombre?: string
   cliente_direccion?: string
@@ -42,6 +56,7 @@ export type VentaData = {
   cajero: string
   usuarioId?: string
   turnoId?: string | null
+  envio?: EnvioData
 }
 
 type Config = Record<string, any>
@@ -142,7 +157,7 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
       // Stock + movimientos
       for (const { item, prodRef, prod, stockActual, cantidad, kitComponente } of prods) {
         const nuevoStock = stockActual - cantidad
-        tx.update(prodRef, { stock: nuevoStock, ultimaActualizacion: f.toISOString(), updatedAt: f.toISOString() })
+        tx.update(prodRef, { stock: nuevoStock, vecesVendido: increment(1), ultimaActualizacion: f.toISOString(), updatedAt: f.toISOString() })
         const movRef = doc(collection(db, COL.MOVIMIENTOS))
         tx.set(movRef, {
           productoId: kitComponente ? prod.id : item.id,
@@ -198,6 +213,9 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
         items: ventaItems,
         total: venta.total,
         importe_total: venta.total,
+        descuentoTotal: venta.descuentoTotal ?? 0,
+        descuentoGlobalTipo: venta.descuentoGlobalTipo ?? null,
+        descuentoGlobalValor: venta.descuentoGlobalValor ?? null,
         cliente_nombre: venta.cliente_nombre || '-',
         cliente_dni: venta.cliente_dni || '-',
         cliente_direccion: venta.cliente_direccion || '',
@@ -220,6 +238,10 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
       const montoEfectivo = pagos.filter((p) => p.tipo === 'efectivo').reduce((s, p) => s + (p.monto || 0), 0)
       const montoTransferencia = pagos.filter((p) => p.tipo === 'transferencia').reduce((s, p) => s + (p.monto || 0), 0)
       ventaDoc = { ...ventaDoc, pagos, tipoPago: pagos.length > 1 ? 'mixto' : pagos[0].tipo, efectivo: montoEfectivo, totalTransferenciaPago: montoTransferencia }
+      // Envío a domicilio
+      if (venta.envio) {
+        ventaDoc = { ...ventaDoc, envio: venta.envio }
+      }
       // En pago mixto, el efectivo recibido puede superar la parte en efectivo del total
       // (se devuelve vuelto solo por la pata en efectivo). Se conservan recibido y vuelto.
       ventaDoc = {
@@ -247,7 +269,7 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
         turnoId: venta.turnoId || '',
         usuarioId: venta.usuarioId || '',
         cajero: venta.cajero || '',
-        ...(venta.tipoDoc !== 'NV' ? { sunat: { serie, numero: nuevo, estado: 'pendiente' } } : {}),
+        ...(venta.tipoDoc !== 'NV' ? { sunat: { serie, numero: nuevo, puntoEmision: puntoEmisionDe(null, config), estado: 'pendiente' } } : {}),
       }
       tx.set(docRef, docData)
 
@@ -284,6 +306,7 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
             await updateDoc(clienteRef, {
               ultimaCompra: new Date().toISOString(),
               totalCompras: ((cd.totalCompras as number) || 0) + 1,
+              montoTotal: ((cd.montoTotal as number) || 0) + (venta.total || 0),
             })
           }
         } catch (e) {

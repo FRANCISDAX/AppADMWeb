@@ -1,17 +1,24 @@
-import { Building2, Check, CloudUpload, Loader2, Printer, Receipt, X } from 'lucide-react'
+import { Building2, Check, CloudUpload, Loader2, Package, Percent, Printer, Receipt, Tag, Truck, X } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePermisos } from '@/context/permisos'
+import { useNotifications } from '@/components/notifications'
 import { CONFIG_POR_DEFECTO, TIPOS_REGIMEN } from '@/constants/tributario'
 import { useConfiguracion } from '@/hooks/use-configuracion'
+import { useProductos } from '@/hooks/use-productos'
 import { cn } from '@/lib/utils'
+import { guardarPromocionVolumen, eliminarPromocionVolumen, listarPromocionesVolumen, type PromocionVolumen } from '@/services/promociones-volumen'
 
 const TABS = [
   { id: 'empresa', label: 'Empresa', icon: Building2 },
   { id: 'sunat', label: 'SUNAT', icon: Receipt },
   { id: 'impresora', label: 'Impresora', icon: Printer },
+  { id: 'envio', label: 'Envío', icon: Truck },
+  { id: 'plantillas', label: 'Plantillas', icon: Package },
+  { id: 'listas', label: 'Listas de Precio', icon: Tag },
+  { id: 'promos', label: 'Promociones', icon: Percent },
 ] as const
 
 function readImageAsDataUrl(file: File): Promise<string> {
@@ -44,7 +51,7 @@ type Cfg = typeof CONFIG_POR_DEFECTO
 export function Configuracion() {
   const { tienePermiso } = usePermisos()
   const { config, setConfig, loading, saving, guardar } = useConfiguracion()
-  const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora'>('empresa')
+  const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora' | 'envio' | 'plantillas' | 'listas' | 'promos'>('empresa')
   const [toast, setToast] = React.useState<string | null>(null)
   const [probando, setProbando] = React.useState(false)
 
@@ -94,6 +101,8 @@ export function Configuracion() {
     )
   }
 
+  const plantillas = (config.plantillasManuales ?? []) as { id: string; nombre: string; precio: number }[]
+
   const Field = ({ label, k, placeholder, type, inputMode }: { label: string; k: keyof Cfg; placeholder?: string; type?: string; inputMode?: 'decimal' | 'numeric' }) => (
     <div>
       <Label>{label}</Label>
@@ -109,13 +118,13 @@ export function Configuracion() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div className="flex gap-1.5 rounded-xl bg-muted p-1">
+      <div className="flex gap-1.5 overflow-x-auto rounded-xl bg-muted p-1 scrollbar-none">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={cn(
-              'flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-bold transition-colors cursor-pointer',
+              'flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-bold transition-colors cursor-pointer',
               tab === t.id ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground'
             )}
           >
@@ -280,6 +289,21 @@ export function Configuracion() {
               <Field label="Serie ND Boleta" k="serieBoletaND" placeholder="BD01" />
               <Field label="Serie NC Factura" k="serieFacturaNC" placeholder="FC01" />
               <Field label="Serie ND Factura" k="serieFacturaND" placeholder="FD01" />
+              <div className="h-px bg-border" />
+              <div>
+                <Label>Punto de emisión (anexo)</Label>
+                <Input
+                  value={String(config.puntoEmision ?? '0000')}
+                  onChange={(e) => set('puntoEmision', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="0000"
+                  inputMode="numeric"
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Código de establecimiento anexo (catálogo 22) del emisor. <span className="font-semibold">0000</span> = casa matriz. Va dentro del XML
+                  firmado, así que forma parte del hash SUNAT.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -300,6 +324,95 @@ export function Configuracion() {
         </div>
       )}
 
+      {tab === 'envio' && (
+        <div className="space-y-4">
+          <div className="rounded-xl border bg-card p-5 shadow-card">
+            <div className="mb-3 flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" />
+              <h2 className="font-bold">Envío a Domicilio</h2>
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={config.envioHabilitado === true}
+                onChange={(e) => set('envioHabilitado' as any, e.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              Habilitar envíos a domicilio
+            </label>
+          </div>
+
+          <div className="rounded-xl border bg-card p-5 shadow-card">
+            <div className="mb-3 flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" />
+              <h2 className="font-bold">Zonas de Envío</h2>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">Configurá las zonas y costos de envío.</p>
+            <div className="space-y-2">
+              {(config.zonasEnvio ?? []).map((zona: any, idx: number) => (
+                <div key={zona.id || idx} className="flex items-center gap-2">
+                  <input
+                    value={zona.nombre}
+                    onChange={(e) => {
+                      const nuevas = [...(config.zonasEnvio ?? [])]
+                      nuevas[idx] = { ...nuevas[idx], nombre: e.target.value }
+                      set('zonasEnvio' as any, nuevas)
+                    }}
+                    placeholder="Nombre de zona"
+                    className="h-9 flex-1 rounded-lg border border-input bg-background px-2 text-sm"
+                  />
+                  <div className="relative w-24">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">S/</span>
+                    <input
+                      type="number"
+                      value={zona.costo}
+                      onChange={(e) => {
+                        const nuevas = [...(config.zonasEnvio ?? [])]
+                        nuevas[idx] = { ...nuevas[idx], costo: Number(e.target.value) || 0 }
+                        set('zonasEnvio' as any, nuevas)
+                      }}
+                      className="h-9 w-full rounded-lg border border-input bg-background pl-7 pr-2 text-sm"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      const nuevas = (config.zonasEnvio ?? []).filter((_: any, i: number) => i !== idx)
+                      set('zonasEnvio' as any, nuevas)
+                    }}
+                    className="text-destructive hover:text-destructive/80 cursor-pointer"
+                    aria-label="Eliminar zona"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => {
+                const nuevas = [...(config.zonasEnvio ?? []), { id: `zona_${Date.now()}`, nombre: '', costo: 0 }]
+                set('zonasEnvio' as any, nuevas)
+              }}
+            >
+              + Agregar zona
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {tab === 'plantillas' && (
+        <PlantillasTab plantillas={plantillas} setPlantillas={(p) => set('plantillasManuales', p)} />
+      )}
+
+      {tab === 'listas' && (
+        <ListasPrecioTab listas={config.listasPrecios ?? []} setListas={(l) => set('listasPrecios' as any, l)} />
+      )}
+
+      {tab === 'promos' && <PromocionesTab />}
+
       <Button className="w-full" size="lg" onClick={onGuardar} disabled={saving}>
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
         {saving ? 'Guardando…' : 'Guardar Configuración'}
@@ -307,6 +420,453 @@ export function Configuracion() {
 
       <div className={cn('pointer-events-none fixed bottom-16 left-1/2 z-50 -translate-x-1/2 transition-opacity', toast ? 'opacity-100' : 'opacity-0')}>
         <div className="rounded-full bg-foreground px-4 py-2.5 text-sm font-semibold text-white shadow-lg">{toast}</div>
+      </div>
+    </div>
+  )
+}
+
+type PlantillaItem = { id: string; nombre: string; precio: number }
+
+function PlantillasTab({ plantillas, setPlantillas }: { plantillas: PlantillaItem[]; setPlantillas: (p: PlantillaItem[]) => void }) {
+  const [nuevoNombre, setNuevoNombre] = React.useState('')
+  const [nuevoPrecio, setNuevoPrecio] = React.useState('')
+
+  function agregar() {
+    const nombre = nuevoNombre.trim()
+    const precio = parseFloat(nuevoPrecio) || 0
+    if (!nombre || precio <= 0) return
+    const nueva: PlantillaItem = { id: `tmpl_${Date.now()}`, nombre, precio }
+    setPlantillas([...plantillas, nueva])
+    setNuevoNombre('')
+    setNuevoPrecio('')
+  }
+
+  function eliminar(id: string) {
+    setPlantillas(plantillas.filter((p) => p.id !== id))
+  }
+
+  return (
+    <div className="rounded-xl border bg-card p-5 shadow-card">
+      <div className="mb-3 flex items-center gap-2">
+        <Package className="h-5 w-5 text-primary" />
+        <h2 className="font-bold">Plantillas de Productos</h2>
+      </div>
+      <p className="mb-4 text-xs text-muted-foreground">
+        Productos de embalaje (cartones, cajas, bolsas, sacos) que aparecen en el PDV para agregar sin inventario.
+      </p>
+
+      {plantillas.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {plantillas.map((p) => (
+            <div key={p.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold">{p.nombre}</div>
+                <div className="text-xs text-primary font-bold">S/ {p.precio.toFixed(2)}</div>
+              </div>
+              <button onClick={() => eliminar(p.id)} className="text-destructive hover:text-destructive/80 cursor-pointer" aria-label="Eliminar plantilla">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {plantillas.length === 0 && (
+        <p className="mb-4 text-center text-sm text-muted-foreground py-4">No hay plantillas creadas</p>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          value={nuevoNombre}
+          onChange={(e) => setNuevoNombre(e.target.value)}
+          placeholder="Nombre del producto"
+          className="h-9 flex-1 rounded-lg border border-input bg-background px-2 text-sm"
+        />
+        <div className="relative w-28">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">S/</span>
+          <input
+            type="number"
+            value={nuevoPrecio}
+            onChange={(e) => setNuevoPrecio(e.target.value)}
+            placeholder="0.00"
+            className="h-9 w-full rounded-lg border border-input bg-background pl-7 pr-2 text-sm"
+            inputMode="decimal"
+          />
+        </div>
+        <Button
+          size="sm"
+          onClick={agregar}
+          disabled={!nuevoNombre.trim() || !nuevoPrecio || parseFloat(nuevoPrecio) <= 0}
+        >
+          + Agregar
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+type ListaPrecio = { id: string; nombre: string; defecto: boolean }
+
+function ListasPrecioTab({ listas, setListas }: { listas: ListaPrecio[]; setListas: (l: ListaPrecio[]) => void }) {
+  const [nuevoNombre, setNuevoNombre] = React.useState('')
+
+  function agregar() {
+    const nombre = nuevoNombre.trim()
+    if (!nombre) return
+    const id = nombre.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_')
+    if (listas.some((l) => l.id === id)) return
+    setListas([...listas, { id, nombre, defecto: false }])
+    setNuevoNombre('')
+  }
+
+  function eliminar(id: string) {
+    setListas(listas.filter((l) => l.id !== id))
+  }
+
+  function toggleDefecto(id: string) {
+    setListas(listas.map((l) => ({ ...l, defecto: l.id === id })))
+  }
+
+  return (
+    <div className="rounded-xl border bg-card p-5 shadow-card">
+      <div className="mb-3 flex items-center gap-2">
+        <Tag className="h-5 w-5 text-primary" />
+        <h2 className="font-bold">Listas de Precios</h2>
+      </div>
+      <p className="mb-4 text-xs text-muted-foreground">
+        Configurá las listas de precios disponibles. Cada producto puede tener un precio distinto por lista, y cada cliente se asocia a una lista.
+      </p>
+
+      {listas.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {listas.map((l) => (
+            <div key={l.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold">{l.nombre}</div>
+                <div className="text-[10px] text-muted-foreground">ID: {l.id}</div>
+              </div>
+              <button
+                onClick={() => toggleDefecto(l.id)}
+                className={cn(
+                  'rounded-md px-2.5 py-1 text-xs font-bold cursor-pointer',
+                  l.defecto ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-accent'
+                )}
+              >
+                {l.defecto ? 'Por defecto' : 'Usar'}
+              </button>
+              {!l.defecto && (
+                <button onClick={() => eliminar(l.id)} className="text-destructive hover:text-destructive/80 cursor-pointer" aria-label="Eliminar lista">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {listas.length === 0 && (
+        <p className="mb-4 text-center text-sm text-muted-foreground py-4">No hay listas creadas</p>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          value={nuevoNombre}
+          onChange={(e) => setNuevoNombre(e.target.value)}
+          placeholder="Nombre de la lista (ej: VIP, Distribuidor)"
+          className="h-9 flex-1 rounded-lg border border-input bg-background px-2 text-sm"
+          onKeyDown={(e) => e.key === 'Enter' && agregar()}
+        />
+        <Button size="sm" onClick={agregar} disabled={!nuevoNombre.trim()}>
+          + Agregar
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+const TIPOS_PROMO = [
+  { value: '3x2', label: '3×2' },
+  { value: '2da_50', label: '2da al 50%' },
+  { value: 'lleva_paga', label: 'Llevá X pagá Y' },
+  { value: 'porcentaje', label: '% por volumen' },
+  { value: 'monto_fijo', label: 'Monto fijo' },
+] as const
+
+type PromoForm = {
+  nombre: string
+  tipo: '3x2' | '2da_50' | 'lleva_paga' | 'porcentaje' | 'monto_fijo'
+  productoIds: string[]
+  activo: boolean
+  fechaInicio: string
+  fechaFin: string
+  notas: string
+  lleva: string
+  paga: string
+  valor: string
+}
+
+const PROMO_VACIO: PromoForm = {
+  nombre: '', tipo: '3x2', productoIds: [], activo: true, fechaInicio: '', fechaFin: '', notas: '', lleva: '', paga: '', valor: '',
+}
+
+function PromocionesTab() {
+  const { productos } = useProductos()
+  const { toast } = useNotifications()
+  const [promos, setPromos] = React.useState<PromocionVolumen[]>([])
+  const [cargando, setCargando] = React.useState(true)
+  const [editando, setEditando] = React.useState<string | null>(null)
+  const [form, setForm] = React.useState<PromoForm>(PROMO_VACIO)
+  const [guardando, setGuardando] = React.useState(false)
+  const [busquedaProd, setBusquedaProd] = React.useState('')
+
+  React.useEffect(() => {
+    cargar()
+  }, [])
+
+  async function cargar() {
+    setCargando(true)
+    const lista = await listarPromocionesVolumen()
+    setPromos(lista)
+    setCargando(false)
+  }
+
+  function nueva() {
+    setEditando('new')
+    setForm(PROMO_VACIO)
+  }
+
+  function editar(p: PromocionVolumen) {
+    setEditando(p.id ?? null)
+    setForm({
+      nombre: p.nombre,
+      tipo: p.tipo,
+      productoIds: p.productoIds,
+      activo: p.activo,
+      fechaInicio: p.fechaInicio ?? '',
+      fechaFin: p.fechaFin ?? '',
+      notas: p.notas ?? '',
+      lleva: p.tipo === 'lleva_paga' ? String(Math.ceil((p.valor ?? 0) / 100)) : p.tipo === 'monto_fijo' ? String(p.valor ?? '') : '',
+      paga: p.tipo === 'lleva_paga' ? String((p.valor ?? 0) % 100) : '',
+      valor: p.tipo === 'porcentaje' ? String(p.valor ?? 0) : p.tipo === 'monto_fijo' ? String(p.descuento ?? '') : '',
+    })
+  }
+
+  function toggleProd(id: string) {
+    setForm((f) => ({
+      ...f,
+      productoIds: f.productoIds.includes(id) ? f.productoIds.filter((x) => x !== id) : [...f.productoIds, id],
+    }))
+  }
+
+  async function guardar() {
+    if (!form.nombre.trim()) return toast('⚠️ Ingrese un nombre')
+    if (form.productoIds.length === 0) return toast('⚠️ Seleccione al menos un producto')
+    setGuardando(true)
+    let valor: number | undefined
+    if (form.tipo === 'lleva_paga') {
+      const l = parseInt(form.lleva) || 0
+      const p = parseInt(form.paga) || 0
+      if (l <= 0 || p <= 0) { setGuardando(false); return toast('⚠️ Ingrese llevá y pagá válidos') }
+      valor = l * 100 + p
+    } else if (form.tipo === 'porcentaje') {
+      valor = parseFloat(form.valor) || 0
+      if (valor <= 0) { setGuardando(false); return toast('⚠️ Ingrese un porcentaje válido') }
+    } else if (form.tipo === 'monto_fijo') {
+      const unidades = parseInt(form.lleva) || 0
+      const montoFijo = parseFloat(form.valor) || 0
+      if (unidades <= 0) { setGuardando(false); return toast('⚠️ Ingrese las unidades requeridas') }
+      if (montoFijo <= 0) { setGuardando(false); return toast('⚠️ Ingrese el monto fijo') }
+      valor = unidades
+    }
+    const esNueva = !editando || editando === 'new'
+    const promoData: Omit<PromocionVolumen, 'id'> & { id?: string } = {
+      nombre: form.nombre.trim(),
+      tipo: form.tipo,
+      productoIds: form.productoIds,
+      activo: form.activo,
+      valor,
+      ...(form.tipo === 'monto_fijo' ? { descuento: parseFloat(form.valor) || 0 } : {}),
+    }
+    if (form.fechaInicio) promoData.fechaInicio = form.fechaInicio
+    if (form.fechaFin) promoData.fechaFin = form.fechaFin
+    if (form.notas) promoData.notas = form.notas
+    if (!esNueva) promoData.id = editando
+    const r = await guardarPromocionVolumen(promoData)
+    setGuardando(false)
+    if (r.success) {
+      toast(esNueva ? '✅ Promoción creada' : '✅ Promoción actualizada')
+      setEditando(null)
+      setForm(PROMO_VACIO)
+      cargar()
+    } else {
+      toast('❌ ' + (r.error || 'Error'))
+    }
+  }
+
+  async function eliminar(id: string) {
+    const ok = await eliminarPromocionVolumen(id)
+    if (ok) {
+      toast('✅ Eliminada')
+      cargar()
+    }
+  }
+
+  const prodFiltrados = productos.filter((p) => {
+    if (!busquedaProd.trim()) return true
+    const q = busquedaProd.toLowerCase()
+    return (p.nombre ?? '').toLowerCase().includes(q) || (p.codigo ?? '').toLowerCase().includes(q)
+  })
+
+  const esEdicion = editando !== null
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border bg-card p-5 shadow-card">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Percent className="h-5 w-5 text-primary" />
+            <h2 className="font-bold">Promociones de Volumen</h2>
+          </div>
+          {!esEdicion && (
+            <Button size="sm" onClick={nueva}>+ Nueva</Button>
+          )}
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Descuentos por cantidad: 3×2, 2da al 50%, llevar X pagar Y, o % por volumen.
+        </p>
+
+        {esEdicion && (
+          <div className="mb-4 space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold">{(!editando || editando === 'new') ? 'Nueva' : 'Editando'} promoción</span>
+              <button onClick={() => { setEditando(null); setForm(PROMO_VACIO) }} className="text-xs text-muted-foreground hover:text-foreground cursor-pointer">Cancelar</button>
+            </div>
+            <div>
+              <Label>Nombre *</Label>
+              <Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: 3×2 Cerveza" />
+            </div>
+            <div>
+              <Label>Tipo</Label>
+              <div className="flex gap-1.5 rounded-xl bg-muted p-1">
+                {TIPOS_PROMO.map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => setForm({ ...form, tipo: t.value as PromoForm['tipo'] })}
+                    className={cn('flex-1 rounded-lg py-1.5 text-xs font-bold cursor-pointer', form.tipo === t.value ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground')}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {form.tipo === 'lleva_paga' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Llevá (unidades)</Label>
+                  <Input type="number" inputMode="numeric" value={form.lleva} onChange={(e) => setForm({ ...form, lleva: e.target.value })} placeholder="4" />
+                </div>
+                <div>
+                  <Label>Pagá (unidades)</Label>
+                  <Input type="number" inputMode="numeric" value={form.paga} onChange={(e) => setForm({ ...form, paga: e.target.value })} placeholder="3" />
+                </div>
+              </div>
+            )}
+            {form.tipo === 'porcentaje' && (
+              <div>
+                <Label>Descuento (%)</Label>
+                <Input type="number" inputMode="decimal" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="10" />
+              </div>
+            )}
+            {form.tipo === 'monto_fijo' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Unidades requeridas</Label>
+                  <Input type="number" inputMode="numeric" value={form.lleva} onChange={(e) => setForm({ ...form, lleva: e.target.value })} placeholder="3" />
+                  <p className="mt-1 text-[10px] text-muted-foreground">Ej: 3 para "3 por S/ 20"</p>
+                </div>
+                <div>
+                  <Label>Precio fijo total (S/)</Label>
+                  <Input type="number" inputMode="decimal" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="20" />
+                  <p className="mt-1 text-[10px] text-muted-foreground">Precio total del grupo</p>
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Vigencia desde</Label>
+                <Input type="date" value={form.fechaInicio} onChange={(e) => setForm({ ...form, fechaInicio: e.target.value })} />
+              </div>
+              <div>
+                <Label>Vigencia hasta</Label>
+                <Input type="date" value={form.fechaFin} onChange={(e) => setForm({ ...form, fechaFin: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label>Productos *</Label>
+              <Input value={busquedaProd} onChange={(e) => setBusquedaProd(e.target.value)} placeholder="Buscar producto..." className="mb-2" />
+              <div className="max-h-32 space-y-1 overflow-y-auto rounded-lg border bg-background p-2">
+                {prodFiltrados.slice(0, 20).map((p) => (
+                  <label key={p.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted/40">
+                    <input
+                      type="checkbox"
+                      checked={form.productoIds.includes(p.id)}
+                      onChange={() => toggleProd(p.id)}
+                      className="h-3.5 w-3.5 accent-primary"
+                    />
+                    <span className="truncate">{p.nombre}</span>
+                  </label>
+                ))}
+                {prodFiltrados.length === 0 && <p className="text-xs text-muted-foreground">Sin resultados</p>}
+              </div>
+              {form.productoIds.length > 0 && <p className="mt-1 text-[11px] text-muted-foreground">{form.productoIds.length} producto(s) seleccionado(s)</p>}
+            </div>
+            <div>
+              <Label>Notas (opcional)</Label>
+              <Input value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} placeholder="Descripción interna" />
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" checked={form.activo} onChange={(e) => setForm({ ...form, activo: e.target.checked })} className="h-4 w-4 accent-primary" />
+              Activa
+            </label>
+            <Button className="w-full" onClick={guardar} disabled={guardando}>
+              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {guardando ? 'Guardando…' : 'Guardar Promoción'}
+            </Button>
+          </div>
+        )}
+
+        {cargando ? (
+          <div className="flex items-center justify-center py-8 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" /> <span className="ml-2 text-sm">Cargando…</span>
+          </div>
+        ) : promos.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">No hay promociones creadas</p>
+        ) : (
+          <div className="space-y-2">
+            {promos.map((p) => (
+              <div key={p.id} className={cn('flex items-center gap-3 rounded-lg border px-3 py-2', p.activo ? 'bg-background' : 'bg-muted/30 opacity-60')}>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-semibold">{p.nombre}</span>
+                    <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                      {TIPOS_PROMO.find((t) => t.value === p.tipo)?.label}
+                    </span>
+                    {!p.activo && <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">Inactiva</span>}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {p.productoIds.length} producto(s)
+                    {p.fechaInicio && ` · Desde ${p.fechaInicio}`}
+                    {p.fechaFin && ` · Hasta ${p.fechaFin}`}
+                  </div>
+                </div>
+                <button onClick={() => editar(p)} className="text-xs font-semibold text-primary hover:underline cursor-pointer">Editar</button>
+                <button onClick={() => p.id && eliminar(p.id)} className="text-destructive hover:text-destructive/80 cursor-pointer" aria-label="Eliminar">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

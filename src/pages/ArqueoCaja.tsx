@@ -1,12 +1,16 @@
-import { Banknote, Calculator, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FileText, Loader2 } from 'lucide-react'
+import { Banknote, Calculator, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FileText, Loader2, Search } from 'lucide-react'
 import * as React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { usePermisos } from '@/context/permisos'
 import { useAuth } from '@/context/auth'
 import { obtenerArqueoDelDia } from '@/services/reportes'
+import { rectificarTurno } from '@/services/turnos'
 import { cn } from '@/lib/utils'
 import { abrirPDFArqueo, type TurnoArqueo } from '@/lib/pdf'
+import { diagnosticarDiferencia, type Diagnostico } from '@/lib/diagnosticos'
 
 const MESES_CORTO = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
 const fmt = (n: number) => 'S/ ' + (n ?? 0).toFixed(2)
@@ -28,6 +32,11 @@ export function ArqueoCaja() {
   const [cargando, setCargando] = React.useState(true)
   const [expandidos, setExpandidos] = React.useState<Record<string, boolean>>({})
   const [contados, setContados] = React.useState<Record<string, string>>({})
+  const [turnoRectificar, setTurnoRectificar] = React.useState<TurnoArqueo | null>(null)
+  const [montoRectificar, setMontoRectificar] = React.useState('')
+  const [motivoRectificacion, setMotivoRectificacion] = React.useState('')
+  const [procesandoRectificacion, setProcesandoRectificacion] = React.useState(false)
+  const [toast, setToast] = React.useState<string | null>(null)
 
   const esHoy = fechaSel.toDateString() === hoy.toDateString()
 
@@ -53,6 +62,44 @@ export function ArqueoCaja() {
       activo = false
     }
   }, [fechaSel, miUid])
+
+  React.useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 2600)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  async function onRectificar() {
+    if (!user || !turnoRectificar?.id) return
+    const montoReal = parseFloat(montoRectificar)
+    if (isNaN(montoReal) || montoReal < 0) {
+      setToast('⚠️ Ingrese un monto válido')
+      return
+    }
+    if (!motivoRectificacion.trim()) {
+      setToast('⚠️ Ingrese el motivo')
+      return
+    }
+    setProcesandoRectificacion(true)
+    const r = await rectificarTurno({
+      turnoId: turnoRectificar.id,
+      montoInicialReal: montoReal,
+      motivo: motivoRectificacion.trim(),
+      usuarioId: user.uid,
+      usuarioNombre: user.email?.split('@')[0] || 'Usuario',
+    })
+    setProcesandoRectificacion(false)
+    if (r.success) {
+      setToast('✅ Turno rectificado')
+      setTurnoRectificar(null)
+      setMontoRectificar('')
+      setMotivoRectificacion('')
+      const resultado = await obtenerArqueoDelDia(fechaSel, miUid)
+      if (resultado.success) setArqueo(resultado as any)
+    } else {
+      setToast('❌ ' + (r.error || 'Error'))
+    }
+  }
 
   const toggleTurno = (id: string) => {
     setExpandidos((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -202,7 +249,24 @@ export function ArqueoCaja() {
 
                 {expandido && (
                   <div className="space-y-2 px-4 py-3">
-                    <Row label="Monto inicial" value={fmt(turno.montoInicial)} />
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Monto inicial</span>
+                      <div className="flex items-center gap-2">
+                        <span className="num font-semibold">{fmt(turno.montoInicial)}</span>
+                        {!abierto && tienePermiso('rectificarTurno') && (
+                          <button
+                            onClick={() => {
+                              setMontoRectificar(String(turno.montoInicial))
+                              setMotivoRectificacion('')
+                              setTurnoRectificar(turno)
+                            }}
+                            className="text-xs text-primary hover:underline cursor-pointer"
+                          >
+                            ✏️
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <Row label="Ventas efectivo" value={'+ ' + fmt(turno.totalEfectivo)} valueClass="text-emerald-600" />
                     <Row label="Ventas transferencia" value={fmt(turno.totalTransferencia)} />
                     <Row label="Gastos en efectivo" value={'- ' + fmt(turno.totalGastosEfectivo)} valueClass="text-destructive" />
@@ -245,6 +309,20 @@ export function ArqueoCaja() {
                         <p className="mt-1.5 text-[10px] text-muted-foreground">
                           Turno aún <b>abierto</b>: podés ir verificando si el efectivo cuadra. Al cerrarlo se registra el contado definitivo.
                         </p>
+                        {contadoIngresado && !diffTurnoOk && (
+                          <DiagnosticoPanel
+                            diags={diagnosticarDiferencia({
+                              montoInicial: turno.montoInicial,
+                              totalEfectivo: turno.totalEfectivo,
+                              totalTransferencia: turno.totalTransferencia,
+                              totalGastosEfectivo: turno.totalGastosEfectivo,
+                              efectivoEsperado: turno.efectivoEsperado,
+                              efectivoContado: contado,
+                              comprobantes: turno.comprobantes,
+                              gastosDelTurno: turno.gastosDelTurno,
+                            })}
+                          />
+                        )}
                       </div>
                     ) : (
                       <>
@@ -257,6 +335,22 @@ export function ArqueoCaja() {
                             {diffTurnoOk ? 'S/ 0.00' : diffTurno > 0 ? `+ ${fmt(diffTurno)}` : fmt(diffTurno)}
                           </span>
                         </div>
+
+                        {/* Diagnóstico inteligente */}
+                        {!diffTurnoOk && (
+                          <DiagnosticoPanel
+                            diags={diagnosticarDiferencia({
+                              montoInicial: turno.montoInicial,
+                              totalEfectivo: turno.totalEfectivo,
+                              totalTransferencia: turno.totalTransferencia,
+                              totalGastosEfectivo: turno.totalGastosEfectivo,
+                              efectivoEsperado: turno.efectivoEsperado,
+                              efectivoContado: turno.efectivoContado,
+                              comprobantes: turno.comprobantes,
+                              gastosDelTurno: turno.gastosDelTurno,
+                            })}
+                          />
+                        )}
                       </>
                     )}
 
@@ -281,7 +375,9 @@ export function ArqueoCaja() {
                             <div className="text-right">
                               <div className="num text-xs font-bold">{fmt(comp.total)}</div>
                               <Badge variant={comp.esCobro ? 'warning' : comp.tipoPago === 'efectivo' ? 'success' : comp.tipoPago === 'credito' ? 'warning' : 'secondary'} className="mt-1">
-                                {comp.esCobro ? '💸 COBRO' : comp.tipoPago === 'efectivo' ? '💵 EFECTIVO' : comp.tipoPago === 'credito' ? '💳 CRÉDITO' : '📲 TRANSF'}
+                                {comp.esCobro
+                                  ? `${comp.tipoPago === 'efectivo' ? '💵 Efectivo' : comp.tipoPago === 'transferencia' ? '📲 Transferencia' : comp.tipoPago === 'yape' ? '📱 Yape' : comp.tipoPago === 'plin' ? '📱 Plin' : '💳 Crédito'} · Op: ${comp.operacion || 'SN'}`
+                                  : comp.tipoPago === 'efectivo' ? '💵 EFECTIVO' : comp.tipoPago === 'credito' ? '💳 CRÉDITO' : '📲 TRANSF'}
                               </Badge>
                             </div>
                           </div>
@@ -294,6 +390,55 @@ export function ArqueoCaja() {
             )
           })
         )}
+      </div>
+
+      {/* Modal Rectificar Turno */}
+      {turnoRectificar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setTurnoRectificar(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-4 font-bold">📝 Rectificar Monto Inicial</h3>
+            <div className="space-y-3">
+              <div className="rounded-lg bg-muted/60 p-3 text-sm">
+                <div className="text-muted-foreground">Turno</div>
+                <div className="font-bold">{turnoRectificar.usuarioNombre} · {turnoRectificar.tipoTurno === 'tarde' ? '🌙 Tarde' : '🌅 Mañana'}</div>
+              </div>
+              <div className="rounded-lg bg-muted/60 p-3 text-sm">
+                <div className="text-muted-foreground">Monto inicial registrado</div>
+                <div className="font-bold">{fmt(turnoRectificar.montoInicial)}</div>
+              </div>
+              <div>
+                <Label>Monto inicial real (S/)</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={montoRectificar}
+                  onChange={(e) => setMontoRectificar(e.target.value)}
+                  placeholder="0.00"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Motivo de la rectificación</Label>
+                <Input
+                  value={motivoRectificacion}
+                  onChange={(e) => setMotivoRectificacion(e.target.value)}
+                  placeholder="Ej: Cajero olvidó ingresar monto inicial"
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setTurnoRectificar(null)}>Cancelar</Button>
+                <Button className="flex-1" onClick={onRectificar} disabled={procesandoRectificacion}>
+                  {procesandoRectificacion ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Rectificar'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={cn('pointer-events-none fixed bottom-16 left-1/2 z-50 -translate-x-1/2 transition-opacity', toast ? 'opacity-100' : 'opacity-0')}>
+        <div className="rounded-full bg-foreground px-4 py-2.5 text-sm font-semibold text-white shadow-lg">{toast}</div>
       </div>
     </div>
   )
@@ -313,6 +458,30 @@ function Mini({ label, value, accent }: { label: string; value: string; accent?:
     <div>
       <div className="text-[10px] text-muted-foreground">{label}</div>
       <div className={cn('num text-xs font-bold', accent ? 'text-destructive' : 'text-foreground')}>{value}</div>
+    </div>
+  )
+}
+
+function DiagnosticoPanel({ diags }: { diags: Diagnostico[] }) {
+  if (diags.length === 0) return null
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
+        <Search className="h-3 w-3" /> Diagnóstico
+      </div>
+      {diags.map((d, i) => (
+        <div
+          key={i}
+          className={cn(
+            'rounded-lg px-3 py-2 text-xs',
+            d.tipo === 'ok' && 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+            d.tipo === 'pista' && 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
+            d.tipo === 'alerta' && 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300',
+          )}
+        >
+          {d.icono} {d.texto}
+        </div>
+      ))}
     </div>
   )
 }

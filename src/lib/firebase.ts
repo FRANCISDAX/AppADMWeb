@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,4 +19,11 @@ export const auth = getAuth(app)
 void setPersistence(auth, browserLocalPersistence).catch((e) => {
   console.error('❌ Error al configurar persistencia de sesión:', e)
 })
-export const db = getFirestore(app)
+
+// Firestore con caché local: permite consultar productos/clientes sin internet.
+// Las escrituras (ventas, turnos) requieren conexión.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+})

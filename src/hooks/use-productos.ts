@@ -15,9 +15,12 @@ export type Producto = {
   precioVenta?: number
   precioCompra?: number
   precioEspecial?: number
+  descuentoPorcentaje?: number
   stock?: number
   minStock?: number
   activo?: boolean
+  esFavorito?: boolean
+  vecesVendido?: number
   aliasVoz?: string
   imagen?: string
   unidadBase?: string
@@ -26,6 +29,10 @@ export type Producto = {
   isKit?: boolean
   kitItems?: KitItem[]
   presentaciones?: { id?: string; nombre?: string; factor?: number; esVenta?: boolean; esCompra?: boolean }[]
+  proveedorId?: string
+  proveedorNombre?: string
+  preciosPorLista?: Record<string, number>
+  precioMinimo?: number
 }
 
 export function useProductos() {

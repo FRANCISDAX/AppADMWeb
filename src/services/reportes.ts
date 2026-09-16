@@ -226,6 +226,7 @@ export async function obtenerArqueoDelDia(fecha: Date | string, usuarioFiltro?: 
           serieNumero: v.serie_numero || v.serieNumero || '',
           tipoPago: v.tipoPago || 'efectivo',
           esCobro: v.tipo === 'cobro_credito',
+          operacion: v.operacion || '',
           total: v.total || 0,
           fecha: v.fecha,
           clienteNombre: v.cliente_nombre || v.clienteNombre || '-',

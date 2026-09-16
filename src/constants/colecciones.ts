@@ -8,7 +8,10 @@ export const COL = {
   CIERRES: 'tblCierresCaja',
   CLIENTES: 'tblClientes',
   USUARIO: 'tblUsuarios',
-  PROVEEDOR: 'Proveedor',
+  PROVEEDOR: 'tblProveedores',
   EGRESOS: 'tblEgresos',
   HISTORIAL_PRECIOS: 'tblHistorialPrecios',
+  CUPONES: 'tblCupones',
+  PROMOCIONES_VOLUMEN: 'tblPromocionesVolumen',
+  CONFIGURACION: 'tblConfiguracion',
 } as const

@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JorFel — Resumen del Sistema</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      color: #1a1a2e;
+      background: #fff;
+      line-height: 1.6;
+    }
+
+    .page {
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 20mm;
+    }
+
+    @media print {
+      .page { padding: 15mm; }
+      .no-print { display: none; }
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      padding-bottom: 30px;
+      border-bottom: 3px solid #f97316;
+    }
+
+    .header h1 {
+      font-size: 36px;
+      font-weight: 800;
+      color: #f97316;
+      letter-spacing: -1px;
+    }
+
+    .header .tagline {
+      font-size: 16px;
+      color: #666;
+      margin-top: 8px;
+    }
+
+    .header .subtitle {
+      font-size: 14px;
+      color: #999;
+      margin-top: 4px;
+    }
+
+    /* Sections */
+    .section {
+      margin-bottom: 30px;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #f97316;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title .icon {
+      font-size: 24px;
+    }
+
+    /* Cards */
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 15px;
+    }
+
+    .card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 10px;
+    }
+
+    .card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .card ul li {
+      padding: 4px 0;
+      font-size: 13px;
+      color: #475569;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .card ul li::before {
+      content: "✓";
+      color: #22c55e;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* Grid */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 15px;
+    }
+
+    @media (max-width: 600px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      background: #f97316;
+      color: white;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    tr:nth-child(even) {
+      background: #f8fafc;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-orange { background: #ffedd5; color: #9a3412; }
+
+    /* Highlight */
+    .highlight {
+      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+      color: white;
+      border-radius: 12px;
+      padding: 25px;
+      margin: 20px 0;
+    }
+
+    .highlight h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .highlight p {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    /* Stats */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .stat {
+      text-align: center;
+      padding: 15px;
+      background: #f8fafc;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .stat .number {
+      font-size: 28px;
+      font-weight: 800;
+      color: #f97316;
+    }
+
+    .stat .label {
+      font-size: 11px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 600px) {
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 2px solid #e2e8f0;
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+    }
+
+    /* Print button */
+    .print-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #f97316;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+      z-index: 100;
+    }
+
+    .print-btn:hover {
+      background: #ea580c;
+    }
+
+    @media print {
+      .print-btn { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print()">📄 Imprimir / Guardar PDF</button>
+
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>JorFel</h1>
+    <div class="tagline">Sistema de Punto de Venta e Inventario</div>
+    <div class="subtitle">Solución completa para negocios de retail y wholesale en Perú</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stat-grid">
+    <div class="stat">
+      <div class="number">12</div>
+      <div class="label">Módulos Principales</div>
+    </div>
+    <div class="stat">
+      <div class="number">60+</div>
+      <div class="label">Funciones</div>
+    </div>
+    <div class="stat">
+      <div class="number">PWA</div>
+      <div class="label">App sin Play Store</div>
+    </div>
+    <div class="stat">
+      <div class="number">24/7</div>
+      <div class="label">Acceso Total</div>
+    </div>
+  </div>
+
+  <!-- ¿Qué es? -->
+  <div class="section">
+    <div class="section-title"><span class="icon">📋</span> ¿Qué es JorFel?</div>
+    <p style="font-size: 14px; color: #475569;">
+      JorFel es una plataforma web y PWA (Progressive Web App) diseñada para gestionar ventas, inventario, clientes, reportes y caja de forma simple y profesional. Funciona como una app instalable en celular, tablet o computadora, sin necesidad de Play Store.
+    </p>
+  </div>
+
+  <!-- Módulos -->
+  <div class="section">
+    <div class="section-title"><span class="icon">📦</span> Módulos Principales</div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>🛒 Punto de Venta (PDV)</h3>
+        <ul>
+          <li>Interfaz táctil para ventas rápidas</li>
+          <li>Búsqueda por nombre o código</li>
+          <li>Escáner de barras USB y cámara</li>
+          <li>Métodos: Efectivo, Yape, Plin, Transferencia, Crédito, Mixto</li>
+          <li>Notas de venta, boletas y facturas</li>
+          <li>Impresión de tickets térmicos</li>
+          <li>Venta a crédito con seguimiento</li>
+          <li>Envío a domicilio con zonas y costos</li>
+          <li>Embalajes: cartones, cajas, bolsas sin inventario</li>
+          <li>Ventas pausadas y recuperación</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>📊 Inventario</h3>
+        <ul>
+          <li>Control de stock por producto</li>
+          <li>Alertas de stock bajo y agotado</li>
+          <li>Kardex (historial de movimientos)</li>
+          <li>Ajustes de stock con motivo</li>
+          <li>Presentaciones de venta y compra</li>
+          <li>Fecha de vencimiento con alertas</li>
+          <li>Costo de adquisición y márgenes</li>
+          <li>Productos favoritos para venta rápida</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>💰 Turnos de Caja</h3>
+        <ul>
+          <li>Apertura con monto inicial</li>
+          <li>Cierre con arqueo automático</li>
+          <li>Control por usuario</li>
+          <li>Gastos del turno (caja o transferencia)</li>
+          <li>Rectificación de monto inicial</li>
+          <li>Historial de turnos cerrados</li>
+          <li>Seguimiento de envíos pendientes</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>📈 Reportes</h3>
+        <ul>
+          <li>Facturación (día, semana, mes)</li>
+          <li>Reporte por turnos y fechas</li>
+          <li>Análisis de productos</li>
+          <li>Ventas por empleado</li>
+          <li>Consolidado de boletas</li>
+          <li>Registro para SUNAT (SIRE)</li>
+          <li>Rotación de inventario</li>
+          <li>Ranking de clientes frecuentes</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>👥 Clientes</h3>
+        <ul>
+          <li>Base de datos con DNI/RUC</li>
+          <li>Historial de compras</li>
+          <li>Estado de cuenta (créditos)</li>
+          <li>Búsqueda rápida</li>
+          <li>Dirección y datos de contacto</li>
+          <li>Ranking de clientes frecuentes</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>💸 Egresos / Gastos</h3>
+        <ul>
+          <li>Registro de gastos operativos</li>
+          <li>Categorías personalizables</li>
+          <li>Pago en caja o transferencia</li>
+          <li>Reporte por período</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>⚙️ Administración</h3>
+        <ul>
+          <li>Dashboard gerencial en tiempo real</li>
+          <li>Dashboard de operaciones</li>
+          <li>Gestión de usuarios y roles</li>
+          <li>Configuración del negocio</li>
+          <li>Auditoría general y de caja</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>📱 Experiencia</h3>
+        <ul>
+          <li>PWA: App sin Play Store</li>
+          <li>Modo oscuro y claro</li>
+          <li>Funciona offline (consulta)</li>
+          <li>Actualizaciones automáticas</li>
+          <li>Acceso desde cualquier dispositivo</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>🚚 Envío a Domicilio</h3>
+        <ul>
+          <li>Zonas de envío configurables</li>
+          <li>Costos por zona</li>
+          <li>Seguimiento: Pendiente → En camino → Entregado</li>
+          <li>Dirección, referencia y notas del cliente</li>
+          <li>Envíos pendientes de turnos anteriores</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>🧠 Arqueo Inteligente</h3>
+        <ul>
+          <li>Diagnóstico automático de diferencias</li>
+          <li>Detecta ventas faltantes o duplicadas</li>
+          <li>Identifica confusión efectivo/transferencia</li>
+          <li>Alertas de gastos sin registro</li>
+          <li>Pistas para reconciliación rápida</li>
+        </ul>
+      </div>
+
+      <div class="card">
+         <h3>📦 Embalajes</h3>
+        <ul>
+          <li>Plantillas de productos sin inventario</li>
+          <li>Cartones, cajas, bolsas, sacos</li>
+          <li>1 click para agregar al carrito</li>
+          <li>Configuración centralizada</li>
+          <li>Compartido entre todos los cajeros</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>🚚 Proveedores</h3>
+        <ul>
+          <li>CRUD completo con SUNAT lookup</li>
+          <li>Contactos, crédito, saldo pendiente</li>
+          <li>Historial de compras por proveedor</li>
+          <li>Control de deudas y pagos</li>
+          <li>Comparar precios entre proveedores</li>
+          <li>Ranking de confiabilidad</li>
+          <li>Sugerencia de compra por stock bajo</li>
+          <li>5 tabs: Lista, Dashboard, Compras, Precios, Ranking</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>🏷️ Sistema de Descuentos</h3>
+        <ul>
+          <li><strong>Por producto:</strong> campo descuentoPorcentaje (0-100%)</li>
+          <li><strong>Por volumen:</strong> 3×2, 2da al 50%, "Llevá 4 pagá 3", % por volumen</li>
+          <li><strong>Cupones:</strong> código, tipo (% o S/), validez, límite de uso</li>
+          <li><strong>Por cliente:</strong> descuento frecuente automático</li>
+          <li><strong>Global:</strong> descuento manual S/ o % en el PDV</li>
+          <li>Orden: producto → volumen → cupón → cliente → global</li>
+          <li>Resumen visual de descuentos aplicados</li>
+          <li>Integrado con pantalla del cliente</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Roles -->
+  <div class="section">
+    <div class="section-title"><span class="icon">🔐</span> Roles y Permisos</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Rol</th>
+          <th>Acceso</th>
+          <th>Ideal para</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>ADMIN</strong></td>
+          <td><span class="badge badge-green">Total</span></td>
+          <td>Dueño del negocio</td>
+        </tr>
+        <tr>
+          <td><strong>GERENTE</strong></td>
+          <td><span class="badge badge-blue">Ventas + Reportes</span></td>
+          <td>Supervisor o gerente de sucursal</td>
+        </tr>
+        <tr>
+          <td><strong>CAJERO</strong></td>
+          <td><span class="badge badge-orange">PDV + Turnos</span></td>
+          <td>Personal de caja</td>
+        </tr>
+        <tr>
+          <td><strong>PERSONALIZADO</strong></td>
+          <td><span class="badge badge-red">A configurar</span></td>
+          <td>Usuarios con acceso limitado</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Ventajas -->
+  <div class="section">
+    <div class="section-title"><span class="icon">🏆</span> Ventajas Competitivas</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Característica</th>
+          <th style="text-align:center">JorFel</th>
+          <th style="text-align:center">Soluciones Tradicionales</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>PWA (app sin Play Store)</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">✗</span></td>
+        </tr>
+        <tr>
+          <td>Funciona offline</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">✗</span></td>
+        </tr>
+        <tr>
+          <td>Actualizaciones automáticas</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">✗</span></td>
+        </tr>
+        <tr>
+          <td>Multi-usuario con roles</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-orange">Pago extra</span></td>
+        </tr>
+        <tr>
+          <td>Dashboard en tiempo real</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">✗</span></td>
+        </tr>
+        <tr>
+          <td>Arqueo de caja automático</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-orange">Manual</span></td>
+        </tr>
+        <tr>
+          <td>Integración Yape/Plin</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">✗</span></td>
+        </tr>
+        <tr>
+          <td>Sin costo de hardware</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">Requiere PC</span></td>
+        </tr>
+        <tr>
+          <td>Acceso multi-dispositivo</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">Solo 1 PC</span></td>
+        </tr>
+        <tr>
+          <td>Envío a domicilio con seguimiento</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">✗</span></td>
+        </tr>
+        <tr>
+          <td>Arqueo de caja inteligente</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">✗</span></td>
+        </tr>
+         <tr>
+          <td>Embalajes sin inventario</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">✗</span></td>
+        </tr>
+        <tr>
+          <td>Sistema de proveedores</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">✗</span></td>
+        </tr>
+        <tr>
+          <td>5 tipos de descuentos</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-orange">Básico</span></td>
+        </tr>
+        <tr>
+          <td>Cupones de descuento</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">✗</span></td>
+        </tr>
+        <tr>
+          <td>Pantalla del cliente</td>
+          <td style="text-align:center"><span class="badge badge-green">✓</span></td>
+          <td style="text-align:center"><span class="badge badge-red">✗</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Requisitos -->
+  <div class="section">
+    <div class="section-title"><span class="icon">🖥️</span> Requisitos</div>
+    <div class="grid-3">
+      <div class="card">
+        <h3>📱 Dispositivo</h3>
+        <ul>
+          <li>Celular, tablet o PC</li>
+          <li>Cualquier navegador</li>
+          <li>Chrome, Safari o Edge</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>🌐 Conexión</h3>
+        <ul>
+          <li>Internet para sincronización</li>
+          <li>Funciona con datos móviles</li>
+          <li>Offline para consulta</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>🖨️ Extras (opcionales)</h3>
+        <ul>
+          <li>Impresora térmica 58mm</li>
+          <li>Escáner de barras USB</li>
+          <li>Lector de código QR</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Highlight -->
+  <div class="highlight">
+    <h3>¿Por qué elegir JorFel?</h3>
+    <p>
+      JorFel no es solo un sistema de ventas. Es una solución completa que se adapta a tu negocio. Instálalo como app en tu celular, úsalo sin internet, actualízalo automáticamente y accede desde cualquier lugar. Sin costos de hardware, sin licencias complicadas, sin límites.
+    </p>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p><strong>JorFel</strong> — Sistema de Punto de Venta e Inventario</p>
+    <p>CIBERSOFT CyS · 2026</p>
+  </div>
+
+</div>
+
+</body>
+</html>
