@@ -1,5 +1,5 @@
 import { collection, deleteDoc, deleteField, doc, getDocs, limit, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, BarChart3, ClipboardCheck, Download, FileText, Loader2, Package, Pencil, Plus, Printer, RefreshCw, Search, ShoppingCart, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, BarChart3, ClipboardCheck, Download, FileText, Loader2, Package, Pencil, Plus, Printer, RefreshCw, Search, ShoppingCart, Tags, Trash2, X } from 'lucide-react'
 import * as React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { InfiniteScroll } from '@/components/ui/infinite-scroll'
 import { ModalReportes } from '@/components/ModalReportes'
 import { ModalCompra } from '@/components/ModalCompra'
+import { ModalCategorias } from '@/components/ModalCategorias'
 import { usePermisos } from '@/context/permisos'
 import { useAuth } from '@/context/auth'
 import { useConfiguracion } from '@/hooks/use-configuracion'
@@ -129,6 +130,7 @@ export function Inventario() {
   const { toast, setToast } = useToast()
   const [reportesAbierto, setReportesAbierto] = React.useState(false)
   const [compraAbierta, setCompraAbierta] = React.useState(false)
+  const [categoriasAbiertas, setCategoriasAbiertas] = React.useState(false)
   const [ajusteAbierto, setAjusteAbierto] = React.useState(false)
   const [ajusteProductoId, setAjusteProductoId] = React.useState('')
   const [ajusteCantidad, setAjusteCantidad] = React.useState('')
@@ -690,6 +692,11 @@ export function Inventario() {
         <Button variant="outline" onClick={() => setReportesAbierto(true)}>
           <BarChart3 className="h-4 w-4" /> Reportes
         </Button>
+        {tienePermiso('configuracion') && (
+          <Button variant="outline" onClick={() => setCategoriasAbiertas(true)}>
+            <Tags className="h-4 w-4" /> Categorías
+          </Button>
+        )}
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -1155,6 +1162,7 @@ export function Inventario() {
 
       {reportesAbierto && <ModalReportes productos={productos} puedeVerCostos={puedeVerCostos} onClose={() => setReportesAbierto(false)} />}
       {compraAbierta && <ModalCompra onClose={() => setCompraAbierta(false)} onGuardado={() => { setCompraAbierta(false) }} />}
+      {categoriasAbiertas && <ModalCategorias onClose={() => setCategoriasAbiertas(false)} />}
 
       {/* Modal Ajustar Stock */}
       {ajusteAbierto && (() => {

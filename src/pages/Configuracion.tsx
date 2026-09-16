@@ -1,11 +1,10 @@
-import { AlertTriangle, Building2, Check, CloudUpload, Loader2, Package, Percent, Printer, Receipt, Tag, Tags, Truck, X } from 'lucide-react'
+import { AlertTriangle, Building2, Check, CloudUpload, Loader2, Package, Percent, Printer, Receipt, Tag, Truck, X } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePermisos } from '@/context/permisos'
 import { useNotifications } from '@/components/notifications'
-import { CategoriasTab } from '@/components/CategoriasTab'
 import { CONFIG_POR_DEFECTO, TIPOS_REGIMEN } from '@/constants/tributario'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos } from '@/hooks/use-productos'
@@ -22,7 +21,6 @@ const TABS = [
   { id: 'plantillas', label: 'Plantillas', icon: Package },
   { id: 'listas', label: 'Listas de Precio', icon: Tag },
   { id: 'promos', label: 'Promociones', icon: Percent },
-  { id: 'categorias', label: 'Categorías', icon: Tags },
 ] as const
 
 function readImageAsDataUrl(file: File): Promise<string> {
@@ -55,7 +53,7 @@ type Cfg = typeof CONFIG_POR_DEFECTO
 export function Configuracion() {
   const { tienePermiso } = usePermisos()
   const { config, setConfig, loading, saving, guardar } = useConfiguracion()
-  const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora' | 'envio' | 'plantillas' | 'listas' | 'promos' | 'categorias'>('empresa')
+  const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora' | 'envio' | 'plantillas' | 'listas' | 'promos'>('empresa')
   const [toast, setToast] = React.useState<string | null>(null)
   const [probando, setProbando] = React.useState(false)
   const [seriesOcupadas, setSeriesOcupadas] = React.useState<SerieOcupada[]>([])
@@ -450,8 +448,6 @@ export function Configuracion() {
       )}
 
       {tab === 'promos' && <PromocionesTab />}
-
-      {tab === 'categorias' && <CategoriasTab />}
 
       <Button
         className="w-full"
