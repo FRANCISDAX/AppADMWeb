@@ -18,9 +18,9 @@ Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `
 - **Lección**: cualquier consulta nueva que combine una **igualdad** (`usuarioId`, `tipoDoc`, …) con un **rango/orderBy** sobre otro campo necesita índice compuesto declarado en `firestore.indexes.json`. Los otros reportes con `usuarioId` (`Reportes.tsx` NV/SUNAT, SIRE, VentasPorEmpleado, turnos) ya lo tenían; el único que faltaba era este.
 - **Técnica de diagnóstico**: se puede consultar Firestore **en solo lectura** con la service account de `appadm-sunat` (`appadm-b359e-firebase-adminsdk-fbsvc-*.json` + `firebase-admin` ya instalado) para reproducir la consulta exacta y ver el error real, en vez de suponer. ⚠️ Los **uid** de `tblUsuarios` tienen 28 caracteres: no truncarlos al comparar (un uid truncado devuelve 0 documentos y parece otro bug). El rango que arma el web es medianoche **local** → `toISOString()` **UTC con `Z`** (correcto: la comparación es por instante; el guardar/mostrar usa fechas locales).
 
-**Work State**: Completed. Índice **desplegado y ya construido**, verificado contra producción: la consulta del cajero devuelve **los mismos 4 documentos del día que la del admin** (S/ 11.00). `npm run build` ✓, `npm run lint` 0 errores. Commit `e150605`. **Sin prueba visual en navegador.**
+**Work State**: Completed. Índice **desplegado y ya construido**, verificado contra producción: la consulta del cajero devuelve **los mismos 4 documentos del día que la del admin** (S/ 11.00). `npm run build` ✓, `npm run lint` 0 errores. Commit `e150605`. **Confirmado por el usuario en el celular: el reporte muestra las ventas.**
 
-**Next Move**: entrar con el cajero y confirmar que el Reporte por Fechas muestra las ventas del día; si otro reporte apareciera en 0, mirar el mensaje de error que ahora sí se muestra (probablemente pida otro índice).
+**Next Move**: — (si otro reporte apareciera en 0, mirar el mensaje de error que ahora sí se muestra; lo más probable es que pida otro índice: declararlo en `firestore.indexes.json` + `firebase deploy --only firestore:indexes`).
 
 **Relevant Files**: `firestore.indexes.json`, `src/pages/ReporteFechas.tsx`, `src/services/reportes.ts` (`obtenerVentasPorRango`).
 
@@ -34,9 +34,9 @@ Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `
 - **Aplicado en**: `Reportes.tsx` (fila compartida por Notas de Venta, Consolidado y Registro SUNAT — donde se reportó), `Turnos.tsx` (ventas del turno + `EnvioCard`), `ReporteTurnos.tsx`, `ReporteFechas.tsx`, `ClienteDetalle.tsx` (cobros pendientes y documentos del cliente) y `ArqueoCaja.tsx` (comprobantes del turno). En `ReporteSire.tsx` la tabla ya está en `overflow-x-auto`: solo se agregó `whitespace-nowrap` a la celda Serie/Número para que **desplace** en vez de partir el número.
 - En escritorio no cambia nada: el bloque del número sigue creciendo con `flex-1`.
 
-**Work State**: Completed y desplegado en https://appadm-b359e.web.app (commits `70bf133` y el de esta pasada). `npm run build` ✓, `npm run lint` 0 errores / 80 warnings (baseline). **Verificación visual pendiente en celular** (no se probó en navegador).
+**Work State**: Completed y desplegado en https://appadm-b359e.web.app (commits `70bf133` y el de esta pasada). `npm run build` ✓, `npm run lint` 0 errores / 80 warnings (baseline). **Confirmado por el usuario en el celular: los números se leen bien.**
 
-**Next Move**: confirmar en el celular que los números se leen en una línea en las 7 pantallas; si aparece otra lista con el mismo síntoma, aplicar el criterio de arriba (`num whitespace-nowrap` + `min-w-[7.5rem]` + fila `flex-wrap`).
+**Next Move**: — (si aparece otra lista con el mismo síntoma, aplicar el criterio de arriba: `num whitespace-nowrap` + `min-w-[7.5rem]` + fila `flex-wrap`).
 
 **Relevant Files**: `src/pages/Reportes.tsx`, `src/pages/Turnos.tsx`, `src/pages/ReporteTurnos.tsx`, `src/pages/ReporteFechas.tsx`, `src/pages/ClienteDetalle.tsx`, `src/pages/ArqueoCaja.tsx`, `src/pages/ReporteSire.tsx`.
 
@@ -57,7 +57,8 @@ Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `
 
 **Work State**: Completed y desplegado en https://appadm-b359e.web.app (commit `3533994`). Verificado con scripts temporales (ya eliminados): **25** casos del validador web (14 de regresión + 10 de NC/ND + series efectivas) y **14** del helper de la RN, incluido `configConSeriesDeCaja` (las propias ganan, las vacías dejan la global, no muta el original). `npm run build` ✓, `npm run lint` 0 errores / 80 warnings (baseline). **Sin probar en navegador ni en dispositivo.**
 
-**Next Move**: (1) probar en navegador: crear una 2ª caja con series propias y verificar que boletas/notas numeran por serie; (2) que el admin asigne las series de notas por cajero en Usuarios → Editar; (3) commitear la app RN (el usuario commitea manualmente allí).
+**Next Move**: (1) probar en navegador: crear una 2ª caja con series propias y verificar que boletas/notas numeran por serie; (2) que el admin asigne las series de notas por cajero en Usuarios → Editar.
+**Repos a cargo del usuario** (el agente NO commitea ahí): la app RN `AppAdm` y `appadm-sunat`; el usuario los versiona manualmente.
 
 **Relevant Files**: `src/lib/series.ts`, `src/services/usuarios.ts`, `src/pages/UsuarioDetalle.tsx`, `src/pages/Reportes.tsx`, `src/context/permisos.tsx`, `src/services/consolidado.ts`. RN: `AppAdm/helper/Series.js`, `AppAdm/services/usuarios.js`, `AppAdm/context/UserContext.js`, `AppAdm/app/(drawer)/UsuarioDetalle.jsx`, `AppAdm/app/(drawer)/RegistroVentas.jsx`.
 
