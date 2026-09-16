@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "tblDocumentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "usuarioId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "tblHistorialPrecios",
       "queryScope": "COLLECTION",
       "fields": [

@@ -32,15 +32,22 @@ export function ReporteFechas() {
   const [hasta, setHasta] = React.useState(hoyISO())
   const [ventas, setVentas] = React.useState<Venta[]>([])
   const [cargando, setCargando] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
   const [detalle, setDetalle] = React.useState<Venta | null>(null)
 
   async function cargar() {
     if (!desde || !hasta) return
     setCargando(true)
+    setError(null)
     try {
       setVentas(await obtenerVentasPorRango(parseFecha(desde), parseFecha(hasta), miUid))
     } catch (e) {
+      // Sin esto el reporte mostraba "Sin ventas en el rango" (todo en 0) cuando
+      // Firestore rechazaba la consulta, p. ej. por un índice compuesto faltante.
+      const msg = e instanceof Error ? e.message : String(e)
       console.error('❌ Error cargando reporte por fechas:', e)
+      setVentas([])
+      setError(msg)
     } finally {
       setCargando(false)
     }
@@ -96,6 +103,14 @@ export function ReporteFechas() {
         </Button>
       </div>
 
+      {error && (
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          <p className="font-bold">No se pudo leer las ventas del período</p>
+          <p className="mt-1 break-all text-xs">{error}</p>
+          <p className="mt-1 text-xs">Los totales de abajo quedan en 0 porque la consulta falló, no porque no haya ventas.</p>
+        </div>
+      )}
+
       {/* Resumen */}
       <div className="rounded-2xl border bg-card p-5 shadow-card">
         <div className="mb-3 text-sm font-bold">📊 Resumen del período</div>
@@ -123,6 +138,11 @@ export function ReporteFechas() {
         </div>
         {cargando ? (
           <div className="flex h-40 items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /> <span className="ml-2 text-sm">Cargando…</span></div>
+        ) : error ? (
+          <div className="p-5 text-sm text-destructive">
+            <p className="font-bold">No se pudo cargar el reporte</p>
+            <p className="mt-1 break-all text-xs">{error}</p>
+          </div>
         ) : ventas.length === 0 ? (
           <p className="py-16 text-center text-sm text-muted-foreground">Sin ventas en el rango</p>
         ) : (
