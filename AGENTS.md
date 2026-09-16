@@ -8,6 +8,22 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 5 — Reporte por Fechas en 0 para el cajero: índice faltante + error oculto)
+
+**Objective**: el Reporte por Fechas mostraba **todo en 0** ("Sin ventas en el rango") con ventas reales del día.
+
+**Important Details**:
+- **Causa**: `obtenerVentasPorRango` (`services/reportes.ts`) agrega `where('usuarioId','==',uid)` **junto a un rango sobre `fecha`**. Con un rango, Firestore ya no puede hacer merge join: **exige el índice compuesto `tblDocumentos (usuarioId ASC, fecha DESC)`**, que **no existía** en `firestore.indexes.json` → `FailedPrecondition: The query requires an index`. Y `ReporteFechas.tsx` **se tragaba el error** (`console.error` sin estado de error) dejando `ventas = []` ⇒ "Sin ventas en el rango" y todos los totales en 0. ⚠️ **A los ADMIN no les pasa** porque `verTodo` deja `miUid = undefined` y no se agrega ese filtro: solo afecta a **cajeros con `reporteFechas`** (el usuario `LUu3…b0`, CAJERO con `verTodo=false`, lo reproducía).
+- **Fix**: (1) índice agregado a `firestore.indexes.json` — la dirección exacta se obtuvo **decodificando el `create_composite`** en base64 que devuelve el propio error de Firestore, así no se adivina; desplegado con `firebase deploy --only firestore:indexes` (⚠️ **nunca** `--force`). (2) `ReporteFechas.tsx` ahora tiene estado `error` y muestra el motivo **encima del resumen**, aclarando que los 0 son por el fallo de la consulta y no por falta de ventas.
+- **Lección**: cualquier consulta nueva que combine una **igualdad** (`usuarioId`, `tipoDoc`, …) con un **rango/orderBy** sobre otro campo necesita índice compuesto declarado en `firestore.indexes.json`. Los otros reportes con `usuarioId` (`Reportes.tsx` NV/SUNAT, SIRE, VentasPorEmpleado, turnos) ya lo tenían; el único que faltaba era este.
+- **Técnica de diagnóstico**: se puede consultar Firestore **en solo lectura** con la service account de `appadm-sunat` (`appadm-b359e-firebase-adminsdk-fbsvc-*.json` + `firebase-admin` ya instalado) para reproducir la consulta exacta y ver el error real, en vez de suponer. ⚠️ Los **uid** de `tblUsuarios` tienen 28 caracteres: no truncarlos al comparar (un uid truncado devuelve 0 documentos y parece otro bug). El rango que arma el web es medianoche **local** → `toISOString()` **UTC con `Z`** (correcto: la comparación es por instante; el guardar/mostrar usa fechas locales).
+
+**Work State**: Completed. Índice **desplegado y ya construido**, verificado contra producción: la consulta del cajero devuelve **los mismos 4 documentos del día que la del admin** (S/ 11.00). `npm run build` ✓, `npm run lint` 0 errores. Commit `e150605`. **Sin prueba visual en navegador.**
+
+**Next Move**: entrar con el cajero y confirmar que el Reporte por Fechas muestra las ventas del día; si otro reporte apareciera en 0, mirar el mensaje de error que ahora sí se muestra (probablemente pida otro índice).
+
+**Relevant Files**: `firestore.indexes.json`, `src/pages/ReporteFechas.tsx`, `src/services/reportes.ts` (`obtenerVentasPorRango`).
+
 ### (2026-09 · 4 — Números de comprobante legibles en móvil)
 
 **Objective**: el número de comprobante (`B001-00000123`) se aplastaba y se partía en dos líneas **solo en el celular**, en las listas de Reportes.
