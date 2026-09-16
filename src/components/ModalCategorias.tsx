@@ -8,6 +8,7 @@ import { useCategorias } from '@/hooks/use-categorias'
 import {
   ICONOS_CATEGORIA,
   ICONO_POR_DEFECTO,
+  claveCategoria,
   contarProductosPorCategoria,
   eliminarCategoria,
   guardarCategoria,
@@ -35,6 +36,15 @@ export function ModalCategorias({ onClose }: { onClose: () => void }) {
   const [editando, setEditando] = React.useState<{ id: string; nombre: string; icono: string } | null>(null)
 
   const recargarConteos = React.useCallback(() => contarProductosPorCategoria().then(setConteos), [])
+
+  // Categorías que usan los productos y NO equivalen a ninguna administrada
+  // (comparando sin acentos ni mayúsculas). Si no hay ninguna, el botón de
+  // importar no se muestra: así no se convierte un typo en categoría oficial
+  // con un clic distraído.
+  const porImportar = React.useMemo(() => {
+    const administradas = new Set(categorias.map((c) => claveCategoria(c.nombre)))
+    return Object.keys(conteos).filter((n) => !administradas.has(claveCategoria(n)))
+  }, [categorias, conteos])
 
   React.useEffect(() => {
     let vigente = true
@@ -159,9 +169,18 @@ export function ModalCategorias({ onClose }: { onClose: () => void }) {
               {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Crear
             </Button>
           </div>
-          <Button variant="secondary" className="mt-3" onClick={importar} disabled={importando}>
-            {importando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Importar las que ya usan los productos
-          </Button>
+          {porImportar.length > 0 && (
+            <div className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2">
+              <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                Hay {porImportar.length} categoría{porImportar.length === 1 ? '' : 's'} que usan los productos y no {porImportar.length === 1 ? 'está' : 'están'} en la
+                lista: {porImportar.join(', ')}
+              </p>
+              <Button variant="secondary" className="mt-2" onClick={importar} disabled={importando}>
+                {importando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {importando ? 'Importando…' : `Importar ${porImportar.length === 1 ? 'esa categoría' : 'esas categorías'}`}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Listado */}
