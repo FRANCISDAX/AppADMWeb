@@ -367,7 +367,7 @@ export function ReporteSire() {
                           {label?.label || d.tipoDoc}
                         </span>
                       </td>
-                      <td className="px-4 py-2 font-mono text-xs font-semibold">{d.serieNumero ?? `${d.serie}-${String(d.numero ?? '').padStart(6, '0')}`}</td>
+                      <td className="whitespace-nowrap px-4 py-2 font-mono text-xs font-semibold">{d.serieNumero ?? `${d.serie}-${String(d.numero ?? '').padStart(6, '0')}`}</td>
                       <td className="px-4 py-2 text-xs">{d.venta?.cliente_nombre && d.venta.cliente_nombre !== '-' ? d.venta.cliente_nombre : 'Consumidor'}</td>
                       <td className="px-4 py-2 text-right num text-xs">{d.baseGravada !== 0 ? fmt(d.baseGravada) : '—'}</td>
                       <td className="px-4 py-2 text-right num text-xs">{d.igv !== 0 ? fmt(d.igv) : '—'}</td>

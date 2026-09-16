@@ -364,15 +364,15 @@ export function ArqueoCaja() {
                       <div className="border-t border-border/60 pt-2">
                         <div className="mb-2 text-xs font-bold text-muted-foreground">🧾 Comprobantes ({turno.comprobantes.length})</div>
                         {turno.comprobantes.map((comp, idx) => (
-                          <div key={comp.id || comp.serieNumero || idx} className="mb-1.5 flex items-center justify-between rounded-lg border border-border/60 bg-background px-3 py-2">
-                            <div className="min-w-0">
-                              <div className="text-xs font-bold text-indigo-600">{comp.serieNumero || 'S/C'}</div>
+                          <div key={comp.id || comp.serieNumero || idx} className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-border/60 bg-background px-3 py-2">
+                            <div className="min-w-[7.5rem]">
+                              <div className="num whitespace-nowrap text-xs font-bold text-indigo-600">{comp.serieNumero || 'S/C'}</div>
                               <div className="truncate text-[11px] text-muted-foreground">{comp.clienteNombre}</div>
                               {comp.fecha ? (
                                 <div className="text-[10px] text-muted-foreground">{new Date(comp.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}</div>
                               ) : null}
                             </div>
-                            <div className="text-right">
+                            <div className="shrink-0 text-right">
                               <div className="num text-xs font-bold">{fmt(comp.total)}</div>
                               <Badge variant={comp.esCobro ? 'warning' : comp.tipoPago === 'efectivo' ? 'success' : comp.tipoPago === 'credito' ? 'warning' : 'secondary'} className="mt-1">
                                 {comp.esCobro

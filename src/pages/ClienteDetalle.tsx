@@ -351,13 +351,13 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
                 const cobrado = v.venta?.cobrado ?? 0
                 const pend = total - cobrado
                 return (
-                  <div key={v.id} className="flex items-center gap-3 py-2.5">
-                    <button onClick={() => setDetalleVenta(v)} className="min-w-0 flex-1 text-left cursor-pointer">
-                      <div className="text-sm font-semibold">{v.serieNumero || v.id}</div>
-                      <div className="text-xs text-muted-foreground">{fmtFecha(v.createdAt || v.fecha)} · {v.venta?.tipoPago}</div>
+                  <div key={v.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5">
+                    <button onClick={() => setDetalleVenta(v)} className="min-w-[7.5rem] flex-1 text-left cursor-pointer">
+                      <div className="num whitespace-nowrap text-sm font-semibold">{v.serieNumero || v.id}</div>
+                      <div className="truncate text-xs text-muted-foreground">{fmtFecha(v.createdAt || v.fecha)} · {v.venta?.tipoPago}</div>
                     </button>
-                    <div className="text-right">
-                      <div className="text-sm font-bold text-red-600">{fmt(pend)}</div>
+                    <div className="shrink-0 text-right">
+                      <div className="num whitespace-nowrap text-sm font-bold text-red-600">{fmt(pend)}</div>
                       <div className="text-[11px] text-muted-foreground">de {fmt(total)}</div>
                     </div>
                     <Button variant="outline" size="sm" disabled={cobrando} onClick={() => { setCobroDoc(v); setCobroMonto(String(pend)) }}>Cobrar</Button>
@@ -430,16 +430,16 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
               {ventasFiltradas.map((v, i) => {
                 const ven = v.venta || {}
                 return (
-                  <button key={v.id || i} onClick={() => setDetalleVenta(v)} className="flex w-full items-center gap-3 py-2.5 text-left cursor-pointer hover:bg-muted/40 rounded-lg px-2 -mx-2">
-                    <div className="min-w-0 flex-1">
+                  <button key={v.id || i} onClick={() => setDetalleVenta(v)} className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 py-2.5 text-left cursor-pointer hover:bg-muted/40 rounded-lg px-2 -mx-2">
+                    <div className="min-w-[7.5rem] flex-1">
                       <div className="text-xs text-muted-foreground">{fmtFecha(v.createdAt || ven.fecha)}</div>
-                      <div className="text-sm font-semibold">{v.serieNumero || '-'}</div>
+                      <div className="num whitespace-nowrap text-sm font-semibold">{v.serieNumero || '-'}</div>
                       <div className="mt-0.5 flex gap-1.5">
                         <Badge variant={ven.tipoPago === 'credito' ? 'warning' : 'success'} className="text-[10px]">{ven.tipoPago === 'credito' ? 'Crédito' : ven.tipoPago === 'transferencia' ? 'Transferencia' : ven.tipoPago || '-'}</Badge>
                         {v.sunat?.estado && <Badge variant={v.sunat.estado === 'aceptado' ? 'success' : v.sunat.estado === 'rechazado' ? 'destructive' : 'warning'} className="text-[10px]">{v.sunat.estado}</Badge>}
                       </div>
                     </div>
-                    <div className="text-sm font-bold">{fmt(ven.total ?? 0)}</div>
+                    <div className="num shrink-0 text-sm font-bold">{fmt(ven.total ?? 0)}</div>
                   </button>
                 )
               })}

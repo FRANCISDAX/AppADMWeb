@@ -88,8 +88,8 @@ export function Turnos() {
     return (
       <div className="rounded-xl border p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="text-xs font-bold truncate">{envio.serieNumero}</div>
+          <div className="min-w-[7.5rem] flex-1">
+            <div className="num whitespace-nowrap text-xs font-bold">{envio.serieNumero}</div>
             <div className="text-xs text-muted-foreground truncate">{envio.clienteNombre || '—'}</div>
           </div>
           {estadoBadge(envio.envio.estado)}
@@ -286,9 +286,9 @@ export function Turnos() {
                   const tipoLabel = tipo === 'efectivo' ? '💵 Efectivo' : tipo === 'transferencia' ? '📲 Transferencia' : tipo === 'yape' ? '📱 Yape' : tipo === 'plin' ? '📱 Plin' : '💳 Crédito'
                   const op = v.operacion || 'SN'
                   return (
-                    <div key={v.id || i} className="flex items-center gap-3 py-2.5 text-sm">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-semibold">{v.serie_numero || v.serieNumero || '-'}</div>
+                    <div key={v.id || i} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 text-sm">
+                      <div className="min-w-[7.5rem] flex-1">
+                        <div className="num whitespace-nowrap font-semibold">{v.serie_numero || v.serieNumero || '-'}</div>
                         <div className="truncate text-xs text-muted-foreground">{v.cliente_nombre && v.cliente_nombre !== '-' ? v.cliente_nombre : 'Consumidor'}</div>
                       </div>
                       <div className="shrink-0 text-right">

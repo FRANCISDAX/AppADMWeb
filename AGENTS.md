@@ -8,6 +8,22 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 4 — Números de comprobante legibles en móvil)
+
+**Objective**: el número de comprobante (`B001-00000123`) se aplastaba y se partía en dos líneas **solo en el celular**, en las listas de Reportes.
+
+**Important Details**:
+- **Causa**: la fila era `flex items-center` **sin** `flex-wrap` y el bloque de texto `flex-1 min-w-0`, o sea **encogible hasta cero**. En escritorio sobra ancho; a ~375 px el número competía con el total, el badge de estado y hasta 5 botones (PDF · NC · ND · Enviar · Pago) → se comprimía y se partía (el guion de `B001-00000…` es punto de corte válido para el navegador).
+- **Criterio aplicado (usar en cualquier lista de comprobantes)**: la fila lleva `flex flex-wrap items-center gap-x-3 gap-y-2`; el **número** va con `num whitespace-nowrap` (cifras tabulares, **nunca** `truncate`: un número cortado es ilegible) dentro de un bloque con `min-w-[7.5rem] flex-1` (120 px, suficiente para 13 caracteres en `text-sm`); los bloques de la derecha (importe, badge, botones) van `shrink-0` y los botones con `flex-wrap justify-end`, así **bajan a una segunda línea** en vez de comerse el número. La línea secundaria (cliente · fecha · cajero) sí puede seguir `truncate`.
+- **Aplicado en**: `Reportes.tsx` (fila compartida por Notas de Venta, Consolidado y Registro SUNAT — donde se reportó), `Turnos.tsx` (ventas del turno + `EnvioCard`), `ReporteTurnos.tsx`, `ReporteFechas.tsx`, `ClienteDetalle.tsx` (cobros pendientes y documentos del cliente) y `ArqueoCaja.tsx` (comprobantes del turno). En `ReporteSire.tsx` la tabla ya está en `overflow-x-auto`: solo se agregó `whitespace-nowrap` a la celda Serie/Número para que **desplace** en vez de partir el número.
+- En escritorio no cambia nada: el bloque del número sigue creciendo con `flex-1`.
+
+**Work State**: Completed y desplegado en https://appadm-b359e.web.app (commits `70bf133` y el de esta pasada). `npm run build` ✓, `npm run lint` 0 errores / 80 warnings (baseline). **Verificación visual pendiente en celular** (no se probó en navegador).
+
+**Next Move**: confirmar en el celular que los números se leen en una línea en las 7 pantallas; si aparece otra lista con el mismo síntoma, aplicar el criterio de arriba (`num whitespace-nowrap` + `min-w-[7.5rem]` + fila `flex-wrap`).
+
+**Relevant Files**: `src/pages/Reportes.tsx`, `src/pages/Turnos.tsx`, `src/pages/ReporteTurnos.tsx`, `src/pages/ReporteFechas.tsx`, `src/pages/ClienteDetalle.tsx`, `src/pages/ArqueoCaja.tsx`, `src/pages/ReporteSire.tsx`.
+
 ### (2026-09 · 3 — Series por cajero (incl. NC/ND) + consolidado)
 
 **Objective**: que cada vendedor/cajero pueda tener **sus propias series** (también las de NC/ND) trabajando en **un solo establecimiento**, y que el consolidado de NV no las ignore.

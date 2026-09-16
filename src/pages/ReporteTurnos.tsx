@@ -207,12 +207,12 @@ export function ReporteTurnos() {
                                 const tipo = v.tipoPago || 'efectivo'
                                 const tipoLabel = tipo === 'efectivo' ? '💵 Efectivo' : tipo === 'transferencia' ? '📲 Transferencia' : '💳 Crédito'
                                 return (
-                                  <div key={v.id || i} onClick={() => setDetalle({ venta: v, serieNumero: v.serie_numero || v.serieNumero, fecha: v.fecha, tipoDoc: v.tipoDoc })} className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-xs transition-colors hover:bg-muted/40">
-                                    <div className="min-w-0 flex-1">
-                                      <div className="truncate font-semibold">{v.serie_numero || v.serieNumero || '-'}</div>
+                                  <div key={v.id || i} onClick={() => setDetalle({ venta: v, serieNumero: v.serie_numero || v.serieNumero, fecha: v.fecha, tipoDoc: v.tipoDoc })} className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-2 py-2 text-xs transition-colors hover:bg-muted/40">
+                                    <div className="min-w-[7.5rem] flex-1">
+                                      <div className="num whitespace-nowrap font-semibold">{v.serie_numero || v.serieNumero || '-'}</div>
                                       <div className="truncate text-muted-foreground">{v.cliente_nombre && v.cliente_nombre !== '-' ? v.cliente_nombre : 'Consumidor'}</div>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="shrink-0 text-right">
                                       <div className={cn('num font-bold', anulada && 'line-through text-muted-foreground')}>{fmt(v.total ?? 0)}</div>
                                       <div className={cn('text-[10px]', anulada ? 'text-red-600' : 'text-muted-foreground')}>{anulada ? '🗑️ Anulada' : tipoLabel}</div>
                                     </div>

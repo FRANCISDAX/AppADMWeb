@@ -136,13 +136,13 @@ export function ReporteFechas() {
               const label = esNC ? '🌱 NC' : esND ? '📈 ND' : esMixto ? '🪙 Mixto' : tipo === 'efectivo' ? '💵 Efectivo' : tipo === 'transferencia' ? '📲 Transferencia' : '💳 Crédito'
               const variant = esNC ? 'destructive' : esND ? 'secondary' : esMixto ? 'secondary' : tipo === 'efectivo' ? 'success' : tipo === 'credito' ? 'warning' : 'secondary'
               return (
-                <div key={v.id} onClick={() => setDetalle(v)} className="flex cursor-pointer items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/40">
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold">{v.serieNumero ?? '-'}</div>
+                <div key={v.id} onClick={() => setDetalle(v)} className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 text-sm transition-colors hover:bg-muted/40">
+                  <div className="min-w-[7.5rem] flex-1">
+                    <div className="num whitespace-nowrap font-semibold">{v.serieNumero ?? '-'}</div>
                     <div className="truncate text-xs text-muted-foreground">{fmtFecha(v.fecha)} · {v.venta?.cliente_nombre && v.venta.cliente_nombre !== '-' ? v.venta.cliente_nombre : 'Consumidor'}</div>
                   </div>
-                  <Badge variant={variant as any} className="text-[10px]">{label}</Badge>
-                  <span className={cn('font-bold', v.tipoDoc === 'NV' && 'text-muted-foreground', esNC && 'text-destructive')}>{esNC ? '-' : ''}{fmt(v.venta?.total ?? 0)}</span>
+                  <Badge variant={variant as any} className="shrink-0 text-[10px]">{label}</Badge>
+                  <span className={cn('num shrink-0 whitespace-nowrap font-bold', v.tipoDoc === 'NV' && 'text-muted-foreground', esNC && 'text-destructive')}>{esNC ? '-' : ''}{fmt(v.venta?.total ?? 0)}</span>
                 </div>
               )
             })}
