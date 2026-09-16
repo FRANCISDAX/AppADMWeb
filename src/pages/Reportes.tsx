@@ -371,21 +371,23 @@ export function Reportes() {
   }
 
   const Row = ({ d, sunat, mostrarAcciones = false }: { d: Doc; sunat?: boolean; mostrarAcciones?: boolean }) => (
-    <div className={cn("flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/40", d.estado === 'anulada' && "opacity-50")}>
-      <div className="min-w-0 flex-1">
-        <div className="font-semibold">{d.serieNumero ?? `${d.serie}-${String(d.numero ?? '').padStart(6, '0')}`}</div>
+    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 text-sm hover:bg-muted/40", d.estado === 'anulada' && "opacity-50")}>
+      {/* min-w: el número del comprobante (B001-00000123) no debe partirse en dos
+          líneas ni quedar aplastado por los botones de la derecha. */}
+      <div className="min-w-[7.5rem] flex-1">
+        <div className="num whitespace-nowrap font-semibold">{d.serieNumero ?? `${d.serie}-${String(d.numero ?? '').padStart(6, '0')}`}</div>
         <div className="truncate text-xs text-muted-foreground">
           {d.venta?.cliente_nombre && d.venta.cliente_nombre !== '-' ? d.venta.cliente_nombre : 'Consumidor'} · {d.fecha ? new Date(d.fecha).toLocaleString('es-PE') : ''}
           {d.venta?.cajero ? ` · 👤 ${d.venta.cajero}` : ''}
         </div>
       </div>
-      <span className={cn('num font-bold', d.tipoDoc === 'NC' && 'text-destructive')}>
+      <span className={cn('num shrink-0 whitespace-nowrap font-bold', d.tipoDoc === 'NC' && 'text-destructive')}>
         {d.tipoDoc === 'NC' ? '-' : ''}{fmt(d.venta?.total ?? 0)}
       </span>
       {sunat ? (
         <>
           <Badge variant={badgeSunat(d).variant} title={badgeSunat(d).tooltip || undefined}>{badgeSunat(d).label}</Badge>
-          <div className="flex gap-1.5">
+          <div className="flex min-w-0 flex-wrap justify-end gap-1.5">
             <Button variant="outline" size="sm" onClick={() => verPDF(d)}><Printer className="h-3.5 w-3.5" /> PDF</Button>
             {(d.tipoDoc === 'BOLETA' || d.tipoDoc === 'FACTURA') && d.sunat?.estado === 'aceptado' && (
               <>
@@ -409,7 +411,7 @@ export function Reportes() {
           </div>
         </>
       ) : (
-        <span className="flex items-center gap-1.5">
+        <span className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
           {d.estado === 'anulada' && (
             <span className="rounded-md bg-red-100 px-2 py-1 text-[11px] font-bold text-red-700 dark:bg-red-500/15 dark:text-red-300">
               ANULADA
