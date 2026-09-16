@@ -14,4 +14,5 @@ export const COL = {
   CUPONES: 'tblCupones',
   PROMOCIONES_VOLUMEN: 'tblPromocionesVolumen',
   CONFIGURACION: 'tblConfiguracion',
+  CATEGORIAS: 'tblCategorias',
 } as const

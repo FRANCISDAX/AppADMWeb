@@ -27,6 +27,8 @@ import { usePermisos } from '@/context/permisos'
 import { useNotifications } from '@/components/notifications'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos, type Producto } from '@/hooks/use-productos'
+import { useCategorias } from '@/hooks/use-categorias'
+import { categoriasParaFiltros } from '@/services/categorias'
 import { consultarDni, consultarRuc } from '@/lib/consultaSunat'
 import { buscarClientes, type Cliente } from '@/services/clientes'
 import { db } from '@/lib/firebase'
@@ -50,6 +52,7 @@ export function Pdv() {
   const { nombre: nombreUsuario, tienePermiso, serieBoleta, serieFactura, seriePrefijo } = usePermisos()
   const { confirm } = useNotifications()
   const { productos, loading, error } = useProductos()
+  const { activas: categoriasAdmin } = useCategorias()
   const { config: cfg } = useConfiguracion()
   const [q, setQ] = React.useState('')
   const [categoria, setCategoria] = React.useState('Todos')
@@ -118,11 +121,13 @@ export function Pdv() {
     setToast(`✅ ${producto.nombre} agregado`)
   }, [productos, setToast])
 
+  // Filtros: categorías administradas (activas, en su orden) ∪ las que ya usan
+  // los productos, para que ningún producto quede inalcanzable.
   const categorias = React.useMemo(() => {
-    const set = new Set<string>(['Todos'])
-    productos.forEach((p) => p.categoria && set.add(p.categoria))
-    return Array.from(set)
-  }, [productos])
+    const presentes = new Set<string>()
+    productos.forEach((p) => p.categoria && presentes.add(p.categoria))
+    return ['Todos', ...categoriasParaFiltros(categoriasAdmin, presentes)]
+  }, [productos, categoriasAdmin])
 
   const lista = React.useMemo(() => {
     const t = q.trim().toLowerCase()

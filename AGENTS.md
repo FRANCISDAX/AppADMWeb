@@ -8,6 +8,27 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 6 — Categorías administradas (antes fijas en la RN))
+
+**Objective**: dejar de tener categorías fijas en el código y poder administrarlas.
+
+**Important Details**:
+- **Antes**: la app RN traía la lista fija `Productos / Bebidas / Dulces / Otros` y el web **no tenía lista**: los chips se derivaban de lo que ya tenían los productos y el formulario era **texto libre** (un typo creaba una categoría nueva). En producción había exactamente 3 en uso: `Bebidas` (20), `Productos` (18), `Otros` (2).
+- **Modelo**: colección **`tblCategorias`** `{ nombre, orden, activo, icono }`. El producto **sigue guardando el NOMBRE** en `Producto.categoria` (compatible con los datos existentes y con la RN); el **id del documento es un slug** del nombre (`bebidas`, `productos`…) para que el sembrado sea **idempotente** si dos clientes siembran a la vez. **Renombrar** actualiza en lote los productos que usaban el nombre anterior (`writeBatch`, lotes de 400) para no dejar huérfanos.
+- **Capas**: `src/lib/categorias.ts` (**puro**: `slugCategoria`, `claveCategoria`, `iconoDe`, `ordenarCategorias`, `categoriasParaFiltros`, `ICONOS_CATEGORIA`) + `src/services/categorias.ts` (Firestore, reexporta lo puro) + `src/hooks/use-categorias.ts` (**en vivo** por `onSnapshot`). En la RN igual: `helper/Categorias.js` (puro) + `services/categorias.js`.
+- **Auto-siembra**: `asegurarCategoriasIniciales()` siembra con las categorías **que ya usan los productos** (o el catálogo por defecto si no hay ninguna) cuando la colección está vacía. Es **necesario**, no opcional: como la categoría es de **lista obligatoria**, una colección vacía dejaría sin opciones al formulario de productos. El hook la dispara una sola vez.
+- **Decisiones del usuario**: (1) se administran en el **web y también desde la RN**; (2) **obligatorio elegir de la lista** (no se puede inventar al crear un producto); (3) **no se puede borrar** una categoría con productos: se **desactiva** (desaparece de filtros y del formulario) — el botón de borrar queda bloqueado y avisa cuántos productos la usan.
+- **Filtros**: `categoriasParaFiltros(administradas, presentes)` = administradas **activas** (en su orden) **∪** las que ya usan los productos (alfabéticas al final). Así ningún producto queda inalcanzable si su categoría se desactivó. Se aplica en Inventario (lista + toma física) y en el PDV.
+- **Web**: `Configuracion.tsx` → pestaña **Categorías** (`components/CategoriasTab.tsx`): crear con icono, reordenar (↑↓), activar/desactivar, renombrar (con conteo de productos afectados), borrar y **"Importar las que ya usan los productos"**. El formulario de producto (`Inventario.tsx`) ya no es texto libre: chips de las categorías activas (más la del producto si estaba desactivada, para no cambiarla al editar). Al crear un producto la categoría arranca **vacía** y es obligatoria.
+- **RN**: `inventario.jsx` carga las categorías de Firestore (`categoriasParaUI` las pasa a `{ id, nombre, icono }` con **`id === nombre`**, porque el filtro compara `p.categoria === selectedCategoria` y `ModalProducto` compara `formData.categoria === cat.nombre`), y agrega un chip **"Nueva"** (solo con permiso `crearProducto`) que abre `components/ModalCategoria.jsx` para crear la categoría con icono.
+- **Estado inicial ya sembrado en producción**: `bebidas` (orden 1), `productos` (2), `otros` (3) con sus iconos. `Dulces` **no** se sembró porque ningún producto la usa (el admin puede agregarla desde la UI).
+
+**Work State**: Completed y desplegado. Verificado con scripts temporales (eliminados): **24** casos del módulo puro del web y **8** del helper de la RN. El test encontró un bug real: `categoriasParaFiltros` usaba `c.activo` estricto, así que una categoría sin el campo `activo` desaparecía de los filtros → corregido a `activo !== false` (igual que `ordenarCategorias`). `npm run build` ✓, `npm run lint` 0 errores / 80 warnings (baseline); `npx eslint` limpio en la RN. **Sin probar en navegador ni en celular.**
+
+**Next Move**: probar en navegador (crear una categoría, reordenar, renombrar y ver que los productos cambian de nombre, intentar borrar una en uso) y en el celular (chips desde Firestore + crear desde "Nueva").
+
+**Relevant Files**: `src/lib/categorias.ts` (nuevo), `src/services/categorias.ts` (nuevo), `src/hooks/use-categorias.ts` (nuevo), `src/components/CategoriasTab.tsx` (nuevo), `src/pages/Configuracion.tsx`, `src/pages/Inventario.tsx`, `src/pages/Pdv.tsx`, `src/constants/colecciones.ts`. RN: `AppAdm/helper/Categorias.js` (nuevo), `AppAdm/services/categorias.js` (nuevo), `AppAdm/components/ModalCategoria.jsx` (nuevo), `AppAdm/app/(drawer)/(tabs)/inventario.jsx`, `AppAdm/constants/Colecciones.js`.
+
 ### (2026-09 · 5 — Reporte por Fechas en 0 para el cajero: índice faltante + error oculto)
 
 **Objective**: el Reporte por Fechas mostraba **todo en 0** ("Sin ventas en el rango") con ventas reales del día.
@@ -306,3 +327,4 @@ Calculation order: product → volume → coupon → client → global. Each lay
 | HISTORIAL_PRECIOS | tblHistorialPrecios | Price history |
 | CUPONES | tblCupones | Discount coupons |
 | PROMOCIONES_VOLUMEN | tblPromocionesVolumen | Volume-based promotions (incl. monto_fijo) |
+| CATEGORIAS | tblCategorias | Categorías de producto administradas: `{ nombre, orden, activo, icono }` (id = slug; el producto guarda el nombre en `categoria`) |

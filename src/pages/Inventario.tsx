@@ -15,6 +15,8 @@ import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos, type Producto } from '@/hooks/use-productos'
 import { AFECTACION_POR_DEFECTO, TIPO_AFECTACION } from '@/constants/tributario'
 import { db } from '@/lib/firebase'
+import { useCategorias } from '@/hooks/use-categorias'
+import { categoriasParaFiltros } from '@/services/categorias'
 import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento, esc } from '@/lib/ui-utils'
 import { exportarExcel } from '@/lib/excel'
@@ -49,13 +51,13 @@ type FormState = {
 }
 
 const VACIO: FormState = {
-  nombre: '', codigo: '', categoria: 'Productos', precioCompra: '', precioVenta: '', precioEspecial: '', stock: '', minStock: '',
+  nombre: '', codigo: '', categoria: '', precioCompra: '', precioVenta: '', precioEspecial: '', stock: '', minStock: '',
   activo: true, esFavorito: false, imagen: '', tipoAfectacion: AFECTACION_POR_DEFECTO, unidadBase: 'unidad', fechaVencimiento: '', isKit: false, kitItems: [], presentaciones: [], proveedorId: '', proveedorNombre: '', preciosPorLista: {}, precioMinimo: '',
 }
 
 function toForm(p: Producto): FormState {
   return {
-    nombre: p.nombre ?? '', codigo: p.codigo ?? '', categoria: p.categoria ?? 'Productos',
+    nombre: p.nombre ?? '', codigo: p.codigo ?? '', categoria: p.categoria ?? '',
     precioCompra: String(p.precioCompra ?? ''), precioVenta: String(p.precioVenta ?? ''), precioEspecial: String(p.precioEspecial ?? ''),
     stock: String(p.stock ?? ''), minStock: String(p.minStock ?? ''), activo: p.activo !== false, esFavorito: p.esFavorito === true,
     imagen: p.imagen ?? '', tipoAfectacion: p.tipoAfectacion ?? AFECTACION_POR_DEFECTO,
@@ -152,11 +154,24 @@ export function Inventario() {
 
   React.useEffect(() => setVisibles(PAGE), [q, catActiva, soloStockBajo])
 
+  const { activas: categoriasAdmin } = useCategorias()
+
   const categoria = React.useMemo(() => {
     const s = new Set<string>()
     productos.forEach((p) => p.categoria && s.add(p.categoria))
     return Array.from(s)
   }, [productos])
+
+  // Filtros: las categorías administradas (activas, en su orden) ∪ las que ya
+  // usan los productos, para que ningún producto quede inalcanzable.
+  const opcionesCategoria = React.useMemo(() => categoriasParaFiltros(categoriasAdmin, categoria), [categoriasAdmin, categoria])
+
+  // Formulario: solo las activas. Si el producto tenía una desactivada se agrega,
+  // así editarlo no le cambia la categoría por sorpresa.
+  const categoriasFormulario = React.useMemo(() => {
+    const base = categoriasAdmin.map((c) => c.nombre)
+    return form.categoria && !base.includes(form.categoria) ? [...base, form.categoria] : base
+  }, [categoriasAdmin, form.categoria])
 
   const lista = React.useMemo(() => {
     const t = q.trim().toLowerCase()
@@ -315,11 +330,7 @@ export function Inventario() {
     }
   }
 
-  const tomaCategorias = React.useMemo(() => {
-    const s = new Set<string>(['Todas'])
-    productos.forEach((p) => p.categoria && s.add(p.categoria))
-    return Array.from(s)
-  }, [productos])
+  const tomaCategorias = React.useMemo(() => ['Todas', ...opcionesCategoria], [opcionesCategoria])
 
   const tomaLista = React.useMemo(() => {
     const t = tomaBusqueda.trim().toLowerCase()
@@ -536,7 +547,7 @@ export function Inventario() {
   function validar(): string | null {
     if (!form.nombre.trim()) return 'El nombre es obligatorio'
     if (!(parseFloat(form.precioVenta) > 0)) return 'El precio de venta es obligatorio'
-    if (!form.categoria.trim()) return 'La categoría es obligatoria'
+    if (!form.categoria.trim()) return 'Elegí una categoría'
     const nombreDup = productos.some((p) => p.id !== editando?.id && p.nombre?.toLowerCase() === form.nombre.trim().toLowerCase())
     if (nombreDup) return `El nombre "${form.nombre.trim()}" ya existe`
     if (!editando && form.codigo.trim()) {
@@ -553,7 +564,7 @@ export function Inventario() {
     const precioEspecialVal = parseFloat(form.precioEspecial)
     const raw: Record<string, unknown> = {
       nombre: form.nombre.trim(),
-      categoria: form.categoria.trim() || 'Productos',
+      categoria: form.categoria.trim(),
       codigo: form.codigo.trim(),
       precioCompra: parseFloat(form.precioCompra) || 0,
       precioVenta: parseFloat(form.precioVenta) || 0,
@@ -682,7 +693,7 @@ export function Inventario() {
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {['Todos', ...categoria].map((c) => (
+        {['Todos', ...opcionesCategoria].map((c) => (
           <button
             key={c}
             onClick={() => setCatActiva(c)}
@@ -967,18 +978,24 @@ export function Inventario() {
               </div>
               <div>
                 <Label>Categoría *</Label>
-                <Input value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} />
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {categoria.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setForm({ ...form, categoria: c })}
-                      className={cn('rounded-full px-2.5 py-1 text-[11px] font-bold border cursor-pointer', form.categoria === c ? 'bg-primary text-white border-primary' : 'bg-background hover:bg-accent')}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
+                {categoriasFormulario.length === 0 ? (
+                  <p className="mt-1 rounded-lg bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-600 dark:text-amber-500">
+                    No hay categorías activas. Creá una en <span className="font-semibold">Configuración → Categorías</span>.
+                  </p>
+                ) : (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {categoriasFormulario.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setForm({ ...form, categoria: c })}
+                        className={cn('rounded-full px-2.5 py-1 text-[11px] font-bold border cursor-pointer', form.categoria === c ? 'bg-primary text-white border-primary' : 'bg-background hover:bg-accent')}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <Label>Tipo de Afectación IGV</Label>
