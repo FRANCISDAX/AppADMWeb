@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { crearGuardiaErrores, esRuido, normalizarError, resumenError } from './errores.ts'
+import { crearGuardiaErrores, esRuido, normalizarError, resumenError, trocearLotes } from './errores.ts'
 
 test('normalizarError saca mensaje y stack de un Error', () => {
   const r = normalizarError(new Error('boom'))
@@ -47,6 +47,22 @@ test('la guardia descarta el error repetido aunque pase el tiempo', () => {
   t += 5_000
   assert.equal(permitido('render|boom'), false, 'el mismo error no se registra dos veces')
   assert.equal(permitido('render|otro'), true, 'uno distinto sí')
+})
+
+test('trocearLotes respeta el máximo de 500 operaciones de Firestore', () => {
+  assert.deepEqual(trocearLotes([], 500), [], 'sin nada no hay lotes')
+  assert.equal(trocearLotes(Array.from({ length: 500 }, (_, i) => i), 500).length, 1, 'justo 500 = un lote')
+  const lotes = trocearLotes(Array.from({ length: 501 }, (_, i) => i), 500)
+  assert.equal(lotes.length, 2, '501 necesita dos lotes')
+  assert.equal(lotes[0].length, 500)
+  assert.equal(lotes[1].length, 1)
+  assert.equal(lotes.flat().length, 501, 'no se pierde ni se duplica ningún elemento')
+})
+
+test('trocearLotes con tamaño inválido no arma lotes vacíos ni pierde datos', () => {
+  assert.equal(trocearLotes([1, 2, 3], 0).length, 3, 'tamaño 0 → de a uno')
+  assert.equal(trocearLotes([1, 2, 3], Number.NaN).length, 3, 'NaN → de a uno')
+  assert.deepEqual(trocearLotes([1, 2, 3]), [[1, 2, 3]], 'usa 500 por defecto')
 })
 
 test('resumenError arma un texto útil para copiar y pegar', () => {

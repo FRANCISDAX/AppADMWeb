@@ -108,6 +108,22 @@ export function instalarCapturaGlobal(
   }
 }
 
+/**
+ * Parte una lista en lotes del tamaño máximo que acepta una escritura de
+ * Firestore (**500 operaciones**).
+ *
+ * Se usa para borrar/actualizar en bloque: hacerlo de a un documento son cientos
+ * de viajes de ida y vuelta y, si uno falla a mitad, queda todo a medias. Un
+ * tamaño inválido (0, negativo, `NaN`) se trata como 1 por lote: nunca devuelve
+ * lotes vacíos ni entra en bucle.
+ */
+export function trocearLotes<T>(items: readonly T[], tamano = 500): T[][] {
+  const n = Math.max(1, Math.floor(tamano) || 1)
+  const lotes: T[][] = []
+  for (let i = 0; i < items.length; i += n) lotes.push(items.slice(i, i + n))
+  return lotes
+}
+
 /** Texto corto y estable para mostrar/copiar el error. */
 export function resumenError(e: Pick<ErrorApp, 'mensaje' | 'contexto' | 'ruta' | 'fecha' | 'dispositivo' | 'stack'>): string {
   return [

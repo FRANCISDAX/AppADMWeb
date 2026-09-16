@@ -1,7 +1,7 @@
-import { addDoc, collection, deleteDoc, getDocs, limit as fsLimit, orderBy, query } from 'firebase/firestore'
+import { addDoc, collection, getDocs, limit as fsLimit, orderBy, query, writeBatch } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { auth, db } from '@/lib/firebase'
-import { crearGuardiaErrores, esRuido, normalizarError, type ErrorApp } from '@/lib/errores'
+import { crearGuardiaErrores, esRuido, normalizarError, trocearLotes, type ErrorApp } from '@/lib/errores'
 
 /**
  * Registro de errores de la app web (`tblErrores`).
@@ -20,6 +20,9 @@ import { crearGuardiaErrores, esRuido, normalizarError, type ErrorApp } from '@/
 
 /** Máximo de errores que se traen para ver en Auditoría. */
 export const MAX_ERRORES_UI = 100
+
+/** Máximo de operaciones por lote de Firestore. */
+const TAMANO_LOTE = 500
 
 /** Error repetido u ola de errores: no se registra de nuevo. */
 const permitido = crearGuardiaErrores()
@@ -69,24 +72,35 @@ export async function obtenerErrores(max: number = MAX_ERRORES_UI): Promise<Erro
   }
 }
 
-/** Borra los errores con más de `dias` días. Devuelve cuántos borró. */
+/**
+ * Borra los errores con más de `dias` días. Devuelve cuántos borró de verdad.
+ *
+ * El borrado va por **lotes** (máximo 500 operaciones por `writeBatch`): de a un
+ * `deleteDoc` eran cientos de viajes de ida y vuelta y, si uno fallaba a mitad,
+ * quedaba la limpieza a medias sin saber cuánto se borró. Si un lote falla se
+ * corta y se devuelve lo ya borrado (los anteriores ya no están, informar 0
+ * sería mentir).
+ */
 export async function limpiarErrores(dias = 30): Promise<number> {
+  const corte = new Date()
+  corte.setDate(corte.getDate() - dias)
+  const limite = corte.toISOString()
+  let borrados = 0
   try {
-    const corte = new Date()
-    corte.setDate(corte.getDate() - dias)
-    const limite = corte.toISOString()
     const snap = await getDocs(collection(db, COL.ERRORES))
-    let borrados = 0
-    for (const d of snap.docs) {
+    const viejos = snap.docs.filter((d) => {
       const fecha = String((d.data() as { fecha?: string }).fecha || '')
-      if (fecha && fecha < limite) {
-        await deleteDoc(d.ref)
-        borrados++
-      }
+      return Boolean(fecha) && fecha < limite
+    })
+
+    for (const lote of trocearLotes(viejos, TAMANO_LOTE)) {
+      const batch = writeBatch(db)
+      for (const d of lote) batch.delete(d.ref)
+      await batch.commit()
+      borrados += lote.length
     }
-    return borrados
   } catch (e) {
     console.error('❌ limpiarErrores:', e)
-    return 0
   }
+  return borrados
 }
