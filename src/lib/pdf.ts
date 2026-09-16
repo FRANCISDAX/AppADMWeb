@@ -1,5 +1,6 @@
 import QRCode from 'qrcode'
 import { numeroALetras } from '@/lib/numero-a-letras'
+import { etiquetaPago, formaPagoLabel } from '@/lib/pagos'
 import { esc } from '@/lib/ui-utils'
 
 const TITULOS: Record<string, string> = {
@@ -113,11 +114,11 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
     .join('')
 
   const totalStr = Number(venta.importe_total || venta.total || 0).toFixed(2)
-  const formaPago = venta.forma_pago || (venta.tipoPago === 'efectivo' ? 'Efectivo' : venta.tipoPago === 'credito' ? 'Crédito' : 'Transferencia')
-  // Pago mixto (efectivo + transferencia, etc.): muestra el desglose.
+  const formaPago = venta.forma_pago || formaPagoLabel(venta.pagos ?? [], venta.tipoPago)
+  // Pago múltiple (efectivo + Yape + tarjeta…): muestra el desglose con el medio real.
   const pagoHTML =
     Array.isArray(venta.pagos) && venta.pagos.length > 1
-      ? venta.pagos.map((p: any) => `<tr><td class="td-l" colspan="3">${p.tipo === 'efectivo' ? '💵 Efectivo' : p.tipo === 'transferencia' ? '📲 Transferencia' : '💳 Crédito'} S/ ${Number(p.monto || 0).toFixed(2)}</td></tr>`).join('')
+      ? venta.pagos.map((p: any) => `<tr><td class="td-l" colspan="3">${etiquetaPago(p)} S/ ${Number(p.monto || 0).toFixed(2)}${p.operacion ? ` · Op: ${esc(String(p.operacion))}` : ''}</td></tr>`).join('')
         + (Number(venta.cambio || 0) > 0
           ? (Number(venta.montoRecibido || 0) > 0
             ? `<tr><td class="td-l" colspan="2">Efectivo recibido S/ ${Number(venta.montoRecibido || 0).toFixed(2)}</td><td class="td-r">Vuelto S/ ${Number(venta.cambio || 0).toFixed(2)}</td></tr>`
@@ -127,7 +128,7 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
       ? `<tr><td class="td-l" colspan="2">Efectivo S/ ${Number(venta.montoRecibido || venta.efectivo || 0).toFixed(2)}</td><td class="td-r">Vuelto S/ ${Number(venta.cambio || 0).toFixed(2)}</td></tr>`
       : venta.tipoPago === 'credito' || formaPago.toLowerCase() === 'credito'
       ? `<tr><td class="td-l" colspan="3">Crédito</td></tr>${venta.cobrado ? `<tr><td class="td-l s" colspan="3">Cobrado: S/ ${Number(venta.cobrado).toFixed(2)}</td></tr>` : ''}`
-      : `<tr><td class="td-l" colspan="3">Transferencia S/ ${totalStr}</td></tr>${venta.referencia ? `<tr><td class="td-l s" colspan="3">Ref: ${esc(venta.referencia)}</td></tr>` : ''}`
+      : `<tr><td class="td-l" colspan="3">${esc(formaPago)} S/ ${totalStr}</td></tr>${venta.referencia ? `<tr><td class="td-l s" colspan="3">Ref: ${esc(venta.referencia)}</td></tr>` : ''}`
 
   const clienteNombre = venta.cliente_nombre || venta.cliente || '-'
   const clienteDni = venta.cliente_dni || venta.clienteDoc || '-'

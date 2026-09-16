@@ -31,6 +31,16 @@ import { categoriasParaFiltros } from '@/services/categorias'
 import { consultarDni, consultarRuc } from '@/lib/consultaSunat'
 import { buscarClientes, obtenerCliente, obtenerEstadoCredito, type Cliente } from '@/services/clientes'
 import { evaluarVentaCredito, type EstadoCredito } from '@/lib/credito'
+import {
+  MEDIOS_ELECTRONICOS,
+  etiquetaPago,
+  infoMedio,
+  normalizarMonto,
+  resumenPagos,
+  tipoPagoDe,
+  topeSugerido,
+  type MedioPago,
+} from '@/lib/pagos'
 import { CreditoPanel } from '@/components/CreditoPanel'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { registrarVenta } from '@/services/ventas'
@@ -47,6 +57,23 @@ import QRCode from 'qrcode'
 // Un producto tiene precio especial (promo) si su valor es > 0.
 const tienePromo = (p: Producto) => p?.precioEspecial != null && p.precioEspecial > 0
 
+/**
+ * Una línea de la lista "Formas de pago". El monto se guarda como texto porque
+ * es un input (mismo criterio que el resto del PDV); se convierte con
+ * `normalizarMonto` al calcular.
+ */
+type PagoUI = { id: string; medio: MedioPago; monto: string; operacion: string }
+
+let pagoSecuencia = 0
+const nuevoPago = (medio: MedioPago, monto: string): PagoUI => ({
+  // Id estable para la key de React (nunca el índice: al borrar una fila el
+  // input del medio siguiente se quedaría con el valor de la anterior).
+  id: `pago-${++pagoSecuencia}`,
+  medio,
+  monto,
+  operacion: '',
+})
+
 export function Pdv() {
   const { user } = useAuth()
   const { nombre: nombreUsuario, tienePermiso, serieBoleta, serieFactura, seriePrefijo } = usePermisos()
@@ -57,11 +84,12 @@ export function Pdv() {
   const [q, setQ] = React.useState('')
   const [categoria, setCategoria] = React.useState('Todos')
   const [tipoComp, setTipoComp] = React.useState<'nv' | 'boleta' | 'factura'>('boleta')
-  const [metodo, setMetodo] = React.useState<'efectivo' | 'transferencia' | 'credito' | 'mixto'>('efectivo')
-  const [pagoMixtoEfectivo, setPagoMixtoEfectivo] = React.useState('')
-  const [pagoMixtoTransf, setPagoMixtoTransf] = React.useState('')
-  const [recibido, setRecibido] = React.useState('')
-  const [referencia, setReferencia] = React.useState('')
+  const [pagos, setPagos] = React.useState<PagoUI[]>([])
+  // El crédito es exclusivo (no se combina): cuando está activo, la venta entera
+  // va a la cuenta del cliente y la lista de formas de pago queda de lado.
+  const [pagoCredito, setPagoCredito] = React.useState(false)
+  // Muestra los medios electrónicos (Yape, Plin, transferencia, tarjeta).
+  const [grupoTransf, setGrupoTransf] = React.useState(false)
   const [clienteDni, setClienteDni] = React.useState('')
   const [clienteNombre, setClienteNombre] = React.useState('')
   const [clienteDireccion, setClienteDireccion] = React.useState('')
@@ -127,7 +155,7 @@ export function Pdv() {
   // cliente al que corresponde, así nunca se muestra el de un cliente anterior.
   React.useEffect(() => {
     const id = clienteDni.trim()
-    if (metodo !== 'credito') return
+    if (!pagoCredito) return
     if (!/^\d{8}$/.test(id) && !/^\d{11}$/.test(id)) return
     let vigente = true
     obtenerEstadoCredito(id)
@@ -138,11 +166,11 @@ export function Pdv() {
     return () => {
       vigente = false
     }
-  }, [metodo, clienteDni])
+  }, [pagoCredito, clienteDni])
 
   const dniCreditoValido = /^\d{8}$/.test(clienteDni.trim()) || /^\d{11}$/.test(clienteDni.trim())
   const estadoCredito = credito?.id === clienteDni.trim() ? credito.estado : null
-  const cargandoCredito = metodo === 'credito' && dniCreditoValido && estadoCredito === null
+  const cargandoCredito = pagoCredito && dniCreditoValido && estadoCredito === null
 
   // Filtros: categorías administradas (activas, en su orden) ∪ las que ya usan
   // los productos, para que ningún producto quede inalcanzable.
@@ -262,6 +290,55 @@ export function Pdv() {
 
   const total = descuentosCalc.totalFinal
 
+  // ─── Formas de pago ────────────────────────────────────────────────────────
+  // La regla (topes, vuelto, redondeo) vive en `lib/pagos.ts`; acá solo se
+  // guarda lo que carga el cajero y se muestra el resultado. Así el panel y el
+  // guardado no pueden contradecirse.
+  const resumen = React.useMemo(
+    () =>
+      resumenPagos({
+        pagos: pagos.map((p) => ({
+          id: p.id,
+          medio: p.medio,
+          monto: normalizarMonto(p.monto),
+          ...(p.operacion.trim() ? { operacion: p.operacion } : {}),
+        })),
+        total,
+      }),
+    [pagos, total]
+  )
+
+  // Con el total ya cubierto no se agregan más medios: el excedente solo tiene
+  // sentido como efectivo recibido (y ese se edita en la fila que ya existe).
+  const puedeAgregarPago = resumen.falta > 0
+
+  const agregarPago = React.useCallback(
+    (medio: MedioPago) => {
+      setPagoCredito(false)
+      setGrupoTransf(false)
+      // Se precarga con lo que falta: el caso normal (pago exacto) queda en un toque.
+      const tope = topeSugerido(medio, resumen.falta)
+      const monto = tope === null ? (resumen.falta > 0 ? String(resumen.falta) : '') : String(tope)
+      setPagos((prev) => [...prev, nuevoPago(medio, monto)])
+    },
+    [resumen.falta]
+  )
+
+  function actualizarPago(id: string, cambios: Partial<Pick<PagoUI, 'monto' | 'operacion'>>) {
+    setPagos((prev) => prev.map((p) => (p.id === id ? { ...p, ...cambios } : p)))
+  }
+
+  function quitarPago(id: string) {
+    setPagos((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  /** Cambiar a crédito: la venta entera va a la cuenta del cliente. */
+  function elegirCredito() {
+    setPagoCredito(true)
+    setGrupoTransf(false)
+    setPagos([])
+  }
+
   // Stock efectivo: para kits se calcula desde los componentes
   const kitStock = React.useCallback((p: Producto) => {
     if (!p.isKit || !p.kitItems?.length) return p.stock ?? 0
@@ -339,7 +416,8 @@ export function Pdv() {
       manualItems,
       usarPromo,
       tipoComp,
-      metodo,
+      metodo: pagoCredito ? 'credito' : 'pago',
+      pagos: pagos.map((p) => ({ medio: p.medio, monto: normalizarMonto(p.monto), operacion: p.operacion })),
       clienteDni,
       clienteNombre,
       clienteDireccion,
@@ -350,13 +428,13 @@ export function Pdv() {
     setManualItems({})
     setUsarPromo({})
     setTipoComp('boleta')
-    setMetodo('efectivo')
+    setPagoCredito(false)
+    setPagos([])
+    setGrupoTransf(false)
     setClienteDni('')
     setClienteNombre('')
     setClienteDireccion('')
     setDniConsultado(false)
-    setRecibido('')
-    setReferencia('')
     setListaPrecioSel('')
     setToast('⏸️ Venta pausada')
   }
@@ -374,7 +452,17 @@ export function Pdv() {
     setManualItems(v.manualItems)
     setUsarPromo(v.usarPromo)
     setTipoComp(v.tipoComp)
-    setMetodo(v.metodo)
+    setPagoCredito(v.metodo === 'credito')
+    // Las ventas pausadas viejas no tienen `pagos`: se reconstruye una fila con
+    // el medio que tenían (o efectivo) por el total guardado.
+    setPagos(
+      v.pagos?.length
+        ? v.pagos.map((p) => nuevoPago(infoMedio(p.medio).medio, String(normalizarMonto(p.monto) || v.total)))
+        : v.metodo === 'credito'
+          ? []
+          : [nuevoPago(v.metodo === 'transferencia' || v.metodo === 'mixto' ? 'transferencia' : 'efectivo', String(v.total))]
+    )
+    setGrupoTransf(false)
     setClienteDni(v.clienteDni)
     setClienteNombre(v.clienteNombre)
     setClienteDireccion(v.clienteDireccion)
@@ -530,13 +618,7 @@ export function Pdv() {
     }
     if (dni && !dniConsultado) return setToast('⚠️ Presiona Consultar para validar el DNI/RUC')
 
-    if (metodo === 'efectivo') {
-      const m = parseFloat(recibido)
-      if (!recibido || isNaN(m)) return setToast('⚠️ Ingresa un monto recibido')
-      if (m < total) return setToast('⚠️ El monto recibido es menor al total')
-    } else if (metodo === 'transferencia') {
-      if (!referencia.trim()) return setToast('⚠️ Ingresa la referencia de la transferencia')
-    } else if (metodo === 'credito') {
+    if (pagoCredito) {
       if (!/^\d{8}$/.test(dni) && !/^\d{11}$/.test(dni)) return setToast('⚠️ El crédito requiere DNI o RUC válido')
       if (!dniConsultado) return setToast('⚠️ Presiona Consultar para validar el DNI/RUC')
       // El estado lo lee el servicio y la REGLA la define lib/credito.ts:
@@ -544,12 +626,11 @@ export function Pdv() {
       const estado = await obtenerEstadoCredito(dni)
       const evaluacion = evaluarVentaCredito({ total, estado })
       if (!evaluacion.permitido) return setToast(`🚫 ${evaluacion.motivo}`)
-    } else if (metodo === 'mixto') {
-      const tr = parseFloat(pagoMixtoTransf) || 0
-      const ef = parseFloat(pagoMixtoEfectivo) || 0
-      if (tr <= 0) return setToast('⚠️ Ingresa el monto por transferencia')
-      if (ef < 0) return setToast('⚠️ El efectivo no puede ser negativo')
-      if (ef + tr < total) return setToast(`⚠️ Transferencia + efectivo (S/ ${(ef + tr).toFixed(2)}) no alcanza el total (S/ ${total.toFixed(2)})`)
+    } else {
+      // El tope, el vuelto y el "falta" los define lib/pagos.ts: acá solo se
+      // muestra el motivo de que no se pueda cobrar todavía.
+      if (resumen.pagos.length === 0) return setToast('⚠️ Elegí al menos una forma de pago')
+      if (!resumen.puedeCobrar) return setToast(`⚠️ ${resumen.motivo ?? 'El pago no cubre el total'}`)
     }
 
     // El cierre del turno invalida la venta: solo se puede cobrar con turno abierto.
@@ -600,14 +681,18 @@ export function Pdv() {
       if (!ok2) return
     }
 
-    const methodLabel = metodo === 'efectivo' ? '💵 Efectivo' : metodo === 'transferencia' ? '📲 Transferencia' : metodo === 'credito' ? '💳 Crédito' : '🪙 Mixto'
+    // Desglose del cobro para que el cajero confirme viendo exactamente qué se
+    // registra (con pago múltiple, un solo rótulo ya no alcanza).
+    const detallePago = pagoCredito
+      ? 'Crédito (todo a la cuenta del cliente)'
+      : resumen.pagos.map((p) => `${etiquetaPago(p)} ${fmt(p.monto)}`).join(' + ')
     const itemsCount = Object.keys(cart).reduce((s, id) => s + cart[id], 0)
     const ok = await confirm({
       title: '¿Confirmar la venta?',
       message:
         `Total: ${fmt(total)}\n` +
         `Productos: ${itemsCount}\n` +
-        `Método de pago: ${methodLabel}\n` +
+        `Forma de pago: ${detallePago}${resumen.vuelto > 0 ? `\nVuelto: ${fmt(resumen.vuelto)}` : ''}\n` +
         `Comprobante: ${tipoComp === 'nv' ? 'Nota de Venta' : tipoComp === 'boleta' ? 'Boleta' : 'Factura'}`,
       okText: 'Cobrar',
     })
@@ -639,24 +724,17 @@ export function Pdv() {
         manual: true,
       }))
       const items = [...invItems, ...manItems]
+      // El crédito es la única forma de pago que no pasa por la lista: va por el
+      // total. En el resto, `resumen.pagos` ya viene con los montos aplicados y
+      // los bolsillos resueltos por `lib/pagos.ts`.
+      const pagosGuardar = pagoCredito ? undefined : resumen.pagos
+      const tipoPago = pagoCredito ? 'credito' : tipoPagoDe(resumen.pagos)
       const res = await registrarVenta({
         items,
         venta: {
           tipoDoc: tipoComp === 'nv' ? 'NV' : tipoComp === 'boleta' ? 'BOLETA' : 'FACTURA',
-          tipoPago: metodo,
-          pagos: metodo === 'mixto'
-            ? (() => {
-                const tr = parseFloat(pagoMixtoTransf) || 0
-                // Si la transferencia supera el total, la venta se cubre por transferencia
-                // y el excedente se devuelve en efectivo. Si no, se reparte entre efectivo y transferencia.
-                const trAplicada = Math.min(tr, total)
-                const efAplicado = Math.max(0, total - tr)
-                return [
-                  { tipo: 'efectivo' as const, monto: efAplicado },
-                  { tipo: 'transferencia' as const, monto: trAplicada },
-                ]
-              })()
-            : undefined,
+          tipoPago,
+          pagos: pagosGuardar,
           total,
           descuentoTotal: descuentosCalc.totalDescuento,
           descuentoGlobalTipo: descuentoGlobalValor ? descuentoGlobalTipo : undefined,
@@ -664,12 +742,11 @@ export function Pdv() {
           cliente_dni: dni || '',
           cliente_nombre: clienteNombre || '',
           cliente_direccion: clienteDireccion || '',
-          referencia,
-          montoRecibido: metodo === 'mixto' ? (parseFloat(pagoMixtoEfectivo) || 0) : (parseFloat(recibido) || 0),
-          cambio: metodo === 'mixto'
-            ? Math.max(0, (parseFloat(pagoMixtoEfectivo) || 0) + (parseFloat(pagoMixtoTransf) || 0) - total)
-            : Math.max(0, (parseFloat(recibido) || 0) - total),
-          vueltoTransferencia: metodo === 'mixto' ? Math.max(0, (parseFloat(pagoMixtoTransf) || 0) - total) : 0,
+          // La referencia del documento es el N° de operación del primer pago
+          // electrónico (antes era un campo aparte; ahora vive en cada pago).
+          referencia: resumen.pagos.find((p) => p.operacion)?.operacion || '',
+          montoRecibido: resumen.efectivoRecibido,
+          cambio: resumen.vuelto,
           cajero: nombreUsuario || user?.email || 'sistema',
           usuarioId: user?.uid || '',
           turnoId: turno?.id || null,
@@ -693,10 +770,11 @@ export function Pdv() {
       })
       if (res.success) {
         setToast(`✅ Venta ${res.correlativo ?? ''} registrada`)
-        setVentaOk({ correlativo: res.correlativo ?? '', total, vuelto, documento: res.documento })
+        setVentaOk({ correlativo: res.correlativo ?? '', total, vuelto: resumen.vuelto, documento: res.documento })
         setCart({})
-        setRecibido('')
-        setReferencia('')
+        setPagos([])
+        setPagoCredito(false)
+        setGrupoTransf(false)
         setClienteDni('')
         setClienteNombre('')
         setDniConsultado(false)
@@ -725,11 +803,6 @@ export function Pdv() {
       setImprimiendo(false)
     }
   }
-
-  const recibidoNum = parseFloat(recibido) || 0
-  const vuelto = metodo === 'mixto'
-    ? Math.max(0, (parseFloat(pagoMixtoEfectivo) || 0) + (parseFloat(pagoMixtoTransf) || 0) - total)
-    : Math.max(0, recibidoNum - total)
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_440px] items-start">
@@ -1281,114 +1354,145 @@ export function Pdv() {
               </div>
             )}
 
-            <div className="grid grid-cols-4 gap-1.5">
-              {(['efectivo', 'transferencia', 'credito', 'mixto'] as const).map((m) => (
+            {/* ── Formas de pago (pago múltiple) ────────────────────────────────
+                El cajero agrega medios a una lista y el sistema valida el total.
+                Solo el efectivo puede pagar de más (da vuelto); el crédito es
+                exclusivo y va por el total de la venta. */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-1.5">
                 <button
-                  key={m}
-                  onClick={() => { setMetodo(m); if (m !== 'mixto') { setPagoMixtoTransf(''); setPagoMixtoEfectivo(''); } }}
+                  type="button"
+                  onClick={() => agregarPago('efectivo')}
+                  disabled={!pagoCredito && !puedeAgregarPago}
                   className={cn(
-                    'h-10 rounded-lg text-xs font-bold border transition-colors cursor-pointer',
-                    metodo === m ? 'bg-primary text-white border-primary' : 'bg-background hover:bg-accent'
+                    'h-10 rounded-lg border text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40',
+                    !pagoCredito && pagos.length > 0 ? 'bg-primary/10 border-primary text-primary' : 'bg-background hover:bg-accent'
                   )}
                 >
-                  {m === 'efectivo' ? 'Efectivo' : m === 'transferencia' ? 'Tarjeta/Transf.' : m === 'credito' ? 'Crédito' : 'Mixto'}
+                  💵 Efectivo
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setGrupoTransf((v) => !v)}
+                  disabled={!pagoCredito && !puedeAgregarPago}
+                  className={cn(
+                    'flex h-10 items-center justify-center gap-1 rounded-lg border text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40',
+                    grupoTransf ? 'border-primary bg-primary/10 text-primary' : 'bg-background hover:bg-accent'
+                  )}
+                >
+                  📲 Transferencia <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', grupoTransf && 'rotate-180')} />
+                </button>
+                <button
+                  type="button"
+                  onClick={elegirCredito}
+                  className={cn(
+                    'h-10 rounded-lg border text-xs font-bold transition-colors cursor-pointer',
+                    pagoCredito ? 'border-primary bg-primary text-white' : 'bg-background hover:bg-accent'
+                  )}
+                >
+                  💳 Crédito
+                </button>
+              </div>
+
+              {!pagoCredito && pagos.length === 0 && !grupoTransf && (
+                <p className="text-[11px] text-muted-foreground">
+                  Elegí con qué paga el cliente. Se pueden combinar varias formas (y el sistema valida que no se pase del total).
+                </p>
+              )}
+
+              {grupoTransf && (pagoCredito || puedeAgregarPago) && (
+                <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-dashed p-2">
+                  {MEDIOS_ELECTRONICOS.map((m) => (
+                    <button
+                      key={m.medio}
+                      type="button"
+                      onClick={() => agregarPago(m.medio)}
+                      className="h-9 cursor-pointer rounded-lg border bg-background text-xs font-semibold transition-colors hover:bg-accent"
+                    >
+                      {m.icono} {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {!pagoCredito && pagos.length > 0 && (
+                <div className="space-y-2 rounded-xl border p-2">
+                  {pagos.map((p) => {
+                    const info = infoMedio(p.medio)
+                    return (
+                      <div key={p.id} className="space-y-1.5 rounded-lg bg-muted/40 p-2">
+                        <div className="flex items-center gap-2">
+                          <span className="min-w-[6.5rem] shrink-0 text-xs font-bold">
+                            {info.icono} {info.label}
+                          </span>
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            value={p.monto}
+                            onChange={(e) => actualizarPago(p.id, { monto: e.target.value })}
+                            className="num h-8"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => quitarPago(p.id)}
+                            aria-label={`Quitar ${info.label}`}
+                            title="Quitar esta forma de pago"
+                            className="shrink-0 cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        {info.pideOperacion && (
+                          <Input
+                            value={p.operacion}
+                            onChange={(e) => actualizarPago(p.id, { operacion: e.target.value })}
+                            placeholder="N° de operación (opcional)"
+                            className="h-8 text-xs"
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {puedeAgregarPago && (
+                    <button
+                      type="button"
+                      onClick={() => setGrupoTransf(true)}
+                      className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed py-1.5 text-xs font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Forma de pago
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {!pagoCredito && pagos.length > 0 && (
+                <div className="space-y-1 rounded-lg bg-muted/60 px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Pagado</span>
+                    <span className="num font-bold">{fmt(resumen.electronico + resumen.efectivoRecibido)}</span>
+                  </div>
+                  {resumen.falta > 0 ? (
+                    <div className="flex items-center justify-between font-bold text-destructive">
+                      <span>Falta</span>
+                      <span className="num">{fmt(resumen.falta)}</span>
+                    </div>
+                  ) : resumen.vuelto > 0 ? (
+                    <div className="flex items-center justify-between font-bold text-emerald-600">
+                      <span>Vuelto</span>
+                      <span className="num">{fmt(resumen.vuelto)}</span>
+                    </div>
+                  ) : (
+                    <div className="font-bold text-emerald-600">✓ Cubre el total</div>
+                  )}
+                  {resumen.motivo && <p className="text-[11px] font-semibold text-destructive">{resumen.motivo}</p>}
+                </div>
+              )}
             </div>
 
-            {metodo === 'credito' && (
+            {pagoCredito && (
               <CreditoPanel dni={clienteDni.trim()} estado={estadoCredito} total={total} cargando={cargandoCredito} />
-            )}
-
-            {metodo === 'mixto' && (
-              (() => {
-                const tr = parseFloat(pagoMixtoTransf) || 0
-                const ef = parseFloat(pagoMixtoEfectivo) || 0
-                const trAplicada = Math.min(tr, total)
-                const enEfectivo = Math.max(0, total - tr)
-                const vueltoTotal = Math.max(0, ef + tr - total)
-                const transfSupera = tr > total
-                return (
-                  <div className="space-y-2 rounded-xl border border-dashed p-3">
-                    <div className="flex items-center gap-2">
-                      <label className="w-28 text-xs font-semibold text-muted-foreground">Transfer. S/</label>
-                      <Input type="number" inputMode="decimal" placeholder="0.00" value={pagoMixtoTransf} onChange={(e) => {
-                        const v = e.target.value
-                        setPagoMixtoTransf(v)
-                        const num = parseFloat(v) || 0
-                        if (num <= 0) {
-                          // El efectivo cubre todo → método Efectivo y se limpia el mixto
-                          setMetodo('efectivo')
-                          setPagoMixtoTransf('')
-                          setPagoMixtoEfectivo('')
-                        } else {
-                          setPagoMixtoEfectivo(String(num >= total ? 0 : Math.max(0, total - num)))
-                        }
-                      }} className="num" />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">Monto que paga el cliente por transferencia (puede ser mayor al total → se devuelve el excedente en efectivo).</p>
-                    <div className="flex items-center gap-2">
-                      <label className="w-28 text-xs font-semibold text-muted-foreground">Efectivo rec. S/</label>
-                      <Input type="number" inputMode="decimal" placeholder="0.00" value={pagoMixtoEfectivo} disabled className={cn('num cursor-not-allowed opacity-50')} />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">Se calcula automáticamente (total − transferencia). Si la transferencia es mayor al total, efectivo = 0.</p>
-
-                    {(ef + tr) < total ? (
-                      <div className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 dark:bg-red-500/10">
-                        ⚠️ Faltan S/ {fmt(total - ef - tr)} por cubrir. El efectivo + transferencia debe sumar al menos el total (S/ {fmt(total)}).
-                      </div>
-                    ) : tr > 0 ? (
-                      <>
-                        <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs">
-                          <span className="text-muted-foreground">Cubierto por transferencia</span>
-                          <span className="font-bold text-foreground">{fmt(trAplicada)}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs">
-                          <span className="text-muted-foreground">Parte en efectivo del total</span>
-                          <span className="font-bold text-foreground">{fmt(enEfectivo)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Vuelto en efectivo</span>
-                          <span className={vueltoTotal > 0 ? 'font-bold text-emerald-600' : 'font-bold text-muted-foreground'}>{fmt(vueltoTotal)}</span>
-                        </div>
-                        {transfSupera && (
-                          <div className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10">
-                            La transferencia supera el total: se devuelve S/ {fmt(tr - total)} en efectivo al cliente.
-                          </div>
-                        )}
-                        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/10">✓ Cubre el total (S/ {fmt(total)})</div>
-                      </>
-                    ) : null}
-                  </div>
-                )
-              })()
-            )}
-
-            {metodo === 'efectivo' && (
-              <div>
-                <div className="flex items-center gap-2">
-                  <label className="w-24 text-xs font-semibold text-muted-foreground">Recibido</label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={recibido}
-                    onChange={(e) => setRecibido(e.target.value)}
-                    className="num"
-                  />
-                </div>
-                <div className="mt-2 flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Vuelto</span>
-                  <span className="num font-bold text-primary">{fmt(vuelto)}</span>
-                </div>
-              </div>
-            )}
-
-            {metodo === 'transferencia' && (
-              <div className="flex items-center gap-2">
-                <label className="w-24 text-xs font-semibold text-muted-foreground">Referencia</label>
-                <Input value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="Yape, Plin, N° operación" className="flex-1" />
-              </div>
             )}
 
             {/* Descuentos */}
@@ -1444,7 +1548,7 @@ export function Pdv() {
                 <Pause className="h-4 w-4" />
                 Pausar
               </Button>
-              <Button onClick={cobrar} disabled={allItems.length === 0 || cobrando}>
+              <Button onClick={cobrar} disabled={allItems.length === 0 || cobrando || (!pagoCredito && !resumen.puedeCobrar)}>
                 {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 {cobrando ? 'Procesando…' : 'Cobrar'}
               </Button>

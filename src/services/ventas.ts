@@ -2,6 +2,7 @@ import { collection, doc, increment, getDoc, getDocs, query, runTransaction, upd
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
+import { bolsilloDe, formaPagoLabel, type PagoGuardado } from '@/lib/pagos'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
@@ -42,7 +43,13 @@ export type EnvioData = {
 export type VentaData = {
   tipoDoc: 'NV' | 'BOLETA' | 'FACTURA'
   tipoPago: 'efectivo' | 'transferencia' | 'credito' | 'mixto'
-  pagos?: { tipo: 'efectivo' | 'transferencia' | 'credito'; monto: number }[]
+  /**
+   * Formas de pago. `tipo` es el **bolsillo** (efectivo o transferencia: lo que
+   * entienden el arqueo, los reportes y las anulaciones) y `medio` el detalle
+   * (Yape, Plin, tarjeta…). Los montos son los **aplicados** y suman el total.
+   * Los arma `lib/pagos.ts`.
+   */
+  pagos?: PagoGuardado[]
   total: number
   descuentoTotal?: number
   descuentoGlobalTipo?: 'porcentaje' | 'monto'
@@ -53,7 +60,6 @@ export type VentaData = {
   referencia?: string
   montoRecibido?: number
   cambio?: number
-  vueltoTransferencia?: number
   cajero: string
   usuarioId?: string
   turnoId?: string | null
@@ -228,25 +234,44 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
         const monto = venta.montoRecibido ?? venta.total
         ventaDoc = { ...ventaBase, tipoPago: 'efectivo', forma_pago: 'Efectivo', efectivo: monto, montoRecibido: monto, cambio: Math.max(0, monto - venta.total) }
       } else if (venta.tipoPago === 'credito') {
+        // El crédito es por el total de la venta y no se combina: `cobrado` arranca
+        // en 0 porque TODAVÍA no pagó nada (es lo que lee el saldo del cliente).
         ventaDoc = { ...ventaBase, tipoPago: 'credito', forma_pago: 'Crédito', cobrado: 0 }
+      } else if (venta.tipoPago === 'mixto') {
+        // El desglose manda: acá no se inventa nada, lo arma `lib/pagos.ts`.
+        ventaDoc = { ...ventaBase, tipoPago: 'mixto' }
       } else {
         ventaDoc = { ...ventaBase, tipoPago: 'transferencia', forma_pago: 'Transferencia', referencia: venta.referencia || '' }
       }
       ventaDoc = { ...ventaDoc, cajero: venta.cajero || 'sistema', serie_numero: serieNumero, sucursal: config.sucursal || '', mensaje: config.mensaje || '', son_letras: numeroALetras(venta.total), turnoId: venta.turnoId || '' }
 
-      // Pago (posiblemente mixto). Si no viene `pagos`, se colapsa a un solo método.
-      const pagos = venta.pagos && venta.pagos.length > 0
+      // Pago (puede ser múltiple). Si no viene `pagos`, se colapsa a un solo método.
+      // `p.tipo` es el bolsillo: así el turno, el arqueo y los reportes siguen
+      // sumando por efectivo/transferencia sin saber qué medio se usó.
+      const pagos: PagoGuardado[] = venta.pagos && venta.pagos.length > 0
         ? venta.pagos
-        : [{ tipo: (venta.tipoPago === 'mixto' ? 'efectivo' : venta.tipoPago) as 'efectivo' | 'transferencia' | 'credito', monto: venta.total }]
-      const montoEfectivo = pagos.filter((p) => p.tipo === 'efectivo').reduce((s, p) => s + (p.monto || 0), 0)
-      const montoTransferencia = pagos.filter((p) => p.tipo === 'transferencia').reduce((s, p) => s + (p.monto || 0), 0)
-      ventaDoc = { ...ventaDoc, pagos, tipoPago: pagos.length > 1 ? 'mixto' : pagos[0].tipo, efectivo: montoEfectivo, totalTransferenciaPago: montoTransferencia }
+        : [{ tipo: (venta.tipoPago === 'mixto' ? 'efectivo' : venta.tipoPago) as PagoGuardado['tipo'], monto: venta.total }]
+      const montoEfectivo = pagos.filter((p) => bolsilloDe(p.medio ?? p.tipo) === 'efectivo').reduce((s, p) => s + (p.monto || 0), 0)
+      const montoTransferencia = pagos.filter((p) => bolsilloDe(p.medio ?? p.tipo) === 'transferencia').reduce((s, p) => s + (p.monto || 0), 0)
+      const tipoPagoFinal = pagos.length > 1 ? 'mixto' : pagos[0].tipo
+      ventaDoc = {
+        ...ventaDoc,
+        pagos,
+        tipoPago: tipoPagoFinal,
+        // Con pago múltiple el rótulo viejo ("Transferencia") mentiría: se arma
+        // desde los medios reales (Yape, Plin, tarjeta…).
+        forma_pago: formaPagoLabel(pagos, tipoPagoFinal),
+        efectivo: montoEfectivo,
+        totalTransferenciaPago: montoTransferencia,
+      }
       // Envío a domicilio
       if (venta.envio) {
         ventaDoc = { ...ventaDoc, envio: venta.envio }
       }
-      // En pago mixto, el efectivo recibido puede superar la parte en efectivo del total
-      // (se devuelve vuelto solo por la pata en efectivo). Se conservan recibido y vuelto.
+      // `montoRecibido` es lo que el cliente entregó en efectivo y `cambio` el
+      // vuelto. Con pago múltiple lo calcula `lib/pagos.ts` (solo el efectivo
+      // puede pagar de más); `efectivo` guarda el monto **aplicado**, que es lo
+      // que tiene que entrar a la caja.
       ventaDoc = {
         ...ventaDoc,
         montoRecibido: venta.montoRecibido != null ? venta.montoRecibido : (ventaDoc.montoRecibido ?? montoEfectivo),
@@ -284,7 +309,11 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
           totalVentas: (turnoData.totalVentas || 0) + venta.total,
           totalEfectivo: (turnoData.totalEfectivo || 0) + montoEfectivo,
           totalTransferencia: (turnoData.totalTransferencia || 0) + montoTransferencia,
-          vueltoTransferencia: (turnoData.vueltoTransferencia || 0) + (venta.vueltoTransferencia || 0),
+          // Ya no se acumula `vueltoTransferencia`: existía porque la transferencia
+          // podía superar el total y el excedente se devolvía en efectivo. Con el
+          // pago múltiple eso es imposible (los electrónicos no pueden pasarse),
+          // así que el vuelto sale solo del efectivo (`montoRecibido − aplicado`).
+          // Los turnos viejos conservan su valor y el arqueo lo sigue restando.
         })
       }
 
@@ -409,16 +438,24 @@ export async function anularNotaVenta({ documentoId, motivo, usuario = 'sistema'
       if (turnoRef && turnoSnap && turnoSnap.exists()) {
         const td = turnoSnap.data()
         const monto = venta.total || 0
+        // Desglose real del cobro. Antes se usaba `venta.tipoPago === 'efectivo'`
+        // a secas: en una venta MIXTA eso daba 0 y 0, así que el efectivo y la
+        // transferencia del turno quedaban inflados (solo se corregía el total).
+        const pagosAnulados: PagoGuardado[] = Array.isArray(venta.pagos) && venta.pagos.length > 0
+          ? venta.pagos
+          : [{ tipo: venta.tipoPago === 'efectivo' ? 'efectivo' : venta.tipoPago === 'transferencia' ? 'transferencia' : 'credito', monto } as PagoGuardado]
+        const anuladoEfectivo = pagosAnulados.filter((p) => bolsilloDe(p.medio ?? p.tipo) === 'efectivo').reduce((s, p) => s + (p.monto || 0), 0)
+        const anuladoTransferencia = pagosAnulados.filter((p) => bolsilloDe(p.medio ?? p.tipo) === 'transferencia').reduce((s, p) => s + (p.monto || 0), 0)
         const nuevasVentas = (td.ventasDelTurno || []).map((v: any) => (v.id === venta.id ? { ...v, estado: 'anulada', anulacion: { fecha: new Date().toISOString(), usuario, motivo } } : v))
         const update: Record<string, any> = { ventasDelTurno: nuevasVentas }
         if (turnoAbierto) {
           update.totalVentas = Math.max(0, (td.totalVentas || 0) - monto)
-          update.totalEfectivo = Math.max(0, (td.totalEfectivo || 0) - (venta.tipoPago === 'efectivo' ? monto : 0))
-          update.totalTransferencia = Math.max(0, (td.totalTransferencia || 0) - (venta.tipoPago === 'transferencia' ? monto : 0))
+          update.totalEfectivo = Math.max(0, (td.totalEfectivo || 0) - anuladoEfectivo)
+          update.totalTransferencia = Math.max(0, (td.totalTransferencia || 0) - anuladoTransferencia)
         } else {
           update.totalAnulado = (td.totalAnulado || 0) + monto
-          update.totalAnuladoEfectivo = (td.totalAnuladoEfectivo || 0) + (venta.tipoPago === 'efectivo' ? monto : 0)
-          update.totalAnuladoTransferencia = (td.totalAnuladoTransferencia || 0) + (venta.tipoPago === 'transferencia' ? monto : 0)
+          update.totalAnuladoEfectivo = (td.totalAnuladoEfectivo || 0) + anuladoEfectivo
+          update.totalAnuladoTransferencia = (td.totalAnuladoTransferencia || 0) + anuladoTransferencia
         }
         tx.update(turnoRef, update)
       }

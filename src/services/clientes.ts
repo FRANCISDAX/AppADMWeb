@@ -1,6 +1,7 @@
 import { collection, doc, getDoc, getDocs, query, runTransaction, setDoc, updateDoc, where, writeBatch, limit, startAfter, type QueryDocumentSnapshot, type DocumentData, type QueryConstraint } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { type EstadoCredito } from '@/lib/credito'
+import { bolsilloDe } from '@/lib/pagos'
 import { db } from '@/lib/firebase'
 import { consultarDni, consultarRuc } from '@/lib/consultaSunat'
 
@@ -340,8 +341,11 @@ export async function registrarCobro(documentoId: string, monto: number, tipoPag
           fecha: new Date().toISOString(),
           serie_numero: `COBRO-${documentoId}`,
         }
-        const totalEfectivo = (t.totalEfectivo || 0) + (tipoPago === 'efectivo' ? monto : 0)
-        const totalTransferencia = (t.totalTransferencia || 0) + (tipoPago === 'transferencia' ? monto : 0)
+        // El bolsillo lo define `lib/pagos.ts`: si no, un cobro por Yape o Plin
+        // (que el PDV y la ficha guardan como `tipoPago: 'yape'` / `'plin'`) no
+        // entraba en NINGÚN total del turno y el arqueo quedaba corto.
+        const totalEfectivo = (t.totalEfectivo || 0) + (bolsilloDe(tipoPago) === 'efectivo' ? monto : 0)
+        const totalTransferencia = (t.totalTransferencia || 0) + (bolsilloDe(tipoPago) === 'transferencia' ? monto : 0)
         tx.update(turnoRef, {
           ventasDelTurno: [...(t.ventasDelTurno || []), item],
           totalEfectivo,

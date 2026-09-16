@@ -7,6 +7,8 @@
  * cambia en todos lados.
  */
 
+import { redondear2 } from './dinero.ts'
+
 /** Límite `0` significa **sin límite configurado** (no "no puede comprar"). */
 export const SIN_LIMITE = 0
 
@@ -36,11 +38,8 @@ export type EvaluacionCredito = {
   disponible: number
 }
 
-/** Redondeo a 2 decimales evitando los típicos 0.30000000000000004. */
-export function redondear2(n: number): number {
-  const valor = Number(n) || 0
-  return Math.round((valor + Number.EPSILON) * 100) / 100
-}
+// El redondeo de dinero vive en `dinero.ts` (lo comparten crédito y pagos).
+export { redondear2 } from './dinero.ts'
 
 /** Disponible del cliente: `Infinity` sin límite configurado, `0` si ya se pasó. */
 export function disponibleDe(estado: EstadoCredito): number {

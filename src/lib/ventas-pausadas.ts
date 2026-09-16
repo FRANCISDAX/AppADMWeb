@@ -7,7 +7,15 @@ export type VentaPausada = {
   manualItems: Record<string, { nombre: string; precio: number; qty: number }>
   usarPromo: Record<string, boolean>
   tipoComp: 'nv' | 'boleta' | 'factura'
-  metodo: 'efectivo' | 'transferencia' | 'credito' | 'mixto'
+  /**
+   * `pago` = se cobra con la lista de formas de pago; `credito` = la venta entera
+   * va a la cuenta del cliente. Las pausadas viejas traen `efectivo` /
+   * `transferencia` / `mixto` (cuando el PDV tenía un solo medio): se leen como
+   * `pago` y se reconstruyen desde `pagos` o, si no hay, con una fila por el total.
+   */
+  metodo: 'pago' | 'credito' | 'efectivo' | 'transferencia' | 'mixto'
+  /** Formas de pago cargadas (vacío si es a crédito). */
+  pagos?: { medio: string; monto: number; operacion?: string }[]
   clienteDni: string
   clienteNombre: string
   clienteDireccion: string

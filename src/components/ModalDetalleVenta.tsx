@@ -1,13 +1,11 @@
 import { X } from 'lucide-react'
+import { etiquetaPago } from '@/lib/pagos'
 import { cn } from '@/lib/utils'
 
 const fmt = (n: any) => 'S/ ' + (Number(n) || 0).toFixed(2)
 
 type Item = { nombre?: string; cantidad?: number; precioVenta?: number; precio?: number; unidad?: string; presentacionNombre?: string; subtotal?: number }
-type Pago = { tipo?: string; monto?: number }
-
-const labelPago = (tipo?: string) =>
-  tipo === 'efectivo' ? '💵 Efectivo' : tipo === 'transferencia' ? '📲 Transferencia' : tipo === 'credito' ? '💳 Crédito' : tipo === 'mixto' ? '🪙 Mixto' : (tipo || 'Efectivo')
+type Pago = { tipo?: string; medio?: string; monto?: number; operacion?: string }
 
 export function ModalDetalleVenta({ venta, serieNumero, fecha, tipoDoc, onClose }: {
   venta: any
@@ -89,7 +87,10 @@ export function ModalDetalleVenta({ venta, serieNumero, fecha, tipoDoc, onClose 
           <div className="mb-4 space-y-1.5 rounded-xl bg-muted/40 p-3 text-sm">
             {pagos.map((p, i) => (
               <div key={i} className="flex items-center justify-between">
-                <span>{labelPago(p.tipo)}</span>
+                <span>
+                  {etiquetaPago(p)}
+                  {p.operacion ? <span className="ml-1 text-[11px] text-muted-foreground">· Op: {p.operacion}</span> : null}
+                </span>
                 <span className="font-bold">{fmt(p.monto ?? 0)}</span>
               </div>
             ))}
