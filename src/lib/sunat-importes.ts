@@ -96,3 +96,36 @@ export function totalDeclarado(items: readonly ItemVenta[], descuentoTotal: numb
   const conDescuento = itemsConDescuento(items, descuentoTotal)
   return redondear2(conDescuento.reduce((s, it) => s + importeBrutoDe(it), 0))
 }
+
+/**
+ * Tasa del IGV. Es la que aplica SUNAT y la que usa el backend (`sunat_py`).
+ */
+export const IGV_RATE = 0.18
+
+/**
+ * ¿La afectación lleva IGV? Solo `'10'` (gravado - operación onerosa): en la
+ * práctica es la única que se usa en ventas. Las de retiro ('11'-'19') y las
+ * gratuitas tampoco suman IGV en el comprobante.
+ */
+export function esGravado(afectacion: string): boolean {
+  return String(afectacion || '').trim() === '10'
+}
+
+/**
+ * Valor de venta **sin IGV** para declarar en el comprobante.
+ *
+ * ⚠️ El precio del producto es un **precio final al público** (incluye el IGV, es
+ * el que está en la etiqueta y el que se le cobra al cliente). El XML, en cambio,
+ * lleva el **valor unitario sin IGV**: la base gravada. Por eso a las líneas
+ * gravadas se les despeja el impuesto (`precio / 1.18`) y el comprobante muestra
+ * el desglose (base + IGV = precio). En las exoneradas/inafectas el valor es el
+ * precio tal cual, porque no llevan IGV.
+ *
+ * Si se mandara el precio con IGV como si fuera la base, una venta de S/ 100 se
+ * declararía como S/ 118.
+ */
+export function valorUnitarioSunat(precioFinal: number, afectacion: string): number {
+  const precio = Number(precioFinal) || 0
+  if (!esGravado(afectacion)) return precio
+  return Number((precio / (1 + IGV_RATE)).toFixed(6))
+}

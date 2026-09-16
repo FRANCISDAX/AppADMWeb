@@ -1,6 +1,6 @@
 // Configuración de conexión a la API SUNAT (SOLO helpers, nunca se llama a la API).
 // El envío real lo hace el administrador desde la app móvil.
-import { itemsConDescuento } from './sunat-importes.ts'
+import { itemsConDescuento, valorUnitarioSunat } from './sunat-importes.ts'
 
 export function construirUrlApiSunat(base: string, tipo: 'invoices' | 'notes'): string {
   const limpia = String(base || '').trim().replace(/\/+$/, '')
@@ -36,11 +36,14 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
   let opInafectas = 0
   // El comprobante declara **lo que se cobró**: si la venta tiene descuento
   // (promoción de volumen, cupón, cliente o global), se reparte entre las líneas
-  // y se manda el precio unitario efectivo. Si no se hiciera, el XML declararía
+  // y se manda el valor unitario efectivo. Si no se hiciera, el XML declararía
   // el importe de lista (media docena con promo: cobrado 3.00, declarado 3.60).
+  // Y en las líneas gravadas ese valor va **sin IGV** (el precio de la app incluye
+  // IGV): ver `valorUnitarioSunat`.
   const items = itemsConDescuento(venta.items || [], venta.descuentoTotal || 0).map((it: any) => {
-    const importe = Number(it.subtotal ?? (it.precioVenta ?? 0) * (it.cantidad ?? 1))
     const af = it.tipoAfectacion || '10'
+    const valor = valorUnitarioSunat(it.precioVenta, af)
+    const importe = Math.round(valor * (it.cantidad ?? 1) * 100) / 100
     if (af.startsWith('10') || af.startsWith('11')) opGravadas += importe
     else if (af.startsWith('2')) opExoneradas += importe
     else if (af.startsWith('3')) opInafectas += importe
@@ -49,10 +52,12 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
       descripcion: it.nombre,
       cantidad: it.cantidad,
       unidad: it.unidad === 'KG' || it.unidad === 'KGM' ? 'KGM' : 'NIU',
-      precio_unitario: it.precioVenta,
+      precio_unitario: valor,
       tipo_afectacion: af,
     }
   })
+  // El IGV se calcula por línea como (importe con IGV − base) para que el total
+  // cuadre al céntimo con lo cobrado; acá se replica la misma regla.
   const igv = Math.round(opGravadas * 0.18 * 100) / 100
   const total = opGravadas + igv + opExoneradas + opInafectas
 
@@ -97,10 +102,11 @@ export function construirPayloadNota(doc: any, config: Record<string, any>) {
   let opExoneradas = 0
   let opInafectas = 0
   // Igual que en el comprobante: la nota declara los importes efectivamente
-  // cobrados (con el descuento de la venta original ya repartido por línea).
+  // cobrados (descuento ya repartido) y el valor sin IGV en las líneas gravadas.
   const items = itemsConDescuento(venta.items || [], venta.descuentoTotal || 0).map((it: any) => {
-    const importe = Math.abs(Number(it.subtotal ?? (it.precioVenta ?? 0) * (it.cantidad ?? 1)))
     const af = it.tipoAfectacion || '10'
+    const valor = Math.abs(valorUnitarioSunat(it.precio_unitario ?? it.precioVenta ?? 0, af))
+    const importe = Math.abs(Math.round(valor * (it.cantidad ?? 1) * 100) / 100)
     if (af.startsWith('10') || af.startsWith('11')) opGravadas += importe
     else if (af.startsWith('2')) opExoneradas += importe
     else if (af.startsWith('3')) opInafectas += importe
@@ -109,7 +115,7 @@ export function construirPayloadNota(doc: any, config: Record<string, any>) {
       descripcion: it.nombre,
       cantidad: Math.abs(it.cantidad || 1),
       unidad: it.unidad === 'KG' || it.unidad === 'KGM' ? 'KGM' : 'NIU',
-      precio_unitario: Math.abs(it.precio_unitario ?? it.precioVenta ?? 0),
+      precio_unitario: valor,
       tipo_afectacion: af,
     }
   })

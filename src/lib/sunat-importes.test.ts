@@ -1,6 +1,14 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { importeBrutoDe, itemsConDescuento, repartirDescuento, totalDeclarado } from './sunat-importes.ts'
+import {
+  IGV_RATE,
+  esGravado,
+  importeBrutoDe,
+  itemsConDescuento,
+  repartirDescuento,
+  totalDeclarado,
+  valorUnitarioSunat,
+} from './sunat-importes.ts'
 
 /** Item como se guarda en el documento (web): cantidad en unidades base. */
 const item = (cantidad: number, precioVenta: number, extra: Record<string, unknown> = {}) => ({
@@ -92,4 +100,51 @@ test('el precio unitario declarado reconstruye el importe de la línea', () => {
     const base = Math.round(Number(it.cantidad) * Number(it.precioVenta) * 100) / 100
     assert.equal(base, it.subtotal, `línea ${String(it.id)}: ${String(it.cantidad)} × ${String(it.precioVenta)} = ${String(it.subtotal)}`)
   }
+})
+
+// ─── IGV: el precio del producto es final al público (con IGV) ────────────────
+// Caso del negocio: en Lima un polo cuesta S/ 100 en la etiqueta. La boleta debe
+// salir por S/ 100 mostrando el desglose (base 84.75 + IGV 15.25).
+
+test('solo la afectación 10 (gravado) lleva IGV', () => {
+  assert.equal(esGravado('10'), true)
+  assert.equal(esGravado('20'), false, 'exonerado')
+  assert.equal(esGravado('30'), false, 'inafecto')
+  assert.equal(esGravado(''), false)
+})
+
+test('un producto exonerado se declara al precio tal cual (su caso actual)', () => {
+  // Huevos: precio final 0.60, exonerado → la base es 0.60 y no hay IGV.
+  assert.equal(valorUnitarioSunat(0.6, '20'), 0.6)
+  assert.equal(valorUnitarioSunat(3.0, '30'), 3.0)
+})
+
+test('un polo gravado de S/ 100 se declara con base 84.75 (sin IGV)', () => {
+  const valor = valorUnitarioSunat(100, '10')
+  assert.equal(Number(valor.toFixed(2)), 84.75)
+  assert.equal(Number((valor * 1).toFixed(2)), 84.75, 'base de 1 unidad')
+  // y el IGV sale de la diferencia: 100 − 84.75 = 15.25
+  assert.equal(Number((100 - Number(valor.toFixed(2))).toFixed(2)), 15.25)
+})
+
+test('el valor sin IGV multiplicado por la cantidad da la base de la línea', () => {
+  const valor = valorUnitarioSunat(100, '10')
+  for (const cantidad of [1, 2, 3, 7, 12]) {
+    const base = Math.round(valor * cantidad * 100) / 100
+    // base + IGV debe dar el importe cobrado (100 × cantidad) al céntimo
+    const total = Math.round(valor * cantidad * (1 + IGV_RATE) * 100) / 100
+    assert.equal(total, Math.round(cantidad * 100 * 100) / 100, `${cantidad} unidades`)
+    assert.ok(base < total, 'la base es menor al total (hay IGV)')
+  }
+})
+
+test('con descuento: primero se reparte el descuento y después se despeja el IGV', () => {
+  // Polo de 100 con 20 de descuento → se cobra 80 → base 67.80 + IGV 12.20
+  const conDescuento = itemsConDescuento([{ id: 'polo', cantidad: 1, precioVenta: 100, subtotal: 100, tipoAfectacion: '10' }], 20)
+  assert.equal(conDescuento[0].subtotal, 80)
+  const valor = valorUnitarioSunat(conDescuento[0].precioVenta, '10')
+  const base = Math.round(valor * 1 * 100) / 100
+  const total = Math.round(valor * 1 * (1 + IGV_RATE) * 100) / 100
+  assert.equal(base, 67.8)
+  assert.equal(total, 80, 'lo cobrado, al céntimo')
 })
