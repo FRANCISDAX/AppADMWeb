@@ -291,6 +291,20 @@ export function Pdv() {
   const total = descuentosCalc.totalFinal
 
   // ─── Formas de pago ────────────────────────────────────────────────────────
+  // Sin nada en la venta no se elige forma de pago: los botones quedan
+  // deshabilitados y no se muestra la lista. Se calcula del carrito en vivo, así
+  // que al vaciarlo (botón, o borrando el último producto) se desactivan solos.
+  const hayProductos = Object.keys(cart).length > 0 || Object.keys(manualItems).length > 0
+
+  /** Al quedarse la venta sin nada, se descarta la forma de pago elegida. */
+  function limpiarPagoSiVacio(carrito: Record<string, number>, manuales: Record<string, unknown>) {
+    if (Object.keys(carrito).length === 0 && Object.keys(manuales).length === 0) {
+      setPagos([])
+      setPagoCredito(false)
+      setGrupoTransf(false)
+    }
+  }
+
   // La regla (topes, vuelto, redondeo) vive en `lib/pagos.ts`; acá solo se
   // guarda lo que carga el cajero y se muestra el resultado. Así el panel y el
   // guardado no pueden contradecirse.
@@ -314,6 +328,9 @@ export function Pdv() {
 
   const agregarPago = React.useCallback(
     (medio: MedioPago) => {
+      // Sin nada en la venta no hay forma de pago que elegir (los botones ya
+      // están deshabilitados; esto cubre cualquier otro camino de entrada).
+      if (!hayProductos) return
       setPagoCredito(false)
       setGrupoTransf(false)
       // Se precarga con lo que falta: el caso normal (pago exacto) queda en un toque.
@@ -321,7 +338,7 @@ export function Pdv() {
       const monto = tope === null ? (resumen.falta > 0 ? String(resumen.falta) : '') : String(tope)
       setPagos((prev) => [...prev, nuevoPago(medio, monto)])
     },
-    [resumen.falta]
+    [resumen.falta, hayProductos]
   )
 
   function actualizarPago(id: string, cambios: Partial<Pick<PagoUI, 'monto' | 'operacion'>>) {
@@ -334,6 +351,7 @@ export function Pdv() {
 
   /** Cambiar a crédito: la venta entera va a la cuenta del cliente. */
   function elegirCredito() {
+    if (!hayProductos) return
     setPagoCredito(true)
     setGrupoTransf(false)
     setPagos([])
@@ -384,27 +402,33 @@ export function Pdv() {
     setUsarPromo((c) => ({ ...c, [id]: !c[id] }))
   }
   function dec(id: string) {
-    setCart((c) => {
-      const actual = c[id] ?? 0
-      if (actual <= 1) {
-        const { [id]: _, ...rest } = c
-        return rest
-      }
-      return { ...c, [id]: actual - 1 }
-    })
+    const actual = cart[id] ?? 0
+    const siguiente = { ...cart }
+    if (actual <= 1) delete siguiente[id]
+    else siguiente[id] = actual - 1
+    setCart(siguiente)
+    // Si con esto la venta quedó vacía, se descarta la forma de pago elegida.
+    limpiarPagoSiVacio(siguiente, manualItems)
   }
   function del(id: string) {
-    setCart((c) => {
-      const { [id]: _, ...rest } = c
-      return rest
-    })
+    const { [id]: _, ...siguiente } = cart
+    setCart(siguiente)
+    limpiarPagoSiVacio(siguiente, manualItems)
   }
 
   function delManual(id: string) {
-    setManualItems((c) => {
-      const { [id]: _, ...rest } = c
-      return rest
-    })
+    const { [id]: _, ...siguiente } = manualItems
+    setManualItems(siguiente)
+    limpiarPagoSiVacio(cart, siguiente)
+  }
+
+  /** Vaciar la venta completa (catálogo + items manuales) y descartar el pago. */
+  function vaciarCarrito() {
+    setCart({})
+    // Antes "Vaciar" dejaba los items manuales ("Embalaje y Otros"): la venta
+    // seguía viva y el botón Cobrar habilitado, aunque el carrito se viera vacío.
+    setManualItems({})
+    limpiarPagoSiVacio({}, {})
   }
 
   function pausarVenta() {
@@ -1363,10 +1387,10 @@ export function Pdv() {
                 <button
                   type="button"
                   onClick={() => agregarPago('efectivo')}
-                  disabled={!pagoCredito && !puedeAgregarPago}
+                  disabled={!hayProductos || (!pagoCredito && !puedeAgregarPago)}
                   className={cn(
                     'h-10 rounded-lg border text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40',
-                    !pagoCredito && pagos.length > 0 ? 'bg-primary/10 border-primary text-primary' : 'bg-background hover:bg-accent'
+                    hayProductos && !pagoCredito && pagos.length > 0 ? 'bg-primary/10 border-primary text-primary' : 'bg-background hover:bg-accent'
                   )}
                 >
                   💵 Efectivo
@@ -1374,33 +1398,38 @@ export function Pdv() {
                 <button
                   type="button"
                   onClick={() => setGrupoTransf((v) => !v)}
-                  disabled={!pagoCredito && !puedeAgregarPago}
+                  disabled={!hayProductos || (!pagoCredito && !puedeAgregarPago)}
                   className={cn(
                     'flex h-10 items-center justify-center gap-1 rounded-lg border text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40',
-                    grupoTransf ? 'border-primary bg-primary/10 text-primary' : 'bg-background hover:bg-accent'
+                    grupoTransf && hayProductos ? 'border-primary bg-primary/10 text-primary' : 'bg-background hover:bg-accent'
                   )}
                 >
-                  📲 Transferencia <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', grupoTransf && 'rotate-180')} />
+                  📲 Transferencia <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', grupoTransf && hayProductos && 'rotate-180')} />
                 </button>
                 <button
                   type="button"
                   onClick={elegirCredito}
+                  disabled={!hayProductos}
                   className={cn(
-                    'h-10 rounded-lg border text-xs font-bold transition-colors cursor-pointer',
-                    pagoCredito ? 'border-primary bg-primary text-white' : 'bg-background hover:bg-accent'
+                    'h-10 rounded-lg border text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40',
+                    pagoCredito && hayProductos ? 'border-primary bg-primary text-white' : 'bg-background hover:bg-accent'
                   )}
                 >
                   💳 Crédito
                 </button>
               </div>
 
-              {!pagoCredito && pagos.length === 0 && !grupoTransf && (
+              {!hayProductos && (
+                <p className="text-[11px] text-muted-foreground">Agregá productos al carrito para elegir la forma de pago.</p>
+              )}
+
+              {hayProductos && !pagoCredito && pagos.length === 0 && !grupoTransf && (
                 <p className="text-[11px] text-muted-foreground">
                   Elegí con qué paga el cliente. Se pueden combinar varias formas (y el sistema valida que no se pase del total).
                 </p>
               )}
 
-              {grupoTransf && (pagoCredito || puedeAgregarPago) && (
+              {hayProductos && grupoTransf && (pagoCredito || puedeAgregarPago) && (
                 <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-dashed p-2">
                   {MEDIOS_ELECTRONICOS.map((m) => (
                     <button
@@ -1415,7 +1444,7 @@ export function Pdv() {
                 </div>
               )}
 
-              {!pagoCredito && pagos.length > 0 && (
+              {hayProductos && !pagoCredito && pagos.length > 0 && (
                 <div className="space-y-2 rounded-xl border p-2">
                   {pagos.map((p) => {
                     const info = infoMedio(p.medio)
@@ -1467,7 +1496,7 @@ export function Pdv() {
                 </div>
               )}
 
-              {!pagoCredito && pagos.length > 0 && (
+              {hayProductos && !pagoCredito && pagos.length > 0 && (
                 <div className="space-y-1 rounded-lg bg-muted/60 px-3 py-2 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Pagado</span>
@@ -1491,7 +1520,7 @@ export function Pdv() {
               )}
             </div>
 
-            {pagoCredito && (
+            {pagoCredito && hayProductos && (
               <CreditoPanel dni={clienteDni.trim()} estado={estadoCredito} total={total} cargando={cargandoCredito} />
             )}
 
@@ -1541,7 +1570,7 @@ export function Pdv() {
             </div>
 
             <div className="grid grid-cols-3 gap-2 pt-1">
-              <Button variant="outline" onClick={() => setCart({})}>
+              <Button variant="outline" onClick={vaciarCarrito}>
                 Vaciar
               </Button>
               <Button variant="secondary" onClick={pausarVenta} disabled={allItems.length === 0}>
