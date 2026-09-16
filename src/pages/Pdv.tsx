@@ -251,8 +251,15 @@ export function Pdv() {
       return {
         productoId: id,
         nombre: p.nombre ?? '',
-        precioUnitario: precioFinal(p) * factor,
-        cantidad: qty,
+        // ⚠️ El motor de descuentos trabaja en **unidades base**, no en unidades
+        // de venta: el precio va por unidad base y la cantidad son las unidades
+        // base de la línea. Si se mandara `precio × factor` con `cantidad: qty`,
+        // una media docena (1 unidad de venta) nunca alcanzaría el mínimo de 2
+        // unidades de las promociones de volumen y no se aplicaría el descuento
+        // (media docena a 0.60 c/u en vez de 0.50). El subtotal es el mismo
+        // (0.60 × 6 = 3.60), pero ahora la promo sí lo ve.
+        precioUnitario: precioFinal(p),
+        cantidad: qty * factor,
         tienePromo: (usarPromo[id] ?? true) && tienePromo(p),
         precioEspecial: p.precioEspecial ?? 0,
         descuentoPorcentaje: p.descuentoPorcentaje ?? 0,
