@@ -452,13 +452,13 @@ export function Reportes() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
-      <div className="flex gap-1.5 rounded-xl bg-muted p-1">
+      <div className="flex gap-1.5 overflow-x-auto rounded-xl bg-muted p-1 scrollbar-none">
         {([
           { id: 'nv', label: 'Notas de Venta', icon: FileText },
           { id: 'consolidado', label: 'Consolidado de Boletas', icon: Receipt },
           { id: 'sunat', label: 'Registro SUNAT', icon: CloudUpload },
         ] as const).map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={cn('flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-bold transition-colors cursor-pointer', tab === t.id ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground')}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={cn('flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-bold transition-colors cursor-pointer', tab === t.id ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground')}>
             <t.icon className="h-4 w-4" /> {t.label}
           </button>
         ))}

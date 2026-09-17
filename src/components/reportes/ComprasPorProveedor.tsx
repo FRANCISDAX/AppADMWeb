@@ -21,12 +21,20 @@ type Periodo = 'mes' | 'trimestre' | 'anio' | 'todo'
 function filtrarPorPeriodo(fecha: string, periodo: Periodo): boolean {
   if (periodo === 'todo') return true
   const d = new Date(fecha)
+  if (isNaN(d.getTime())) return false
   const ahora = new Date()
-  const diffMs = ahora.getTime() - d.getTime()
-  const diffDias = diffMs / (1000 * 60 * 60 * 24)
-  if (periodo === 'mes') return diffDias <= 30
-  if (periodo === 'trimestre') return diffDias <= 90
-  if (periodo === 'anio') return diffDias <= 365
+  if (periodo === 'mes') {
+    return d.getMonth() === ahora.getMonth() && d.getFullYear() === ahora.getFullYear()
+  }
+  if (periodo === 'trimestre') {
+    const inicioTrimestre = new Date(ahora)
+    inicioTrimestre.setMonth(inicioTrimestre.getMonth() - 3, 1)
+    inicioTrimestre.setHours(0, 0, 0, 0)
+    return d >= inicioTrimestre
+  }
+  if (periodo === 'anio') {
+    return d.getFullYear() === ahora.getFullYear()
+  }
   return true
 }
 
@@ -34,7 +42,7 @@ export function ComprasPorProveedor() {
   const [proveedores, setProveedores] = React.useState<Proveedor[]>([])
   const [resumenes, setResumenes] = React.useState<CompraResumen[]>([])
   const [cargando, setCargando] = React.useState(true)
-  const [periodo, setPeriodo] = React.useState<Periodo>('todo')
+  const [periodo, setPeriodo] = React.useState<Periodo>('mes')
   const [ordenar, setOrdenar] = React.useState<'total' | 'compras' | 'productos'>('total')
 
   React.useEffect(() => {
@@ -44,31 +52,76 @@ export function ComprasPorProveedor() {
   React.useEffect(() => {
     if (proveedores.length === 0) return
     setCargando(true)
-    const q = query(collection(db, COL.MOVIMIENTOS), where('tipoMovimiento', '==', 'compra'), orderBy('fecha', 'desc'))
-    getDocs(q).then((snap) => {
-      const mapa: Record<string, CompraResumen> = {}
-      const nombreMap = new Map(proveedores.map((p) => [p.id, p.nombre]))
 
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ')
+
+    // 1) Compras desde tblMovimientos
+    const q = query(collection(db, COL.MOVIMIENTOS), where('tipoMovimiento', '==', 'compra'), orderBy('fecha', 'desc'))
+    // 2) Compras desde tblEgresos (categoría "Compras")
+    const qEg = query(collection(db, COL.EGRESOS), where('categoria', '==', 'Compras'))
+
+    Promise.all([getDocs(q), getDocs(qEg)]).then(([snap, snapEg]) => {
+      const nombreMap = new Map(proveedores.map((p) => [p.id, p.nombre]))
+      const rucMap = new Map(proveedores.filter((p) => p.documento).map((p) => [p.documento!.trim(), p.nombre]))
+
+      // 1) Agrupar tblMovimientos por compraId
+      const comprasMap: Record<string, { provId: string; provNombre: string; ruc: string; fecha: string; total: number; productoNombres: Set<string> }> = {}
       for (const d of snap.docs) {
         const data = d.data() as Record<string, unknown>
         const fecha = (data.fecha as string) || ''
-        if (!filtrarPorPeriodo(fecha, periodo)) continue
-
         const meta = (data.metadata || {}) as Record<string, unknown>
-        const provId = (meta.proveedorId as string) || ''
-        const provNombre = (meta.proveedor as string) || nombreMap.get(provId) || provId
-        if (!provId && !provNombre) continue
+        const compraId = (meta.compraId as string) || d.id
+        if (!comprasMap[compraId]) {
+          comprasMap[compraId] = {
+            provId: (meta.proveedorId as string) || '',
+            provNombre: (meta.proveedor as string) || '',
+            ruc: '',
+            fecha,
+            total: (meta.totalPagado as number) || 0,
+            productoNombres: new Set(),
+          }
+        }
+        if (data.productoNombre) comprasMap[compraId].productoNombres.add(data.productoNombre as string)
+      }
 
-        const key = provNombre.toLowerCase().trim()
+      // 2) Combinar compras de tblMovimientos + tblEgresos, filtrar por período
+      type CompraBruta = { provId: string; provNombre: string; ruc: string; fecha: string; total: number; productoNombres: Set<string> }
+      const todasLasCompras: CompraBruta[] = []
+
+      for (const c of Object.values(comprasMap)) {
+        todasLasCompras.push(c)
+      }
+      for (const d of snapEg.docs) {
+        const data = d.data() as Record<string, unknown>
+        todasLasCompras.push({
+          provId: (data.proveedorId as string) || '',
+          provNombre: (data.proveedorNombre as string) || '',
+          ruc: (data.rucProveedor as string) || '',
+          fecha: (data.fecha as string) || '',
+          total: (data.monto as number) || 0,
+          productoNombres: new Set(),
+        })
+      }
+
+      // 3) Filtrar por período ANTES de agrupar
+      const comprasFiltradas = periodo === 'todo' ? todasLasCompras : todasLasCompras.filter((c) => filtrarPorPeriodo(c.fecha, periodo))
+
+      // 4) Agrupar por proveedor
+      const mapa: Record<string, CompraResumen> = {}
+      for (const c of comprasFiltradas) {
+        const provId = c.provId || ''
+        const provNombre = c.provNombre || nombreMap.get(provId) || rucMap.get(c.ruc?.trim()) || provId || 'Sin proveedor'
+        const key = norm(provNombre)
+        if (!key) continue
         if (!mapa[key]) {
-          mapa[key] = { proveedorNombre: provNombre, total: 0, compras: 0, productos: new Set(), primeraCompra: fecha, ultimaCompra: fecha }
+          mapa[key] = { proveedorNombre: provNombre, total: 0, compras: 0, productos: new Set(), primeraCompra: c.fecha, ultimaCompra: c.fecha }
         }
         const m = mapa[key]
-        m.total += (meta.totalPagado as number) || 0
+        m.total += c.total
         m.compras++
-        if ((data.productoNombre as string)) m.productos.add(data.productoNombre as string)
-        if (fecha < m.primeraCompra) m.primeraCompra = fecha
-        if (fecha > m.ultimaCompra) m.ultimaCompra = fecha
+        for (const pn of c.productoNombres) m.productos.add(pn)
+        if (c.fecha && (!m.primeraCompra || c.fecha < m.primeraCompra)) m.primeraCompra = c.fecha
+        if (c.fecha && (!m.ultimaCompra || c.fecha > m.ultimaCompra)) m.ultimaCompra = c.fecha
       }
 
       const arr = Object.values(mapa).sort((a, b) => {

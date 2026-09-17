@@ -42,6 +42,11 @@ export const CLAVES_PERMISOS = {
   editarMontoInicial: 'editarMontoInicial',
   rectificarTurno: 'rectificarTurno',
   proveedores: 'proveedores',
+  enviarACaja: 'enviarACaja',
+  verVentasPendientes: 'verVentasPendientes',
+  cobrarVenta: 'cobrarVenta',
+  cancelarVentaPendiente: 'cancelarVentaPendiente',
+  reportesPorVendedor: 'reportesPorVendedor',
 } as const
 
 const ALL_TRUE = Object.fromEntries(Object.values(CLAVES_PERMISOS).map((k) => [k, true]))
@@ -68,6 +73,23 @@ export const PERMISOS_POR_ROL: Record<string, Record<string, boolean>> = {
     ajustarStock: true,
     informacion: true,
     egresos: true,
+    verVentasPendientes: true,
+    cobrarVenta: true,
+    cancelarVentaPendiente: true,
+    reportesPorVendedor: true,
+  },
+  VENDEDOR: {
+    ...ALL_FALSE,
+    ventas: true,
+    turnos: true,
+    dashboard: true,
+    clientes: true,
+    notasVenta: true,
+    imprimirTicket: true,
+    crearProducto: true,
+    editarProducto: true,
+    informacion: true,
+    enviarACaja: true,
   },
 }
 
@@ -75,7 +97,7 @@ export const MODULOS = [
   { key: 'dashboards', label: 'Dashboards', permisos: ['dashboard', 'dashboardOperaciones'] },
   { key: 'modulos', label: 'Módulos (Tabs)', permisos: ['inventario', 'turnos', 'reportes', 'ventas'] },
   { key: 'drawer', label: 'Opciones del Menú', permisos: ['clientes', 'estadoCuenta', 'compras', 'proveedores', 'reporteTurnos', 'reporteFechas', 'arqueoCaja', 'estadisticas', 'notasVenta', 'consolidado', 'registroVentas', 'kardex', 'comandosVoz', 'configuracion', 'informacion', 'usuarios', 'egresos', 'auditoria', 'sire', 'ventasPorEmpleado', 'rotacionInventario'] },
-  { key: 'funciones', label: 'Funciones', permisos: ['crearProducto', 'editarProducto', 'eliminarProducto', 'ajustarStock', 'verCostos', 'anularVenta', 'cobrarCredito', 'imprimirTicket', 'abrirTurno', 'cerrarTurno', 'rectificarCaja', 'corregirPago', 'editarMontoInicial', 'rectificarTurno'] },
+  { key: 'funciones', label: 'Funciones', permisos: ['crearProducto', 'editarProducto', 'eliminarProducto', 'ajustarStock', 'verCostos', 'anularVenta', 'cobrarCredito', 'imprimirTicket', 'abrirTurno', 'cerrarTurno', 'rectificarCaja', 'corregirPago', 'editarMontoInicial', 'rectificarTurno', 'enviarACaja', 'verVentasPendientes', 'cobrarVenta', 'cancelarVentaPendiente', 'reportesPorVendedor'] },
   { key: 'accesos', label: 'Acceso Especial', permisos: ['verTodo'] },
 ]
 
@@ -122,9 +144,14 @@ export const LABELS_PERMISOS: Record<string, string> = {
   editarMontoInicial: 'Editar Monto Inicial',
   rectificarTurno: 'Rectificar Turno Cerrado',
   proveedores: 'Proveedores',
+  enviarACaja: 'Enviar Venta a Caja',
+  verVentasPendientes: 'Ver Ventas Pendientes',
+  cobrarVenta: 'Cobrar Venta Pendiente',
+  cancelarVentaPendiente: 'Cancelar Venta Pendiente',
+  reportesPorVendedor: 'Reportes por Vendedor',
 }
 
-export const ROLES = ['ADMIN', 'GERENTE', 'CAJERO', 'PERSONALIZADO']
+export const ROLES = ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR', 'PERSONALIZADO']
 
 export function permisosPorRol(rol: string): Record<string, boolean> {
   return { ...(PERMISOS_POR_ROL[rol] || PERMISOS_POR_ROL.CAJERO) }

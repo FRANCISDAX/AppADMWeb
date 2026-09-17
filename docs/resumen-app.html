@@ -313,6 +313,8 @@
           <li>Envío a domicilio con zonas y costos</li>
           <li>Embalajes: cartones, cajas, bolsas sin inventario</li>
           <li>Ventas pausadas y recuperación</li>
+          <li><strong>Flujo Vendedor → Cajero:</strong> vendedor envía la venta a caja, cajero cobra</li>
+          <li>Ventas pendientes en cola para cobro rápido</li>
         </ul>
       </div>
 
@@ -335,11 +337,12 @@
         <ul>
           <li>Apertura con monto inicial</li>
           <li>Cierre con arqueo automático</li>
-          <li>Control por usuario</li>
+          <li>Control por usuario y caja</li>
           <li>Gastos del turno (caja o transferencia)</li>
           <li>Rectificación de monto inicial</li>
           <li>Historial de turnos cerrados</li>
           <li>Seguimiento de envíos pendientes</li>
+          <li>Vendedor visible en cada comprobante</li>
         </ul>
       </div>
 
@@ -349,7 +352,7 @@
           <li>Facturación (día, semana, mes)</li>
           <li>Reporte por turnos y fechas</li>
           <li>Análisis de productos</li>
-          <li>Ventas por empleado</li>
+          <li>Ventas por vendedor</li>
           <li>Consolidado de boletas</li>
           <li>Registro para SUNAT (SIRE)</li>
           <li>Rotación de inventario</li>
@@ -386,6 +389,7 @@
           <li>Dashboard de operaciones</li>
           <li>Gestión de usuarios y roles</li>
           <li>Configuración del negocio</li>
+          <li>Gestión de cajas con series propias</li>
           <li>Auditoría general y de caja</li>
         </ul>
       </div>
@@ -424,13 +428,13 @@
       </div>
 
       <div class="card">
-         <h3>📦 Embalajes</h3>
+         <h3>📦 Plantillas Manuales</h3>
         <ul>
           <li>Plantillas de productos sin inventario</li>
           <li>Cartones, cajas, bolsas, sacos</li>
           <li>1 click para agregar al carrito</li>
           <li>Configuración centralizada</li>
-          <li>Compartido entre todos los cajeros</li>
+          <li>Compartido entre todos los usuarios</li>
         </ul>
       </div>
 
@@ -452,11 +456,10 @@
         <h3>🏷️ Sistema de Descuentos</h3>
         <ul>
           <li><strong>Por producto:</strong> campo descuentoPorcentaje (0-100%)</li>
-          <li><strong>Por volumen:</strong> 3×2, 2da al 50%, "Llevá 4 pagá 3", % por volumen</li>
-          <li><strong>Cupones:</strong> código, tipo (% o S/), validez, límite de uso</li>
+          <li><strong>Por volumen:</strong> 3×2, 2da al 50%, "Llevá 4 pagá 3", % por volumen, monto fijo</li>
           <li><strong>Por cliente:</strong> descuento frecuente automático</li>
           <li><strong>Global:</strong> descuento manual S/ o % en el PDV</li>
-          <li>Orden: producto → volumen → cupón → cliente → global</li>
+          <li>Orden: producto → volumen → cliente → global</li>
           <li>Resumen visual de descuentos aplicados</li>
           <li>Integrado con pantalla del cliente</li>
         </ul>
@@ -488,8 +491,13 @@
         </tr>
         <tr>
           <td><strong>CAJERO</strong></td>
-          <td><span class="badge badge-orange">PDV + Turnos</span></td>
-          <td>Personal de caja</td>
+          <td><span class="badge badge-orange">PDV + Turnos + Cobros</span></td>
+          <td>Personal de caja que cobra ventas</td>
+        </tr>
+        <tr>
+          <td><strong>VENDEDOR</strong></td>
+          <td><span class="badge badge-blue">PDV solo lectura</span></td>
+          <td>Vendedor que envía ventas a caja</td>
         </tr>
         <tr>
           <td><strong>PERSONALIZADO</strong></td>
@@ -568,7 +576,7 @@
           <td style="text-align:center"><span class="badge badge-red">✗</span></td>
         </tr>
          <tr>
-          <td>Embalajes sin inventario</td>
+          <td>Plantillas manuales (sin inventario)</td>
           <td style="text-align:center"><span class="badge badge-green">✓</span></td>
           <td style="text-align:center"><span class="badge badge-red">✗</span></td>
         </tr>
@@ -583,7 +591,7 @@
           <td style="text-align:center"><span class="badge badge-orange">Básico</span></td>
         </tr>
         <tr>
-          <td>Cupones de descuento</td>
+          <td>Flujo Vendedor → Cajero</td>
           <td style="text-align:center"><span class="badge badge-green">✓</span></td>
           <td style="text-align:center"><span class="badge badge-red">✗</span></td>
         </tr>
@@ -631,7 +639,7 @@
   <div class="highlight">
     <h3>¿Por qué elegir JorFel?</h3>
     <p>
-      JorFel no es solo un sistema de ventas. Es una solución completa que se adapta a tu negocio. Instálalo como app en tu celular, úsalo sin internet, actualízalo automáticamente y accede desde cualquier lugar. Sin costos de hardware, sin licencias complicadas, sin límites.
+      JorFel no es solo un sistema de ventas. Es una solución completa que se adapta a tu negocio. Instálalo como app en tu celular, úsalo sin internet, actualízalo automáticamente y accede desde cualquier lugar. Sin costos de hardware, sin licencias complicadas, sin límites. El flujo vendedor → cajero separa quién vende de quién cobra, dando control total sobre la caja.
     </p>
   </div>
 

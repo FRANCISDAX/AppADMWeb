@@ -43,9 +43,14 @@ export function ArqueoCaja() {
   const [toast, setToast] = React.useState<string | null>(null)
 
   const esHoy = fechaSel.toDateString() === hoy.toDateString()
+  const inputRef = React.useRef<HTMLInputElement>(null)
 
   const cambiarDia = (delta: number) => {
     setFechaSel(new Date(fechaSel.getFullYear(), fechaSel.getMonth(), fechaSel.getDate() + delta))
+  }
+
+  const irAFecha = (fecha: Date) => {
+    setFechaSel(new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()))
   }
 
   React.useEffect(() => {
@@ -136,7 +141,10 @@ export function ArqueoCaja() {
         <Button variant="ghost" size="icon" onClick={() => cambiarDia(-1)} aria-label="Día anterior">
           <ChevronLeft className="h-5 w-5" />
         </Button>
-        <div className="flex-1 text-center">
+        <button
+          onClick={() => inputRef.current?.showPicker()}
+          className="flex-1 cursor-pointer text-center hover:opacity-80 transition-opacity"
+        >
           <div className="text-sm font-bold">{formatearFechaLarga(fechaSel)}</div>
           <div className="mt-1 flex items-center justify-center gap-2">
             <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
@@ -146,7 +154,20 @@ export function ArqueoCaja() {
               <span className="rounded-md bg-primary px-2 py-0.5 text-[11px] font-bold text-primary-foreground">HOY</span>
             )}
           </div>
-        </div>
+        </button>
+        <input
+          ref={inputRef}
+          type="date"
+          value={fechaSel.toISOString().split('T')[0]}
+          onChange={(e) => {
+            if (e.target.value) {
+              const [y, m, d] = e.target.value.split('-').map(Number)
+              irAFecha(new Date(y, m - 1, d))
+            }
+          }}
+          className="sr-only"
+          aria-label="Seleccionar fecha"
+        />
         <Button variant="ghost" size="icon" onClick={() => cambiarDia(1)} aria-label="Día siguiente">
           <ChevronRight className="h-5 w-5" />
         </Button>
@@ -409,6 +430,9 @@ export function ArqueoCaja() {
                             <div className="min-w-[7.5rem]">
                               <div className="num whitespace-nowrap text-xs font-bold text-indigo-600">{comp.serieNumero || 'S/C'}</div>
                               <div className="truncate text-[11px] text-muted-foreground">{comp.clienteNombre}</div>
+                              {comp.vendedorNombre && comp.vendedorNombre !== '-' ? (
+                                <div className="text-[10px] text-muted-foreground">👤 {comp.vendedorNombre}</div>
+                              ) : null}
                               {comp.fecha ? (
                                 <div className="text-[10px] text-muted-foreground">{new Date(comp.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}</div>
                               ) : null}

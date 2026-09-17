@@ -257,6 +257,7 @@ export async function obtenerArqueoDelDia(fecha: Date | string, usuarioFiltro?: 
           total: v.total || 0,
           fecha: v.fecha,
           clienteNombre: v.cliente_nombre || v.clienteNombre || '-',
+          vendedorNombre: v.vendedorNombre || v.cajero || '',
         })),
       })
     })

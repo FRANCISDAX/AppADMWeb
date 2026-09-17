@@ -7,6 +7,7 @@ import { usePermisos } from '@/context/permisos'
 import { useNotifications } from '@/components/notifications'
 import { CATEGORIAS_EGRESO, actualizarEgreso, eliminarEgreso, obtenerEgresosPorFecha, registrarEgreso, registrarEgresoEnTurno, type Egreso } from '@/services/egresos'
 import { buscarTurnoAbierto } from '@/services/turnos'
+import { cargarProveedores, type Proveedor } from '@/services/proveedores'
 import { exportarExcel } from '@/lib/excel'
 import { cn } from '@/lib/utils'
 
@@ -25,6 +26,10 @@ export default function Egresos() {
   const [egresos, setEgresos] = React.useState<Egreso[]>([])
   const [cargando, setCargando] = React.useState(true)
   const [turnoId, setTurnoId] = React.useState<string | null>(null)
+  const [proveedores, setProveedores] = React.useState<Proveedor[]>([])
+
+  // Cargar proveedores para resolver proveedorId al guardar
+  React.useEffect(() => { cargarProveedores().then(setProveedores) }, [])
 
   // Formulario
   const [formOpen, setFormOpen] = React.useState(false)
@@ -81,6 +86,21 @@ export default function Egresos() {
   const totalTransferencia = egresos.filter((e) => e.tipoPago === 'transferencia').reduce((s, e) => s + e.monto, 0)
   const totalGeneral = egresos.reduce((s, e) => s + e.monto, 0)
 
+  // Resolver proveedorId desde RUC o nombre del formulario
+  function resolverProveedorId(): string | undefined {
+    const ruc = formRuc.trim()
+    const nombre = formProveedor.trim().toLowerCase()
+    if (ruc) {
+      const prov = proveedores.find((p) => p.documento?.trim() === ruc)
+      if (prov?.id) return prov.id
+    }
+    if (nombre) {
+      const prov = proveedores.find((p) => p.nombre?.trim().toLowerCase() === nombre)
+      if (prov?.id) return prov.id
+    }
+    return undefined
+  }
+
   async function handleGuardar() {
     const monto = parseFloat(formMonto)
     if (!monto || monto <= 0) { toast('⚠️ Ingresá un monto válido', 'warning'); return }
@@ -95,6 +115,7 @@ export default function Egresos() {
         tipoPago: formTipo,
         rucProveedor: formRuc.trim() || undefined,
         proveedorNombre: formProveedor.trim() || undefined,
+        proveedorId: resolverProveedorId(),
         comprobante: formComprobante.trim() || undefined,
         fecha: formFecha || hoy(),
         usuarioId: user?.uid ?? '',

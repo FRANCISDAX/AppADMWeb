@@ -91,12 +91,12 @@ export function Kardex() {
         <div className="grid gap-3 md:grid-cols-2">
           <div className="md:col-span-2">
             <Label className="mb-1 block">Producto</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto…" className="pl-10" />
               </div>
-              <select value={productoId} onChange={(e) => setProductoId(e.target.value)} className="h-10 flex-1 rounded-lg border border-input bg-background px-3 text-sm">
+              <select value={productoId} onChange={(e) => setProductoId(e.target.value)} className="h-10 min-h-[40px] flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm">
                 <option value="">— Seleccionar producto —</option>
                 {opciones.filter((p) => !q || p.nombre?.toLowerCase().includes(q.toLowerCase()) || p.codigo?.toLowerCase().includes(q.toLowerCase())).map((p) => (
                   <option key={p.id} value={p.id}>{p.nombre}{p.codigo ? ` · #${p.codigo}` : ''}</option>

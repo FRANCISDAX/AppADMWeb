@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JorFel — Manual de Usuario</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; color: #1e293b; background: #fff; line-height: 1.7; font-size: 14px; }
+
+    .page { max-width: 210mm; margin: 0 auto; padding: 18mm 20mm; }
+    @media print { .page { padding: 12mm 15mm; font-size: 11pt; } .no-print { display: none; } .page-break { page-break-before: always; } }
+
+    /* Cover */
+    .cover { text-align: center; padding: 60px 20px 40px; border-bottom: 4px solid #f97316; margin-bottom: 40px; }
+    .cover h1 { font-size: 48px; font-weight: 900; color: #f97316; letter-spacing: -2px; }
+    .cover .subtitle { font-size: 20px; color: #64748b; margin-top: 8px; }
+    .cover .version { font-size: 13px; color: #94a3b8; margin-top: 16px; }
+    .cover .tagline { font-size: 15px; color: #475569; margin-top: 12px; max-width: 500px; margin-left: auto; margin-right: auto; }
+
+    /* TOC */
+    .toc { margin-bottom: 40px; }
+    .toc h2 { font-size: 22px; font-weight: 800; color: #f97316; margin-bottom: 16px; border-bottom: 2px solid #f97316; padding-bottom: 6px; }
+    .toc-grid { columns: 2; column-gap: 30px; }
+    .toc-item { break-inside: avoid; padding: 5px 0; font-size: 13px; border-bottom: 1px dotted #e2e8f0; }
+    .toc-item .num { font-weight: 700; color: #f97316; margin-right: 6px; }
+
+    /* Sections */
+    .section { margin-bottom: 36px; }
+    .section-title { font-size: 22px; font-weight: 800; color: #0f172a; margin-bottom: 6px; padding-bottom: 8px; border-bottom: 3px solid #f97316; display: flex; align-items: center; gap: 10px; }
+    .section-title .icon { font-size: 24px; }
+    .section-desc { font-size: 13px; color: #64748b; margin-bottom: 16px; }
+
+    h3 { font-size: 16px; font-weight: 700; color: #1e293b; margin: 20px 0 10px; }
+    h4 { font-size: 14px; font-weight: 600; color: #334155; margin: 14px 0 6px; }
+
+    p { margin-bottom: 10px; color: #475569; }
+
+    /* Cards */
+    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 14px; }
+    .card h3 { margin-top: 0; }
+    .card ul { list-style: none; padding: 0; }
+    .card ul li { padding: 3px 0; font-size: 13px; color: #475569; display: flex; align-items: flex-start; gap: 8px; }
+    .card ul li::before { content: "✓"; color: #22c55e; font-weight: 700; flex-shrink: 0; }
+
+    /* Grid */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    @media (max-width: 700px) { .grid-2, .grid-3, .toc-grid { grid-template-columns: 1fr; columns: 1; } }
+
+    /* Example box */
+    .ejemplo { background: #fffbeb; border: 1px solid #fbbf24; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
+    .ejemplo-label { font-size: 11px; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .ejemplo p { color: #78350f; font-size: 13px; margin-bottom: 4px; }
+    .ejemplo code { background: #fef3c7; padding: 1px 5px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+
+    /* Tip box */
+    .tip { background: #eff6ff; border: 1px solid #93c5fd; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
+    .tip-label { font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .tip p { color: #1e3a5f; font-size: 13px; }
+
+    /* Warning box */
+    .warning { background: #fef2f2; border: 1px solid #fca5a5; border-left: 4px solid #ef4444; border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
+    .warning-label { font-size: 11px; font-weight: 700; color: #b91c1c; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .warning p { color: #7f1d1d; font-size: 13px; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+    th { background: #f97316; color: white; padding: 8px 10px; text-align: left; font-weight: 600; font-size: 12px; }
+    td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }
+    tr:nth-child(even) { background: #f8fafc; }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-orange { background: #ffedd5; color: #9a3412; }
+    .badge-yellow { background: #fef9c3; color: #854d0e; }
+    .badge-purple { background: #f3e8ff; color: #6b21a8; }
+
+    /* Steps */
+    .steps { counter-reset: step; margin: 12px 0; }
+    .step { counter-increment: step; padding: 10px 14px 10px 46px; position: relative; margin-bottom: 8px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .step::before { content: counter(step); position: absolute; left: 12px; top: 10px; background: #f97316; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+    .step strong { color: #0f172a; }
+    .step p { margin: 4px 0 0; font-size: 13px; color: #64748b; }
+
+    /* Footer */
+    .footer { margin-top: 40px; padding-top: 16px; border-top: 2px solid #e2e8f0; text-align: center; font-size: 12px; color: #94a3b8; }
+
+    /* Print button */
+    .print-btn { position: fixed; bottom: 20px; right: 20px; background: #f97316; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(249,115,22,0.4); z-index: 100; }
+    .print-btn:hover { background: #ea580c; }
+    @media print { .print-btn { display: none; } }
+  </style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print()">📄 Guardar como PDF</button>
+
+<div class="page">
+
+<!-- ============ PORTADA ============ -->
+<div class="cover">
+  <h1>JorFel</h1>
+  <div class="subtitle">Manual de Usuario</div>
+  <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
+  <div class="version">Versión 2.0 — Septiembre 2026 · CIBERSOFT CyS</div>
+</div>
+
+<!-- ============ CONTENIDO ============ -->
+<div class="toc">
+  <h2>Contenido</h2>
+  <div class="toc-grid">
+    <div class="toc-item"><span class="num">1</span> Primeros Pasos</div>
+    <div class="toc-item"><span class="num">2</span> Punto de Venta (PDV)</div>
+    <div class="toc-item"><span class="num">3</span> Flujo Vendedor → Cajero</div>
+    <div class="toc-item"><span class="num">4</span> Gestión de Productos</div>
+    <div class="toc-item"><span class="num">5</span> Inventario y Stock</div>
+    <div class="toc-item"><span class="num">6</span> Turnos de Caja</div>
+    <div class="toc-item"><span class="num">7</span> Arqueo de Caja</div>
+    <div class="toc-item"><span class="num">8</span> Clientes</div>
+    <div class="toc-item"><span class="num">9</span> Proveedores</div>
+    <div class="toc-item"><span class="num">10</span> Egresos / Gastos</div>
+    <div class="toc-item"><span class="num">11</span> Reportes</div>
+    <div class="toc-item"><span class="num">12</span> Configuración</div>
+    <div class="toc-item"><span class="num">13</span> Gestión de Usuarios</div>
+    <div class="toc-item"><span class="num">14</span> Auditoría</div>
+    <div class="toc-item"><span class="num">15</span> Funciones Especiales</div>
+  </div>
+</div>
+
+<!-- ============ 1. PRIMEROS PASOS ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">🚀</span> 1. Primeros Pasos</div>
+
+  <h3>¿Qué es JorFel?</h3>
+  <p>JorFel es una plataforma web y PWA (Progressive Web App) para gestionar ventas, inventario, clientes, reportes y caja. Funciona como una app instalable en celular, tablet o computadora, sin necesidad de Play Store.</p>
+
+  <h3>Acceso</h3>
+  <div class="steps">
+    <div class="step"><strong>Abre el navegador</strong> en tu dispositivo (Chrome, Safari o Edge).<p>Accede a la dirección que te proporcionó el administrador.</p></div>
+    <div class="step"><strong>Inicia sesión</strong> con tu email y contraseña.<p>El administrador crea tu usuario y te asigna un rol.</p></div>
+    <div class="step"><strong>Instala como app</strong> (opcional).<p>En Chrome: toca los 3 puntos → "Instalar app". En Safari: botón de compartir → "Añadir a pantalla de inicio".</p></div>
+  </div>
+
+  <h3>Roles del sistema</h3>
+  <table>
+    <thead><tr><th>Rol</th><th>Qué puede hacer</th><th>Ideal para</th></tr></thead>
+    <tbody>
+      <tr><td><strong>ADMIN</strong></td><td>Todo: configuración, usuarios, reportes, caja</td><td>Dueño del negocio</td></tr>
+      <tr><td><strong>GERENTE</strong></td><td>Ventas, reportes, inventario (sin config ni usuarios)</td><td>Supervisor de sucursal</td></tr>
+      <tr><td><strong>CAJERO</strong></td><td>PDV, turnos, cobrar ventas pendientes, clientes</td><td>Personal de caja</td></tr>
+      <tr><td><strong>VENDEDOR</strong></td><td>PDV para enviar ventas a caja (no cobra directamente)</td><td>Vendedor de piso</td></tr>
+      <tr><td><strong>PERSONALIZADO</strong></td><td>Lo que el admin le configure</td><td>Acceso limitado</td></tr>
+    </tbody>
+  </table>
+
+  <div class="tip">
+    <div class="tip-label">💡 Consejo</div>
+    <p>Si no tienes acceso a un módulo, pide al administrador que te asigne el permiso correspondiente en <code>Usuarios → Editar → Permisos</code>.</p>
+  </div>
+</div>
+
+<!-- ============ 2. PUNTO DE VENTA ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">🛒</span> 2. Punto de Venta (PDV)</div>
+  <p>El PDV es la pantalla principal donde se realizan las ventas. Se divide en dos paneles: catálogo de productos a la izquierda y carrito de compras a la derecha.</p>
+
+  <h3>2.1 Buscar y agregar productos</h3>
+  <div class="steps">
+    <div class="step"><strong>Busca el producto</strong> escribiendo nombre o código de barras en la barra de búsqueda.<p>Placeholder: "Buscar producto o código..."</p></div>
+    <div class="step"><strong>Escanea el código</strong> con la cámara tocando el ícono de escáner, o con un escáner USB conectado.</div>
+    <div class="step"><strong>Toca el producto</strong> en el catálogo para agregarlo al carrito.</div>
+    <div class="step"><strong>Ajusta la cantidad</strong> usando los botones + y − en el carrito.</div>
+  </div>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p>La clienta María compra 2 paquetes de arroz y 1 botella de aceite. Buscas "arroz" en la barra, tocas el producto, repites para el aceite. En el carrito ajustas: arroz cantidad 2, aceite cantidad 1.</p>
+  </div>
+
+  <h3>2.2 Venta Rápida</h3>
+  <p>Los productos favoritos aparecen arriba del catálogo en la sección <strong>VENTA RÁPIDA</strong>. El admin los marca en <code>Inventario → Editar → "Favorito (se muestra en venta rápida)"</code>. Si no hay favoritos, se muestran los más vendidos.</p>
+
+  <h3>2.3 Categorías</h3>
+  <p>Debajo de la búsqueda hay chips de categorías: <code>Todos</code>, <code>Bebidas</code>, <code>Lácteos</code>, etc. Toca una categoría para filtrar productos.</p>
+
+  <h3>2.4 Agregar items manuales (Embalajes)</h3>
+  <p>Toca el botón <strong>"Embalajes"</strong> para agregar productos sin inventario (cartones, bolsas, hielo). Aparece un modal con las plantillas configuradas en <code>Configuración → Plantillas</code>.</p>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p>El cliente lleva 3 cajas de huevos. Necesitas 1 cartón. Tocas "Embalajes", seleccionas "Cartón S/ 2.00", se agrega al carrito como item manual. No descuenta stock.</p>
+  </div>
+
+  <h3>2.5 Tipo de comprobante</h3>
+  <p>En el panel derecho, antes de los pagos, elige entre tres opciones:</p>
+  <table>
+    <thead><tr><th>Comprobante</th><th>Cuándo usarlo</th><th>Requisitos</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-blue">Nota de Venta</span></td><td>Ventas internas, sin envío a SUNAT</td><td>Ninguno</td></tr>
+      <tr><td><span class="badge badge-green">Boleta</span></td><td>Venta al consumidor final</td><td>DNI si supera S/ 700</td></tr>
+      <tr><td><span class="badge badge-purple">Factura</span></td><td>Venta a empresas o contribuyentes</td><td>RUC (11 dígitos) obligatorio</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.6 Datos del cliente</h3>
+  <p>Si el comprobante es Boleta o Factura, expande la sección <strong>"Cliente"</strong>:</p>
+  <div class="steps">
+    <div class="step"><strong>Ingresa DNI o RUC</strong> y toca <strong>"Consultar"</strong>.<p>El sistema consulta SUNAT automáticamente y muestra el nombre.</p></div>
+    <div class="step"><strong>Si no hay conexión</strong>, toca "Manual" y escribe el nombre a mano.</div>
+    <div class="step"><strong>Selecciona lista de precio</strong> (si hay varias configuradas): aparecen botones como "General", "VIP", "Distribuidor".</div>
+  </div>
+
+  <h3>2.7 Formas de pago</h3>
+  <p>JorFel soporta pago múltiple. Puedes combinar varias formas en una sola venta:</p>
+  <table>
+    <thead><tr><th>Medio</th><th>Emoji</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr><td>Efectivo</td><td>💵</td><td>Dinero físico. Calcula vuelto automáticamente.</td></tr>
+      <tr><td>Yape</td><td>📱</td><td>Transferencia instantánea. Campo opcional "N° de operación".</td></tr>
+      <tr><td>Plin</td><td>📱</td><td>Igual que Yape pero por Plin.</td></tr>
+      <tr><td>Transferencia</td><td>📲</td><td>Depósito bancario. Campo "N° de operación".</td></tr>
+      <tr><td>Tarjeta</td><td>💳</td><td>Crédito/débito en terminal.</td></tr>
+      <tr><td>Crédito</td><td>🏦</td><td>El cliente paga después. Requiere DNI/RUC y saldo disponible.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p>El total es S/ 145.50. El cliente paga S/ 100 en efectivo y S/ 45.50 por Yape. Tocas "+ Forma de pago", seleccionas Efectivo → S/ 100, luego Yape → S/ 45.50. El sistema muestra "Cubre el total" en verde.</p>
+  </div>
+
+  <h3>2.8 Descuentos</h3>
+  <p>Debajo de los pagos hay una sección <strong>"Descuentos"</strong>. Puedes aplicar un descuento global:</p>
+  <ul style="list-style:none; padding:0; margin: 8px 0;">
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Selecciona <code>%</code> o <code>S/</code> y escribe el valor.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Los descuentos de volumen (3×2, etc.) y de cliente se aplican automáticamente.</li>
+  </ul>
+
+  <h3>2.9 Envío a domicilio</h3>
+  <p>Si está habilitado en <code>Configuración → Envío</code>, aparece la sección <strong>"ENVÍO"</strong> en el carrito:</p>
+  <div class="steps">
+    <div class="step"><strong>Selecciona "Envío a domicilio"</strong> en vez de "Recoge en tienda".</div>
+    <div class="step"><strong>Completa la dirección</strong>, referencia, zona (con costo) y notas.</div>
+    <div class="step"><strong>El costo de envío</strong> se suma al total de la venta.</div>
+  </div>
+
+  <h3>2.10 Pausar y recuperar ventas</h3>
+  <p>Si necesitas atender a otro cliente sin perder la venta actual:</p>
+  <div class="steps">
+    <div class="step"><strong>Toca "Pausar"</strong>. La venta se guarda con todos sus items y pagos.</div>
+    <div class="step"><strong>Para recuperar</strong>: toca "Pausadas" → selecciona la venta → "Recuperar".</div>
+  </div>
+  <div class="tip"><div class="tip-label">💡 Consejo</div><p>Debes vaciar el carrito antes de recuperar una venta pausada.</p></div>
+
+  <h3>2.11 Pantalla del cliente</h3>
+  <p>Toca <strong>"Pantalla"</strong> para generar un código QR. El cliente escanea con su celular y ve en tiempo real los productos, totales y descuentos de su compra.</p>
+
+  <h3>2.12 Flujo completo de una venta</h3>
+  <div class="steps">
+    <div class="step"><strong>Agrega productos</strong> al carrito (búsqueda, escáner o venta rápida).</div>
+    <div class="step"><strong>Selecciona comprobante</strong>: Nota de Venta, Boleta o Factura.</div>
+    <div class="step"><strong>Ingresa datos del cliente</strong> (si es Boleta/Factura).</div>
+    <div class="step"><strong>Elige forma(s) de pago</strong>.</div>
+    <div class="step"><strong>Aplica descuentos</strong> (si corresponde).</div>
+    <div class="step"><strong>Toca "Cobrar"</strong>. Confirma en el diálogo de verificación.</div>
+    <div class="step"><strong>Imprime el ticket</strong> (si hay impresora conectada).</div>
+  </div>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo completo</div>
+    <p><strong>Cliente:</strong> Juan Pérez compra 3 latas de cerveza (S/ 5.00 c/u = S/ 15.00) y 1 botella de pisco (S/ 35.00). Subtotal: S/ 50.00. Descuento por volumen 3×2 en cervezas: S/ 5.00. Total: S/ 45.00. Paga con S/ 50 en efectivo. Comprobante: Boleta. DNI: 12345678.<br><strong>Resultado:</strong> Vuelto S/ 5.00. Ticket impreso: "B001-000123".</p>
+  </div>
+</div>
+
+<!-- ============ 3. VENDEDOR → CAJERO ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">🤝</span> 3. Flujo Vendedor → Cajero</div>
+  <p>JorFel separa quién vende de quién cobra. Un vendedor de piso puede armar la venta y enviarla a caja, donde un cajero la cobra.</p>
+
+  <h3>3.1 ¿Cómo funciona?</h3>
+  <div class="steps">
+    <div class="step"><strong>El vendedor</strong> tiene el rol <code>VENDEDOR</code> y el permiso <code>enviarACaja</code>. En el PDV, en vez del botón "Cobrar", ve <strong>"Enviar a caja"</strong>.</div>
+    <div class="step"><strong>El cajero</strong> tiene el rol <code>CAJERO</code> y ve las ventas pendientes en un panel dentro del PDV. Puede cobrarlas o cancelarlas.</div>
+    <div class="step"><strong>Al cobrar</strong>, el cajero selecciona la forma de pago y el sistema descuenta stock, registra la venta en el turno y emite el comprobante.</div>
+  </div>
+
+  <h3>3.2 Panel de ventas pendientes (cajero)</h3>
+  <p>Cuando un cajero abre el PDV, si tiene permiso <code>verVentasPendientes</code>, ve un panel con las ventas enviadas por los vendedores:</p>
+  <ul style="list-style:none; padding:0; margin: 8px 0;">
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Cada venta muestra: <strong>serie/número</strong>, <strong>vendedor</strong>, <strong>cantidad de items</strong>, <strong>total</strong> y <strong>tiempo transcurrido</strong>.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Botón <strong>"Cobrar"</strong>: abre el flujo de cobro con turno y forma de pago.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Botón <strong>🗑</strong>: cancela la venta con motivo obligatorio.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Se actualiza cada 30 segundos automáticamente.</li>
+  </ul>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p><strong>10:30 AM</strong> — Carlos (vendedor) atiende a la señora Rosa. Arma la venta: 2 pañales (S/ 25 c/u) + 1 toallitas (S/ 8). Total S/ 58. Toca "Enviar a caja".<br><strong>10:35 AM</strong> — Luis (cajero) ve "NV-B001-000045 · Carlos · 3 items · S/ 58.00 · hace 5m" en su panel. Toca "Cobrar". Rosa paga con S/ 60 en efectivo. Luis cobra, imprime ticket y da S/ 2 de vuelto.</p>
+  </div>
+
+  <h3>3.3 Cajas</h3>
+  <p>Cada caja define sus propias series de comprobante. En <code>Configuración → Cajas</code> el admin puede crear cajas con series distintas:</p>
+  <table>
+    <thead><tr><th>Caja</th><th>Serie Boleta</th><th>Serie Factura</th><th>Serie NV</th></tr></thead>
+    <tbody>
+      <tr><td>Caja Principal</td><td>B001</td><td>F001</td><td>NV</td></tr>
+      <tr><td>Caja 2</td><td>B002</td><td>F002</td><td>NV2</td></tr>
+    </tbody>
+  </table>
+  <p>Al asignar una caja a un usuario en <code>Usuarios → Editar</code>, ese usuario usa las series de esa caja automáticamente.</p>
+</div>
+
+<!-- ============ 4. GESTIÓN DE PRODUCTOS ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">📦</span> 4. Gestión de Productos</div>
+  <p>Desde <strong>Inventario</strong> puedes crear, editar y eliminar productos.</p>
+
+  <h3>4.1 Crear un producto</h3>
+  <div class="steps">
+    <div class="step"><strong>Toca "Nuevo Producto"</strong> en la barra de herramientas.</div>
+    <div class="step"><strong>Completa los campos obligatorios</strong>: Nombre, Precio de Venta y Categoría.</div>
+    <div class="step"><strong>Agrega código de barras</strong> (opcional, se auto-genera si se deja vacío).</div>
+    <div class="step"><strong>Configura stock</strong>: cantidad actual, stock mínimo para alertas.</div>
+    <div class="step"><strong>Marca como "Favorito"</strong> si quieres que aparezca en Venta Rápida.</div>
+    <div class="step"><strong>Guarda</strong>.</div>
+  </div>
+
+  <h3>4.2 Campos importantes</h3>
+  <table>
+    <thead><tr><th>Campo</th><th>Para qué sirve</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Precio Especial (promo)</strong></td><td>Precio temporal que se usa en el PDV sin cambiar el precio real. Útil para promociones de temporada.</td></tr>
+      <tr><td><strong>Precio mínimo (piso)</strong></td><td>Seguridad: si el precio final baja de este monto, se bloquea la venta. excepto productos con ≤7 días a vencer.</td></tr>
+      <tr><td><strong>Afectación IGV</strong></td><td>10 = Gravado, 20 = Exonerado, 30 = Inafecto. Debe coincidir con tu catálogo SUNAT.</td></tr>
+      <tr><td><strong>Proveedor Preferido</strong></td><td>Vincula el producto a un proveedor para reportes de compras.</td></tr>
+      <tr><td><strong>Presentaciones</strong></td><td>Unidades de venta/compra (ej: Caja 24u, Paquete 6u). Factor de conversión incluido.</td></tr>
+      <tr><td><strong>Es Kit / Combo</strong></td><td>Producto compuesto por otros. El stock se calcula automáticamente.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p><strong>Crear "Leche Gloria 400g":</strong> Nombre: "Leche Gloria 400g". Código: 7891234567890. Precio compra: S/ 3.20. Precio venta: S/ 4.50. Stock: 48. Stock mínimo: 10. Categoría: Lácteos. Afectación: 20 (Exonerado). Proveedor: Distribuidora Lima. Presentación: Caja 12u (factor 12, compra + venta).</p>
+  </div>
+
+  <h3>4.3 Editar precio histórico</h3>
+  <p>Al editar un producto, toca <strong>"Ver historial de precios"</strong> (ícono 📊) para ver todos los cambios de precio anteriores con fecha y usuario.</p>
+
+  <h3>4.4 Eliminar un producto</h3>
+  <p>Toca el ícono 🗑 en la tabla. El sistema verifica que no tenga movimientos registrados (ventas/compras). Si tiene, no permite eliminarlo.</p>
+</div>
+
+<!-- ============ 5. INVENTARIO ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">📊</span> 5. Inventario y Stock</div>
+
+  <h3>5.1 Filtros de la tabla</h3>
+  <table>
+    <thead><tr><th>Filtro</th><th>Qué muestra</th></tr></thead>
+    <tbody>
+      <tr><td><code>Todos</code></td><td>Todos los productos activos</td></tr>
+      <tr><td><code>Solo stock bajo</code></td><td>Productos con stock ≤ stock mínimo</td></tr>
+      <tr><td><code>Solo desactivados</code></td><td>Productos que no se venden actualmente</td></tr>
+      <tr><td>Chips de categoría</td><td>Filtra por categoría específica</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.2 Ajustar stock</h3>
+  <p>Para corregir inventario sin registrar una compra:</p>
+  <div class="steps">
+    <div class="step"><strong>Toca "Ajustar Stock"</strong> en la barra de herramientas.</div>
+    <div class="step"><strong>Selecciona el producto</strong>.</div>
+    <div class="step"><strong>Tipo de ajuste</strong>: Salida (merma, daño, robo) o Entrada (corrección).</div>
+    <div class="step"><strong>Cantidad y motivo</strong>: Merma, Daño, Robo, Corrección, Vencimiento, Otro.</div>
+    <div class="step"><strong>Aplica</strong>. El sistema registra el movimiento en el Kardex.</div>
+  </div>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p>Se rompieron 3 botellas de gaseosa. Tocas "Ajustar Stock", seleccionas "Gaseosa 2L", tipo "Salida", cantidad 3, motivo "Daño". Stock pasa de 24 a 21. En Kardex aparece: "Ajuste salida - Daño - 3 unidades".</p>
+  </div>
+
+  <h3>5.3 Toma de inventario</h3>
+  <p>Para comparar lo que el sistema dice contra lo físico:</p>
+  <div class="steps">
+    <div class="step"><strong>Toca "Toma de Inventario"</strong>.</div>
+    <div class="step"><strong>Cuenta físicamente</strong> cada producto y escribe la cantidad en "Conteo Físico".</div>
+    <div class="step"><strong>El sistema muestra</strong> la diferencia en tiempo real (verde = OK, azul = sobrante, rojo = faltante).</div>
+    <div class="step"><strong>Imprime la plantilla</strong> (botón 📄) si prefieres contar con papel.</div>
+    <div class="step"><strong>Aplica los ajustes</strong>. Solo se ajustan productos con diferencia.</div>
+  </div>
+
+  <h3>5.4 Kardex</h3>
+  <p>Desde <strong>Kardex</strong> (menú lateral) puedes ver el historial completo de movimientos de cada producto: ventas, compras, ajustes, anulaciones. Incluye fecha, tipo, cantidad, stock anterior y nuevo.</p>
+
+  <h3>5.5 Exportar a Excel</h3>
+  <p>Toca <strong>"Excel"</strong> para descargar la tabla de productos actual como archivo .xlsx con todos los campos.</p>
+</div>
+
+<!-- ============ 6. TURNOS DE CAJA ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">💰</span> 6. Turnos de Caja</div>
+  <p>Un turno controla todo el dinero que entra y sale de la caja durante un período (mañana o tarde).</p>
+
+  <h3>6.1 Abrir turno</h3>
+  <div class="steps">
+    <div class="step"><strong>Ve a "Turnos"</strong> en el menú lateral.</div>
+    <div class="step"><strong>Selecciona tipo</strong>: <code>🌅 Mañana</code> o <code>🌙 Tarde</code>.</div>
+    <div class="step"><strong>Ingresa el monto inicial</strong> (cuánto dinero hay en el cajón al empezar).</div>
+    <div class="step"><strong>Toca "Abrir Turno"</strong>.</div>
+  </div>
+
+  <div class="warning">
+    <div class="warning-label">⚠️ Importante</div>
+    <p>No puedes vender sin un turno abierto. Si intentas cobrar, el sistema mostrará: "No hay un turno abierto. Abrí un turno antes de vender."</p>
+  </div>
+
+  <h3>6.2 Turno activo</h3>
+  <p>Al abrir, ves una tarjeta con:</p>
+  <ul style="list-style:none; padding:0; margin: 8px 0;">
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Turno:</strong> Mañana / Tarde</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Apertura:</strong> fecha y hora</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Monto inicial:</strong> S/ X.XX (con botón "Editar" si hay permiso)</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Total ventas / Efectivo / Transferencia</strong>: se actualizan con cada venta</li>
+  </ul>
+
+  <h3>6.3 Comprobantes del turno</h3>
+  <p>Debajo del resumen ves todos los comprobantes emitidos: serie/número, cliente, total, tipo de pago. Los comprobantes anulados aparecen tachados.</p>
+
+  <h3>6.4 Envíos pendientes</h3>
+  <p>Si hay envíos a domicilio, aparecen en esta sección con estados: <span class="badge badge-yellow">Pendiente</span> → <span class="badge badge-blue">En camino</span> → <span class="badge badge-green">Entregado</span>. Puedes cambiar el estado desde aquí.</p>
+
+  <h3>6.5 Cerrar turno</h3>
+  <div class="steps">
+    <div class="step"><strong>Toca "Cerrar Turno"</strong>.</div>
+    <div class="step"><strong>Si conteo ciego está activado</strong>: escribes el conteo sin ver el esperado. El sistema calcula la diferencia después.</div>
+    <div class="step"><strong>Si conteo ciego está desactivado</strong>: ves "Debería haber S/ X.XX" y escribes cuánto contaste.</div>
+    <div class="step"><strong>Conciliación (opcional)</strong>: escribe cuánto recibiste por Yape, Plin, tarjeta, etc.</div>
+    <div class="step"><strong>Escribe observaciones</strong> si hay diferencia.</div>
+    <div class="step"><strong>Toca "Cerrar Turno"</strong>.</div>
+  </div>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p><strong>Apertura:</strong> S/ 200.00 (fondo inicial).<br><strong>Ventas del día:</strong> S/ 1,250.00 (850 efectivo + 400 transferencia).<br><strong>Gastos:</strong> S/ 35.00 (transporte).<br><strong>Debería haber:</strong> 200 + 850 − 35 = S/ 1,015.00 en efectivo.<br><strong>Conteo real:</strong> S/ 1,012.00.<br><strong>Diferencia:</strong> −S/ 3.00 (faltante). El arqueo detecta la diferencia y sugiere causas.</p>
+  </div>
+</div>
+
+<!-- ============ 7. ARQUEO ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">🧮</span> 7. Arqueo de Caja</div>
+  <p>Vista consolidada de todos los turnos de un día. Accesible desde el menú lateral.</p>
+
+  <h3>7.1 Navegación por fecha</h3>
+  <p>Usa las flechas ← → para cambiar de día. Toca la fecha para abrir un selector de calendario. Si es hoy, aparece el badge <span class="badge badge-green">HOY</span>.</p>
+
+  <h3>7.2 Resumen del día</h3>
+  <ul style="list-style:none; padding:0; margin: 8px 0;">
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Hero card:</strong> Total de ventas del día, cantidad de ventas y turnos.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>4 KPIs:</strong> Efectivo, Transferencia, Gastos, Neto.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Caja del día:</strong> Fondo inicial, efectivo esperado, contado y diferencia (solo turnos cerrados).</li>
+  </ul>
+
+  <h3>7.3 Detalle por turno</h3>
+  <p>Toca un turno para expandirlo y ver:</p>
+  <ul style="list-style:none; padding:0; margin: 8px 0;">
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Monto inicial (con opción de rectificar si tienes permiso).</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Efectivo (cajón) con desglose de origen: ventas del día, cobranza de crédito, notas.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Transferencia y conciliación por billetera (sistema vs. declarado).</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Gastos en efectivo con detalle.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Comprobantes emitidos con vendedor visible.</li>
+  </ul>
+
+  <h3>7.4 Arqueo inteligente</h3>
+  <p>Si hay diferencia entre esperado y contado, aparece un panel de diagnóstico con 9 reglas automáticas que detectan: ventas faltantes, duplicados, confusión efectivo/transferencia, gastos sin registro, etc.</p>
+
+  <h3>7.5 Exportar PDF</h3>
+  <p>Toca <strong>"Exportar PDF"</strong> para generar un comprobante impreso con todos los datos del día, incluyendo empresa, RUC, turno, fechas y firmas.</p>
+</div>
+
+<!-- ============ 8. CLIENTES ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">👥</span> 8. Clientes</div>
+
+  <h3>8.1 Buscar clientes</h3>
+  <p>Escribe DNI, RUC o nombre en la barra de búsqueda. Los resultados aparecen en tiempo real.</p>
+
+  <h3>8.2 Ver todos los clientes</h3>
+  <p>Toca <strong>"Todos"</strong> para cargar el listado completo con scroll infinito (25 por página). Aparece un banner con el total: "Mostrando X cliente(s)".</p>
+
+  <h3>8.3 Crear cliente</h3>
+  <div class="steps">
+    <div class="step"><strong>Toca "Nuevo"</strong>.</div>
+    <div class="step"><strong>Consulta DNI/RUC</strong> (opcional) para auto-completar datos de SUNAT.</div>
+    <div class="step"><strong>Completa datos</strong>: razón social, dirección, teléfono, email.</div>
+    <div class="step"><strong>Configura crédito</strong>: límite, días de plazo.</div>
+    <div class="step"><strong>Asigna lista de precio</strong> (si aplica).</div>
+    <div class="step"><strong>Guarda</strong>.</div>
+  </div>
+
+  <h3>8.4 Clasificación de clientes</h3>
+  <p>El sistema clasifica automáticamente según frecuencia y monto de compra:</p>
+  <table>
+    <thead><tr><th>Clasificación</th><th>Criterio</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-green">VIP</span></td><td>Compras frecuentes y alto monto</td></tr>
+      <tr><td><span class="badge badge-blue">Frecuente</span></td><td>Compras regulares</td></tr>
+      <tr><td><span class="badge badge-orange">Ocasional</span></td><td>Pocas compras</td></tr>
+      <tr><td><span class="badge badge-red">Nuevo</span></td><td>Primera compra reciente</td></tr>
+    </tbody>
+  </table>
+
+  <h3>8.5 ClienteDetalle — Crédito y pagos</h3>
+  <p>Al tocar un cliente, ves su detalle con:</p>
+  <ul style="list-style:none; padding:0; margin: 8px 0;">
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Historial de compras</strong> con documentos y montos.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Estado de cuenta</strong>: saldo pendiente, pagos realizados.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Recalcular saldo</strong>: botón para corregir si el cobrado supera el total.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Cobrar crédito</strong>: registrar pagos parciales.</li>
+  </ul>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p>La tienda "Bodega Juan" tiene crédito por S/ 500. Juan compra S/ 120 y paga S/ 70 en efectivo. En ClienteDetalle ves: "Crédito: S/ 500 · Usado: S/ 50 · Disponible: S/ 450". Al cobrar, registras S/ 70 efectivo y el saldo se actualiza.</p>
+  </div>
+</div>
+
+<!-- ============ 9. PROVEEDORES ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">🚚</span> 9. Proveedores</div>
+  <p>Gestión completa de proveedores con 5 pestañas:</p>
+
+  <h3>9.1 Lista</h3>
+  <p>Listado con búsqueda. Cada proveedor muestra: nombre, documento (RUC), contacto principal, saldo pendiente y estado (activo/inactivo).</p>
+
+  <h3>9.2 Dashboard</h3>
+  <p>KPIs: total compras, pagos realizados, saldo pendiente, cantidad de proveedores. Filtros por período (Mes, 3 meses, Año, Todo).</p>
+
+  <h3>9.3 Compras</h3>
+  <p>Historial de compras por proveedor. Filtrable por mes. Muestra: fecha, documento, monto, estado de pago.</p>
+
+  <h3>9.4 Precios</h3>
+  <p>Evolución de precios de compra por producto. Gráfico de líneas con comparación entre proveedores.</p>
+
+  <h3>9.5 Ranking</h3>
+  <p>Confiabilidad de proveedores: puntaje basado en puntualidad de entrega, calidad y precio.</p>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p>Creas "Distribuidora Lima" con RUC 20600000001. Le compraste S/ 2,500 este mes, pagaste S/ 1,800. En Dashboard ves: "Compras: S/ 2,500 · Pagado: S/ 1,800 · Pendiente: S/ 700". En Ranking tiene puntaje 8.5/10.</p>
+  </div>
+</div>
+
+<!-- ============ 10. EGRESOS ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">💸</span> 10. Egresos / Gastos</div>
+
+  <h3>10.1 Registrar un gasto</h3>
+  <div class="steps">
+    <div class="step"><strong>Ve a "Egresos"</strong> en el menú.</div>
+    <div class="step"><strong>Toca "Nuevo Gasto"</strong>.</div>
+    <div class="step"><strong>Descripción</strong>: qué se pagó (ej: "Transporte mercadería").</div>
+    <div class="step"><strong>Monto</strong>: cuánto se pagó.</div>
+    <div class="step"><strong>Categoría</strong>: Transporte, Alquiler, Servicios, Otros.</div>
+    <div class="step"><strong>Medio de pago</strong>: Efectivo o Transferencia.</div>
+    <div class="step"><strong>Proveedor</strong> (opcional): vincula al proveedor correspondiente.</div>
+    <div class="step"><strong>Guarda</strong>.</div>
+  </div>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p>Pagas S/ 35 por elIVERY de mercadería. Registras: "IVERY mercadería", S/ 35, categoría "Transporte", efectivo, proveedor "Distribuidora Lima". Este gasto resta del efectivo en el arqueo.</p>
+  </div>
+
+  <h3>10.2 Historial</h3>
+  <p>Lista de todos los gastos con filtros por período. Puedes exportar a Excel.</p>
+</div>
+
+<!-- ============ 11. REPORTES ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">📈</span> 11. Reportes</div>
+  <p>JorFel ofrece múltiples reportes para分析 tu negocio:</p>
+
+  <h3>11.1 Reporte General (Dashboard)</h3>
+  <p>Resumen en tiempo real: ventas del día, semana y mes. Gráficas de tendencia, ticket promedio, productos más vendidos.</p>
+
+  <h3>11.2 Reporte por Turnos</h3>
+  <p>Desglose por turno: apertura, cierre, ventas, gastos, diferencia. IncluyePDF exportable.</p>
+
+  <h3>11.3 Reporte por Fechas</h3>
+  <p>Selecciona un rango de fechas y ves: total ventas, documentos emitidos, formas de pago, productos más vendidos.</p>
+
+  <h3>11.4 Ventas por Vendedor</h3>
+  <p>Agrupado por vendedor: cantidad de documentos, total ventas, ticket promedio, desglose por tipo de pago (efectivo, transferencia, crédito). Incluye gráfica comparativa.</p>
+
+  <h3>11.5 Registro SIRE</h3>
+  <p>Reporte para la Declaración Jurada de la SUNAT. Muestra: boletas, facturas, notas, anulados. Formato compatible con SIRE.</p>
+
+  <h3>11.6 Rotación de Inventario</h3>
+  <p>Qué productos se venden rápido y cuáles se estancan. Útil para decisiones de compra.</p>
+
+  <h3>11.7 Consolidado de Boletas</h3>
+  <p>Agrupación de boletas para declaración mensual. Incluye IGV y totales.</p>
+
+  <div class="tip">
+    <div class="tip-label">💡 Consejo</div>
+    <p>Todos los reportes se pueden filtrar por tipo de comprobante (NV, Boleta, Factura, NC, ND) y por mes. Usa los filtros para obtener datos precisos.</p>
+  </div>
+</div>
+
+<!-- ============ 12. CONFIGURACIÓN ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">⚙️</span> 12. Configuración</div>
+  <p>Solo accesible para ADMIN. Tiene 8 pestañas:</p>
+
+  <h3>12.1 Empresa</h3>
+  <p>Datos que aparecen en los comprobantes: Razón Social, RUC, Dirección, Logo, Mensaje legal. También: Régimen tributario, Región exonerada de IGV (Amazonía), Conteo ciego.</p>
+
+  <h3>12.2 SUNAT</h3>
+  <p>Configuración de facturación electrónica: URL de APIs, modo prueba/producción, series de comprobantes, punto de emisión, tope de DNI para boletas (S/ 700).</p>
+
+  <h3>12.3 Impresora</h3>
+  <p>URL del servidor de impresión térmica. Botón "Probar servidor" para verificar conexión.</p>
+
+  <h3>12.4 Envío</h3>
+  <p>Habilitar/deshabilitar envíos a domicilio. Configurar zonas de envío con costos.</p>
+
+  <h3>12.5 Plantillas</h3>
+  <p>Productos manuales (cartones, bolsas) que aparecen en el PDV sin gestionar inventario.</p>
+
+  <h3>12.6 Listas de Precio</h3>
+  <p>Crear listas: General, VIP, Distribuidor. Cada producto puede tener precio distinto por lista. Cada cliente se asocia a una lista.</p>
+
+  <h3>12.7 Promociones</h3>
+  <p>Promociones de volumen: 3×2, 2da al 50%, Llevá X pagá Y, % por volumen, Monto fijo. Se aplican automáticamente en el PDV.</p>
+
+  <h3>12.8 Cajas</h3>
+  <p>Crear cajas con series de comprobante propias. Cada caja puede tener: Serie Boleta, Serie Factura, Serie NV, Series NC/ND.</p>
+
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo: Crear promoción "3×2 Cerveza"</div>
+    <p>En <code>Configuración → Promociones → + Nueva</code>:<br>Nombre: "3×2 Cerveza Pilsen Callao". Tipo: 3×2. Lleva: 3. Paga: 2. Vigencia: 01/09 al 30/09. Producto: "Cerveza Pilsen Callao 330ml". Activa: ✓.<br><strong>En el PDV:</strong> Si el cliente lleva 3, el sistema aplica descuento de 1 unidad automáticamente.</p>
+  </div>
+</div>
+
+<!-- ============ 13. USUARIOS ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">👤</span> 13. Gestión de Usuarios</div>
+  <p>Solo ADMIN puede gestionar usuarios.</p>
+
+  <h3>13.1 Crear usuario</h3>
+  <div class="steps">
+    <div class="step"><strong>Toca "Nuevo Usuario"</strong>.</div>
+    <div class="step"><strong>Nombre y email</strong> (el email es único en Firebase Auth).</div>
+    <div class="step"><strong>Contraseña</strong> (mínimo 6 caracteres).</div>
+    <div class="step"><strong>Rol</strong>: ADMIN, GERENTE, CAJERO, VENDEDOR, PERSONALIZADO.</div>
+    <div class="step"><strong>Caja asignada</strong> (si es CAJERO o VENDEDOR): selecciona la caja de la lista.</div>
+    <div class="step"><strong>Permisos</strong>: si es PERSONALIZADO, configura permiso por permiso.</div>
+    <div class="step"><strong>Series de comprobante</strong> (opcional): si la caja tiene series propias, se completan automáticamente.</div>
+    <div class="step"><strong>Crear</strong>.</div>
+  </div>
+
+  <h3>13.2 Roles predefinidos</h3>
+  <table>
+    <thead><tr><th>Rol</th><th>Permisos incluidos</th></tr></thead>
+    <tbody>
+      <tr><td>ADMIN</td><td>Todos</td></tr>
+      <tr><td>GERENTE</td><td>Todos excepto: usuarios, configuración, eliminar producto, rectificar turno, proveedores</td></tr>
+      <tr><td>CAJERO</td><td>PDV, turnos, dashboard, clientes, reportes, imprimir, abrir/cerrar turno, cobrar crédito, egresos, ver/cobrar/cancelar ventas pendientes</td></tr>
+      <tr><td>VENDEDOR</td><td>PDV (solo enviar a caja), turnos, clientes, imprimir</td></tr>
+    </tbody>
+  </table>
+
+  <h3>13.3 Desactivar / activar</h3>
+  <p>En la lista de usuarios, toca el checkbox al lado del nombre para activar/desactivar. Un usuario desactivado no puede iniciar sesión.</p>
+
+  <h3>13.4 Restablecer contraseña</h3>
+  <p>Al editar un usuario, toca <strong>"Restablecer Clave"</strong>. Se envía un email de recuperación al usuario.</p>
+</div>
+
+<!-- ============ 14. AUDITORÍA ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">🔍</span> 14. Auditoría</div>
+
+  <h3>14.1 Auditoría General</h3>
+  <p>Registro cronológico de todas las acciones: ventas, anulaciones, ajustes, cambios de configuración, login/logout. Incluye: usuario, acción, entidad, fecha, dispositivo.</p>
+  <p>Filtros: por usuario, por tipo de acción, por fecha. Exportación a Excel.</p>
+
+  <h3>14.2 Auditoría de Caja</h3>
+  <p>Vista específica de movimientos de caja: aperturas, cierres, diferencias, rectificaciones. Incluye diagnóstico automático de problemas.</p>
+
+  <h3>14.3 Panel de Errores</h3>
+  <p>Errores capturados de la app: mensaje, stack trace, contexto, ruta, dispositivo, usuario. Útil para debugging.</p>
+</div>
+
+<!-- ============ 15. FUNCIONES ESPECIALES ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">⭐</span> 15. Funciones Especiales</div>
+
+  <h3>15.1 Modo offline</h3>
+  <p>JorFel funciona sin internet para consultar productos, precios y stock. Las ventas requieren conexión para sincronizar con Firestore. Aparece un banner "Sin conexión" cuando estás offline.</p>
+
+  <h3>15.2 Modo oscuro</h3>
+  <p>Cambia entre tema claro y oscuro desde el icono de sol/luna en el header. La preferencia se guarda automáticamente.</p>
+
+  <h3>15.3 Pantalla del cliente</h3>
+  <p>Genera un código QR que el cliente escanea con su celular. Ve en tiempo real: productos, cantidades, precios, descuentos y total. Ideal para transparencia.</p>
+
+  <h3>15.4 Notas de crédito / débito</h3>
+  <p>Desde <strong>Reportes</strong>, al ver un documento, puedes generar: Nota de Crédito (NC) para devoluciones, Nota de Débito (ND) para cargos adicionales. El sistema usa las series configuradas.</p>
+
+  <h3>15.5 Anulación de ventas</h3>
+  <p>Desde <strong>Reportes</strong>, selecciona un documento y toca "Anular". Requiere motivo. Solo se pueden anular ventas del mismo día. El stock se restaura automáticamente.</p>
+
+  <h3>15.6 Impresión de tickets</h3>
+  <p>Si hay una impresora térmica configurada (<code>Configuración → Impresora</code>), después de cada venta aparece el botón "Imprimir". Soporta tickets de 80mm con logo, datos de empresa, items, totales y QR.</p>
+
+  <h3>15.7 Compartir comprobante</h3>
+  <p>Al completar una venta, puedes compartir el comprobante por WhatsApp o copiar el resumen al portapapeles.</p>
+
+  <h3>15.8 Respaldo de datos</h3>
+  <p>Todos los datos viven en Firestore (Firebase) con backup automático. No se pierden datos si el dispositivo falla.</p>
+</div>
+
+<!-- ============ GLOSARIO ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">📖</span> Glosario</div>
+  <table>
+    <thead><tr><th>Término</th><th>Significado</th></tr></thead>
+    <tbody>
+      <tr><td><strong>NV</strong></td><td>Nota de Venta — comprobante interno sin envío a SUNAT</td></tr>
+      <tr><td><strong>NC</strong></td><td>Nota de Crédito — devuelve dinero al cliente (devolución)</td></tr>
+      <tr><td><strong>ND</strong></td><td>Nota de Débito — cobra dinero adicional al cliente</td></tr>
+      <tr><td><strong>PWA</strong></td><td>Progressive Web App — app web instalable sin Play Store</td></tr>
+      <tr><td><strong>Kardex</strong></td><td>Historial de movimientos de stock de un producto</td></tr>
+      <tr><td><strong>Arqueo</strong></td><td>Verificación del efectivo físico contra el registrado</td></tr>
+      <tr><td><strong>Conteo ciego</strong></td><td>El cajero escribe el conteo sin ver el esperado</td></tr>
+      <tr><td><strong>Bolsillo</strong></td><td>Tipo de pago: efectivo o transferencia</td></tr>
+      <tr><td><strong>Medio</strong></td><td>Detalle del pago: efectivo, yape, plin, tarjeta, transferencia</td></tr>
+      <tr><td><strong>SIRE</strong></td><td>Sistema Integrado de Registros Electrónicos (SUNAT)</td></tr>
+      <tr><td><strong>RFM</strong></td><td>Recency, Frequency, Monetary — clasificación de clientes</td></tr>
+      <tr><td><strong>IGV</strong></td><td>Impuesto General a las Ventas (18% en Perú)</td></tr>
+      <tr><td><strong>Afectación</strong></td><td>Tipo tributario del producto: Gravado (10), Exonerado (20), Inafecto (30)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============ SOPORTE ============ -->
+<div class="section">
+  <div class="section-title"><span class="icon">📞</span> Soporte</div>
+  <div class="card">
+    <h3>¿Necesitas ayuda?</h3>
+    <ul>
+      <li>Consulta este manual siempre que lo necesites.</li>
+      <li>El administrador del sistema puede configurar permisos, usuarios y cajas.</li>
+      <li>Para errores técnicos, revisa el panel de Auditoría → Errores.</li>
+      <li>Los datos se sincronizan automáticamente con la nube (Firebase).</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.0</p>
+  <p>CIBERSOFT CyS · 2026</p>
+  <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
+</div>
+
+</div>
+</body>
+</html>

@@ -59,9 +59,15 @@ export function Compras() {
   const [cargando, setCargando] = React.useState(false)
   const [anulandoId, setAnulandoId] = React.useState<string | null>(null)
   const [reporte, setReporte] = React.useState<ReporteCompras | null>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null)
 
   const cambiarDia = (delta: number) => {
     setFechaSel(new Date(fechaSel.getFullYear(), fechaSel.getMonth(), fechaSel.getDate() + delta))
+    setReporte(null)
+  }
+
+  const irAFecha = (fecha: Date) => {
+    setFechaSel(new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()))
     setReporte(null)
   }
 
@@ -213,10 +219,26 @@ export function Compras() {
           <Button variant="ghost" size="icon" onClick={() => cambiarDia(-1)} aria-label="Día anterior">
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <div className="flex flex-1 items-center justify-center gap-2">
+          <button
+            onClick={() => inputRef.current?.showPicker()}
+            className="flex flex-1 cursor-pointer items-center justify-center gap-2 hover:opacity-80 transition-opacity"
+          >
             <CalendarDays className="h-5 w-5 text-primary" />
             <span className="text-base font-semibold">{formatearFecha(fechaSel)}</span>
-          </div>
+          </button>
+          <input
+            ref={inputRef}
+            type="date"
+            value={fechaSel.toISOString().split('T')[0]}
+            onChange={(e) => {
+              if (e.target.value) {
+                const [y, m, d] = e.target.value.split('-').map(Number)
+                irAFecha(new Date(y, m - 1, d))
+              }
+            }}
+            className="sr-only"
+            aria-label="Seleccionar fecha"
+          />
           <Button variant="ghost" size="icon" onClick={() => cambiarDia(1)} aria-label="Día siguiente">
             <ChevronRight className="h-5 w-5" />
           </Button>

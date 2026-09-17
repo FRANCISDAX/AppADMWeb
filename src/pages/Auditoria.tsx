@@ -154,12 +154,12 @@ export default function Auditoria() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="flex items-center gap-2 text-xl font-bold"><Shield className="h-5 w-5 text-primary" /> Auditoría</h1>
         {vista === 'actividad' && (
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={exportar} disabled={filtrados.length === 0}><Download className="h-4 w-4" /> Exportar CSV</Button>
-            <Button variant="outline" size="sm" onClick={limpiar}><Trash2 className="h-4 w-4" /> Limpiar +90 días</Button>
+            <Button variant="outline" size="sm" onClick={exportar} disabled={filtrados.length === 0} className="shrink-0"><Download className="h-4 w-4" /> Exportar</Button>
+            <Button variant="outline" size="sm" onClick={limpiar} className="shrink-0"><Trash2 className="h-4 w-4" /> Limpiar +90d</Button>
           </div>
         )}
       </div>

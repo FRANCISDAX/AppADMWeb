@@ -24,6 +24,7 @@ export type Usuario = SeriesUsuario & {
   rol?: string
   activo?: boolean
   permisos?: Record<string, boolean>
+  cajaId?: string
   createdAt?: any
   updatedAt?: any
 }
@@ -103,8 +104,8 @@ async function errorSeries(series: SeriesUsuario, excluirUid?: string): Promise<
   return mensajeConflictos(bloqueantes)
 }
 
-export async function crearUsuario(datos: { email: string; password: string; nombre: string; rol: string; permisos: Record<string, boolean> } & SeriesUsuario) {
-  const { email, password, nombre, rol, permisos } = datos
+export async function crearUsuario(datos: { email: string; password: string; nombre: string; rol: string; permisos: Record<string, boolean>; cajaId?: string } & SeriesUsuario) {
+  const { email, password, nombre, rol, permisos, cajaId } = datos
   try {
     const existente = await getDocs(query(collection(db, COL.USUARIO), where('email', '==', email)))
     if (!existente.empty) return { success: false, error: 'Ya existe un usuario con este email.' }
@@ -120,6 +121,7 @@ export async function crearUsuario(datos: { email: string; password: string; nom
       rol: rol || 'CAJERO',
       activo: true,
       permisos: permisosFinales,
+      ...(cajaId ? { cajaId } : {}),
       ...seriesDe(seriesParaGuardar(datos)),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -136,7 +138,7 @@ export async function crearUsuario(datos: { email: string; password: string; nom
   }
 }
 
-export async function editarUsuario(uid: string, data: Partial<{ nombre: string; rol: string; permisos: Record<string, boolean>; activo: boolean }> & SeriesUsuario) {
+export async function editarUsuario(uid: string, data: Partial<{ nombre: string; rol: string; permisos: Record<string, boolean>; activo: boolean; cajaId: string }> & SeriesUsuario) {
   try {
     // Si se tocan series, se validan contra el resto de cajas antes de escribir.
     const tocaSeries = CAMPOS_SERIE.some((campo) => data[campo] !== undefined)
@@ -154,6 +156,7 @@ export async function editarUsuario(uid: string, data: Partial<{ nombre: string;
     if (data.rol !== undefined) update.rol = data.rol
     if (data.permisos !== undefined) update.permisos = data.permisos
     if (data.activo !== undefined) update.activo = data.activo
+    if (data.cajaId !== undefined) update.cajaId = data.cajaId || null
     await updateDoc(doc(db, COL.USUARIO, uid), update)
     return { success: true }
   } catch (e) {

@@ -9,7 +9,10 @@ const fmt = (n: number) => 'S/ ' + (Number(n) || 0).toFixed(2)
 
 type PuntoHistorial = {
   fecha: string
-  precio: number
+  precioUnidad: number
+  precioPresentacion: number
+  factor: number
+  presentacion: string
   proveedor: string
   cantidad: number
 }
@@ -30,11 +33,15 @@ export function EvolucionPrecios() {
         const data = d.data() as Record<string, unknown>
         if ((data.productoId as string) !== productoSel) continue
         const meta = (data.metadata || {}) as Record<string, unknown>
-        const precio = (meta.precioUnitario as number) || 0
-        if (precio <= 0) continue
+        const precioPresentacion = (meta.precioUnitario as number) || 0
+        if (precioPresentacion <= 0) continue
+        const factor = (meta.factorConversion as number) || 1
         puntos.push({
           fecha: (data.fecha as string) || '',
-          precio,
+          precioUnidad: precioPresentacion / factor,
+          precioPresentacion,
+          factor,
+          presentacion: (meta.presentacionNombre as string) || 'Unidad',
           proveedor: (meta.proveedor as string) || '',
           cantidad: (meta.cantidadPresentacion as number) || (data.cantidad as number) || 0,
         })
@@ -43,13 +50,12 @@ export function EvolucionPrecios() {
     }).catch(() => setHistorial([])).finally(() => setCargando(false))
   }, [productoSel])
 
-  const precios = historial.map((h) => h.precio)
+  const precios = historial.map((h) => h.precioUnidad)
   const precioMin = precios.length > 0 ? Math.min(...precios) : 0
   const precioMax = precios.length > 0 ? Math.max(...precios) : 0
   const precioPromedio = precios.length > 0 ? precios.reduce((s, p) => s + p, 0) / precios.length : 0
   const tendencia = precios.length >= 2 ? precios[0] - precios[precios.length - 1] : 0
 
-  // Calcular puntos para la gráfica SVG
   const chartW = 400
   const chartH = 120
   const chartPoints = React.useMemo(() => {
@@ -59,25 +65,31 @@ export function EvolucionPrecios() {
     const maxY = precioMax * 1.1 || 1
     return reversed.map((p, i) => ({
       x: (i / (reversed.length - 1)) * chartW,
-      y: chartH - ((p.precio - minY) / (maxY - minY)) * chartH,
-      precio: p.precio,
+      y: chartH - ((p.precioUnidad - minY) / (maxY - minY)) * chartH,
+      precioUnidad: p.precioUnidad,
+      precioPresentacion: p.precioPresentacion,
+      factor: p.factor,
+      presentacion: p.presentacion,
       fecha: p.fecha,
       proveedor: p.proveedor,
     }))
   }, [historial, precioMin, precioMax])
 
-  // Agrupar por proveedor
   const porProveedor = React.useMemo(() => {
-    const mapa: Record<string, { compras: number; precioPromedio: number; precioMin: number; precioMax: number; ultimoPrecio: number }> = {}
+    const mapa: Record<string, { compras: number; precioPromedio: number; precioMin: number; precioMax: number; ultimoPrecio: number; precioPresentacion: number; precioUnidad: number; factor: number; presentacion: string }> = {}
     for (const h of historial) {
       const key = h.proveedor || 'Desconocido'
-      if (!mapa[key]) mapa[key] = { compras: 0, precioPromedio: 0, precioMin: Infinity, precioMax: 0, ultimoPrecio: 0 }
+      if (!mapa[key]) mapa[key] = { compras: 0, precioPromedio: 0, precioMin: Infinity, precioMax: 0, ultimoPrecio: 0, precioPresentacion: 0, precioUnidad: 0, factor: 1, presentacion: '' }
       const m = mapa[key]
       m.compras++
-      m.precioPromedio += h.precio
-      m.precioMin = Math.min(m.precioMin, h.precio)
-      m.precioMax = Math.max(m.precioMax, h.precio)
-      m.ultimoPrecio = h.precio
+      m.precioPromedio += h.precioUnidad
+      m.precioMin = Math.min(m.precioMin, h.precioUnidad)
+      m.precioMax = Math.max(m.precioMax, h.precioUnidad)
+      m.ultimoPrecio = h.precioUnidad
+      m.precioPresentacion = h.precioPresentacion
+      m.precioUnidad = h.precioUnidad
+      m.factor = h.factor
+      m.presentacion = h.presentacion
     }
     for (const k of Object.keys(mapa)) {
       mapa[k].precioPromedio = mapa[k].precioPromedio / mapa[k].compras
@@ -85,9 +97,13 @@ export function EvolucionPrecios() {
     return Object.entries(mapa).sort((a, b) => a[1].precioPromedio - b[1].precioPromedio)
   }, [historial])
 
+  const fmtPresentacion = (precioPres: number, factor: number, presentacion: string) => {
+    if (factor <= 1) return null
+    return `${presentacion} ${factor}u — ${fmt(precioPres)} (${fmt(precioPres / factor)}/u)`
+  }
+
   return (
     <div className="space-y-4">
-      {/* Selector de producto */}
       <div>
         <label className="text-xs font-bold text-muted-foreground">Producto</label>
         <select value={productoSel} onChange={(e) => setProductoSel(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-2 text-sm">
@@ -108,19 +124,21 @@ export function EvolucionPrecios() {
 
       {!cargando && historial.length > 0 && (
         <>
-          {/* Métricas */}
           <div className="grid grid-cols-4 gap-2">
             <div className="rounded-xl border bg-card p-3 text-center">
               <p className="text-[10px] text-muted-foreground">Mínimo</p>
               <p className="text-sm font-extrabold text-emerald-600">{fmt(precioMin)}</p>
+              <p className="text-[9px] text-muted-foreground">/unidad</p>
             </div>
             <div className="rounded-xl border bg-card p-3 text-center">
               <p className="text-[10px] text-muted-foreground">Promedio</p>
               <p className="text-sm font-extrabold">{fmt(precioPromedio)}</p>
+              <p className="text-[9px] text-muted-foreground">/unidad</p>
             </div>
             <div className="rounded-xl border bg-card p-3 text-center">
               <p className="text-[10px] text-muted-foreground">Máximo</p>
               <p className="text-sm font-extrabold text-red-600">{fmt(precioMax)}</p>
+              <p className="text-[9px] text-muted-foreground">/unidad</p>
             </div>
             <div className="rounded-xl border bg-card p-3 text-center">
               <p className="text-[10px] text-muted-foreground">Tendencia</p>
@@ -133,20 +151,21 @@ export function EvolucionPrecios() {
             </div>
           </div>
 
-          {/* Gráfica */}
           {chartPoints.length >= 2 && (
             <div className="rounded-xl border bg-card p-3">
-              <p className="mb-2 text-xs font-bold text-muted-foreground">Evolución del precio</p>
+              <p className="mb-2 text-xs font-bold text-muted-foreground">Evolución del precio por unidad</p>
               <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-auto">
                 <polyline fill="none" stroke="hsl(var(--primary))" strokeWidth="2" points={chartPoints.map((p) => `${p.x},${p.y}`).join(' ')} />
                 {chartPoints.map((p, i) => (
-                  <circle key={i} cx={p.x} cy={p.y} r="3" fill="hsl(var(--primary))" />
+                  <g key={i}>
+                    <circle cx={p.x} cy={p.y} r="3" fill="hsl(var(--primary))" />
+                    <title>{`${p.proveedor}\n${fmtPresentacion(p.precioPresentacion, p.factor, p.presentacion) || fmt(p.precioUnidad) + '/unidad'}\n${new Date(p.fecha).toLocaleDateString('es-PE')}`}</title>
+                  </g>
                 ))}
               </svg>
             </div>
           )}
 
-          {/* Por proveedor */}
           {porProveedor.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-bold text-muted-foreground">Comparativa por proveedor</p>
@@ -156,6 +175,11 @@ export function EvolucionPrecios() {
                     <span className="text-sm font-bold">{nombre}</span>
                     <span className="text-xs text-muted-foreground">{stats.compras} compra{stats.compras !== 1 ? 's' : ''}</span>
                   </div>
+                  {stats.factor > 1 && (
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                      Presentación: {stats.presentacion} {stats.factor}u — {fmt(stats.precioPresentacion)} ({fmt(stats.precioUnidad)}/u)
+                    </p>
+                  )}
                   <div className="mt-1 grid grid-cols-3 gap-2 text-center">
                     <div>
                       <p className="text-[10px] text-muted-foreground">Mín</p>
@@ -177,7 +201,6 @@ export function EvolucionPrecios() {
         </>
       )}
 
-      {/* Productos con precio */}
       {!productoSel && (
         <div>
           <p className="text-xs font-bold text-muted-foreground mb-2">Productos con precio registrado</p>

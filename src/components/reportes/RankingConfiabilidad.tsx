@@ -10,9 +10,9 @@ const fmt = (n: number) => 'S/ ' + (Number(n) || 0).toFixed(2)
 type ProveedorScore = {
   id: string
   nombre: string
-  scorePrecio: number      // 0-100: consistencia de precio (menor varianza = mejor)
-  scoreVolumen: number     // 0-100: más volumen = mejor
-  scoreFrecuencia: number  // 0-100: más compras = mejor relación
+  scorePrecio: number
+  scoreVolumen: number
+  scoreFrecuencia: number
   scoreTotal: number
   totalGastado: number
   numCompras: number
@@ -107,9 +107,11 @@ export function RankingConfiabilidad() {
     for (const d of snap.docs) {
       const data = d.data() as Record<string, unknown>
       const meta = (data.metadata || {}) as Record<string, unknown>
+      const precioPresentacion = (meta.precioUnitario as number) || 0
+      const factor = (meta.factorConversion as number) || 1
       result.push({
         proveedorId: (meta.proveedorId as string) || '',
-        precio: (meta.precioUnitario as number) || 0,
+        precio: factor > 0 ? precioPresentacion / factor : precioPresentacion,
         totalPagado: (meta.totalPagado as number) || 0,
         producto: (data.productoNombre as string) || '',
       })
@@ -190,7 +192,7 @@ export function RankingConfiabilidad() {
               {/* Detalle */}
               <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
                 <span>Total: <strong className="text-foreground">{fmt(r.totalGastado)}</strong></span>
-                <span>Precio: {fmt(r.precioMin)} – {fmt(r.precioMax)}</span>
+                <span>Precio/u: {fmt(r.precioMin)} – {fmt(r.precioMax)}</span>
               </div>
             </div>
           ))}

@@ -10,6 +10,7 @@ export type Turno = {
   id?: string
   usuarioId?: string
   usuarioNombre?: string
+  cajaId?: string
   tipoTurno?: string
   fechaApertura?: string
   fechaCierre?: string
@@ -46,7 +47,7 @@ export async function buscarTurnoAbierto(usuarioId?: string | null, permiteOtros
   }
 }
 
-export async function abrirTurno({ tipoTurno, montoInicial, usuarioId, usuarioNombre }: { tipoTurno: string; montoInicial: number; usuarioId: string; usuarioNombre: string }) {
+export async function abrirTurno({ tipoTurno, montoInicial, usuarioId, usuarioNombre, cajaId }: { tipoTurno: string; montoInicial: number; usuarioId: string; usuarioNombre: string; cajaId?: string }) {
   exigirRateLimit('abrir_turno')
   try {
     const abiertos = await getDocs(query(collection(db, COL.TURNOS), where('estado', '==', 'abierto'), where('usuarioId', '==', usuarioId)))
@@ -60,6 +61,7 @@ export async function abrirTurno({ tipoTurno, montoInicial, usuarioId, usuarioNo
     const nuevoTurno = {
       usuarioId,
       usuarioNombre: usuarioNombre || usuarioId,
+      cajaId: cajaId || '',
       tipoTurno,
       fechaApertura: new Date().toISOString(),
       estado: 'abierto' as const,

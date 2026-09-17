@@ -16,4 +16,5 @@ export const COL = {
   CONFIGURACION: 'tblConfiguracion',
   CATEGORIAS: 'tblCategorias',
   ERRORES: 'tblErrores',
+  CAJAS: 'tblCajas',
 } as const

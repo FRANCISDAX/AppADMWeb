@@ -8,10 +8,12 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 
 ## Estado actual
 
-- **Última sesión**: bloque ·10 + los **6 huecos** de la comparación con el rubro, cerrados el 16/09. **Desplegado** en https://appadm-b359e.web.app.
-- **Verde**: `npm test` **93/93**, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 warnings (baseline: no subirlo)**, `npm run build` ✓.
+- **Punto de partida (checkpoint del 17/09)**: se unificó y commiteó el trabajo que estaba sin versionar de la **sesión paralela** — **cajas** (`services/cajas.ts`), **ventas pendientes / en espera** (`components/PanelVentasPendientes.tsx`), **rol VENDEDOR** (`constants/permisos.ts`, `services/usuarios.ts`) y reportes de proveedores — junto con los fixes de UI y del service worker. Ese trabajo **no es de esta sesión**: se revisó que no rompiera los invariantes (no borra las reglas únicas ni reintroduce fórmulas a mano) y se restauró el baseline de lint (dos `\-` innecesarios en `Pdv.tsx`).
+- ⚠️ **Los índices compuestos nuevos se despliegan aparte**: `npx firebase deploy --only firestore:indexes` (`tblEgresos: proveedorId + categoria`, `tblDocumentos: cajaId + estado + fecha`). **Nunca** `--force`. Sin desplegarlos, las consultas nuevas fallan con *"The query requires an index"* (el mismo síntoma del bloque ·5 del historial).
+- **Verde**: `npm test` **98/98**, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 warnings (baseline: no subirlo)**, `npm run build` ✓.
 - **Producción real** (medida, no supuesta): ~93 turnos, ~234 documentos, 40 productos **todos exonerados (`'20'`)** porque la región está exenta de IGV.
 - **Decisiones tomadas con el usuario** (16/09) sobre los controles del cierre: **conciliación por billetera opcional** (no bloquea el cierre), **conteo ciego configurable y apagado por defecto** (`config.conteoCiego`, Configuración → Empresa) y **firmas**: los PDF imprimen nombre/RUC del negocio, quién cerró el turno y dos líneas de firma (cajero / supervisor).
+- 📌 **Alcance acordado (17/09)**: de acá en adelante este agente trabaja **solo en el web**; la app móvil `AppAdm` queda para otra sesión (tiene cambios sin commitear de la última pasada: `helper/Arqueo.js` nuevo, notas con `medio`, rótulos con `etiquetaFormaPago` y el arqueo con desglose/origen — lint 0 errores, verificada en aislado).
 
 ## Invariantes y trampas (leer antes de tocar código)
 
@@ -250,6 +252,7 @@ Calculation order: product → volume → coupon → client → global. Each lay
 - Network-first for Firebase/API calls
 - `fonts.gstatic.com` excluded from SW caching (browser handles font preloading)
 - CSP in `firebase.json`: `default-src 'self'`, `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com`, `worker-src 'self' blob:`, `connect-src` includes `https://fonts.gstatic.com`
+- `meta name="mobile-web-app-capable"` (NOT `apple-mobile-web-app-capable`, deprecated)
 
 ## Firestore Collections
 

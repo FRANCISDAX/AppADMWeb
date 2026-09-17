@@ -11,6 +11,7 @@ type PermisosValue = {
   rol: string | null
   nombre: string | null
   activo: boolean
+  cajaId: string | null
   serieBoleta: string | null
   serieFactura: string | null
   seriePrefijo: string | null
@@ -30,6 +31,7 @@ export function PermisosProvider({ children }: { children: React.ReactNode }) {
   const [rol, setRol] = React.useState<string | null>(null)
   const [nombre, setNombre] = React.useState<string | null>(null)
   const [activo, setActivo] = React.useState(true)
+  const [cajaId, setCajaId] = React.useState<string | null>(null)
   const [serieBoleta, setSerieBoleta] = React.useState<string | null>(null)
   const [serieFactura, setSerieFactura] = React.useState<string | null>(null)
   const [seriePrefijo, setSeriePrefijo] = React.useState<string | null>(null)
@@ -67,6 +69,7 @@ export function PermisosProvider({ children }: { children: React.ReactNode }) {
           setRol(d.rol ?? null)
           setNombre(d.nombre ?? null)
           setActivo(d.activo !== false)
+          setCajaId(d.cajaId ?? null)
           setSerieBoleta(d.serieBoleta ?? null)
           setSerieFactura(d.serieFactura ?? null)
           setSeriePrefijo(d.seriePrefijo ?? null)
@@ -79,6 +82,7 @@ export function PermisosProvider({ children }: { children: React.ReactNode }) {
           setRol(null)
           setNombre(null)
           setActivo(true)
+          setCajaId(null)
           setSerieBoleta(null)
           setSerieFactura(null)
           setSeriePrefijo(null)
@@ -107,8 +111,8 @@ export function PermisosProvider({ children }: { children: React.ReactNode }) {
   }, [permisos, rol])
 
   const value = React.useMemo(
-    () => ({ permisos, rol, nombre, activo, serieBoleta, serieFactura, seriePrefijo, serieBoletaNC, serieBoletaND, serieFacturaNC, serieFacturaND, loading, tienePermiso }),
-    [permisos, rol, nombre, activo, serieBoleta, serieFactura, seriePrefijo, serieBoletaNC, serieBoletaND, serieFacturaNC, serieFacturaND, loading, tienePermiso]
+    () => ({ permisos, rol, nombre, activo, cajaId, serieBoleta, serieFactura, seriePrefijo, serieBoletaNC, serieBoletaND, serieFacturaNC, serieFacturaND, loading, tienePermiso }),
+    [permisos, rol, nombre, activo, cajaId, serieBoleta, serieFactura, seriePrefijo, serieBoletaNC, serieBoletaND, serieFacturaNC, serieFacturaND, loading, tienePermiso]
   )
 
   return <PermisosContext.Provider value={value}>{children}</PermisosContext.Provider>

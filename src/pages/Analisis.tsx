@@ -100,9 +100,9 @@ export function Analisis() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1.5 rounded-xl bg-muted p-1 text-sm">
+      <div className="flex gap-1.5 overflow-x-auto rounded-xl bg-muted p-1 text-sm scrollbar-none">
         {tabs.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={cn('flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 font-bold cursor-pointer', tab === t.id ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={cn('flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 font-bold cursor-pointer', tab === t.id ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
             <t.icon className="h-4 w-4" /> {t.label}
           </button>
         ))}

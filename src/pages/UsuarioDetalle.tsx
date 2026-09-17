@@ -7,6 +7,7 @@ import { LABELS_PERMISOS, MODULOS, PERMISOS_POR_ROL, ROLES, permisosPorRol } fro
 import { useNotifications } from '@/components/notifications'
 import { crearUsuario, editarUsuario, obtenerUsuarios, resetearPassword, validarSeriesUsuario } from '@/services/usuarios'
 import { type ConflictoSerie, type SeriesUsuario, mensajeConflictos } from '@/lib/series'
+import { cargarCajas, type Caja } from '@/services/cajas'
 import { cn } from '@/lib/utils'
 
 // Campos de serie que el admin configura por caja (7: los 3 de venta + 4 de notas).
@@ -35,6 +36,12 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
   const [error, setError] = React.useState<string | null>(null)
   const [conflictosSeries, setConflictosSeries] = React.useState<ConflictoSerie[]>([])
   const [revisandoSeries, setRevisandoSeries] = React.useState(false)
+  const [cajas, setCajas] = React.useState<Caja[]>([])
+  const [cajaId, setCajaId] = React.useState('')
+
+  React.useEffect(() => {
+    cargarCajas().then(setCajas)
+  }, [])
 
   React.useEffect(() => {
     if (!esEdicion) return
@@ -45,11 +52,9 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
         setNombre(u.nombre || '')
         setEmail(u.email || '')
         setRol(u.rol || 'CAJERO')
-        // Fusiona los permisos guardados con los defaults del rol: así los permisos
-        // nuevos (ej. 'estadisticas') quedan con un valor real y se pueden desactivar
-        // guardando false (bloquea de verdad) sin romper las claves que ya existían.
         setPermisos({ ...permisosPorRol(u.rol || 'CAJERO'), ...(u.permisos || {}) })
         setActivo(u.activo !== false)
+        setCajaId(u.cajaId || '')
         setSeries({
           serieBoleta: u.serieBoleta || '',
           serieFactura: u.serieFactura || '',
@@ -122,8 +127,8 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
     try {
       const r: { success: boolean; error?: string } =
         esEdicion && uid
-          ? await editarUsuario(uid, { nombre: nombre.trim(), rol, permisos, activo, ...series })
-          : await crearUsuario({ email: email.trim().toLowerCase(), password, nombre: nombre.trim(), rol, permisos, ...series })
+          ? await editarUsuario(uid, { nombre: nombre.trim(), rol, permisos, activo, cajaId: cajaId || undefined, ...series })
+          : await crearUsuario({ email: email.trim().toLowerCase(), password, nombre: nombre.trim(), rol, permisos, cajaId: cajaId || undefined, ...series })
       if (!r.success) {
         setError(r.error || 'No se pudo guardar el usuario.')
         return
@@ -172,7 +177,7 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
 
         <div>
           <Label>Rol</Label>
-          <div className="mt-1 grid grid-cols-4 gap-1.5">
+          <div className="mt-1 grid grid-cols-5 gap-1.5">
             {ROLES.map((r) => (
               <button key={r} onClick={() => cambiarRol(r)} className={cn('h-10 rounded-lg text-xs font-bold border cursor-pointer', rol === r ? 'bg-primary text-white border-primary' : 'bg-background hover:bg-accent')}>
                 {r}
@@ -180,6 +185,19 @@ export function UsuarioDetalle({ uid, onBack, onSaved }: { uid?: string; onBack:
             ))}
           </div>
         </div>
+
+        {(rol === 'VENDEDOR' || rol === 'CAJERO') && (
+          <div>
+            <Label>Caja asignada</Label>
+            <p className="text-[11px] text-muted-foreground mb-1">El vendedor cajero usará las series de esta caja. Si no asignas una, se usa la serie global.</p>
+            <select value={cajaId} onChange={(e) => setCajaId(e.target.value)} className="mt-1 flex h-10 w-full rounded-lg border bg-background px-3 py-2 text-sm">
+              <option value="">Sin caja asignada (serie global)</option>
+              {cajas.filter((c) => c.activo).map((c) => (
+                <option key={c.id} value={c.id}>{c.nombre}{c.serieBoleta ? ` (${c.serieBoleta}/${c.serieFactura})` : ''}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="rounded-xl border p-3">
           <p className="mb-2 text-sm font-bold">Series de comprobantes (por caja)</p>

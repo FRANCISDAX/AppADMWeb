@@ -16,7 +16,7 @@ const fmt = (n: number) => 'S/ ' + n.toFixed(2)
 
 export function Turnos() {
   const { user } = useAuth()
-  const { tienePermiso } = usePermisos()
+  const { tienePermiso, cajaId } = usePermisos()
   // `config.conteoCiego` (Configuración → Empresa): oculta el "Debería haber" hasta que el
   // cajero registre el conteo.
   const { config } = useConfiguracion()
@@ -165,7 +165,7 @@ export function Turnos() {
   async function onAbrir() {
     if (!user) return
     setProcesando(true)
-    const r = await abrirTurno({ tipoTurno, montoInicial: parseFloat(montoInicial) || 0, usuarioId: user.uid, usuarioNombre: user.email?.split('@')[0] || 'Usuario' })
+    const r = await abrirTurno({ tipoTurno, montoInicial: parseFloat(montoInicial) || 0, usuarioId: user.uid, usuarioNombre: user.email?.split('@')[0] || 'Usuario', cajaId: cajaId || undefined })
     setProcesando(false)
     if (r.success) {
       setToast('✅ Turno abierto')

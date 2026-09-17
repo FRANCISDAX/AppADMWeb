@@ -1,4 +1,4 @@
-import { AlertTriangle, Building2, Check, CloudUpload, Loader2, Package, Percent, Printer, Receipt, Tag, Truck, X } from 'lucide-react'
+import { AlertTriangle, Building2, Check, CloudUpload, CreditCard, Loader2, Package, Percent, Printer, Receipt, Tag, Truck, X } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ import { validarSeriesEmpresa, type SerieOcupada } from '@/lib/series'
 import { cn } from '@/lib/utils'
 import { obtenerSeriesOcupadas } from '@/services/usuarios'
 import { guardarPromocionVolumen, eliminarPromocionVolumen, listarPromocionesVolumen, type PromocionVolumen } from '@/services/promociones-volumen'
+import { cargarCajas, guardarCaja, eliminarCaja, CAJA_POR_DEFECTO, type Caja } from '@/services/cajas'
 
 const TABS = [
   { id: 'empresa', label: 'Empresa', icon: Building2 },
@@ -21,6 +22,7 @@ const TABS = [
   { id: 'plantillas', label: 'Plantillas', icon: Package },
   { id: 'listas', label: 'Listas de Precio', icon: Tag },
   { id: 'promos', label: 'Promociones', icon: Percent },
+  { id: 'cajas', label: 'Cajas', icon: CreditCard },
 ] as const
 
 function readImageAsDataUrl(file: File): Promise<string> {
@@ -53,7 +55,7 @@ type Cfg = typeof CONFIG_POR_DEFECTO
 export function Configuracion() {
   const { tienePermiso } = usePermisos()
   const { config, setConfig, loading, saving, guardar } = useConfiguracion()
-  const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora' | 'envio' | 'plantillas' | 'listas' | 'promos'>('empresa')
+  const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora' | 'envio' | 'plantillas' | 'listas' | 'promos' | 'cajas'>('empresa')
   const [toast, setToast] = React.useState<string | null>(null)
   const [probando, setProbando] = React.useState(false)
   const [seriesOcupadas, setSeriesOcupadas] = React.useState<SerieOcupada[]>([])
@@ -488,6 +490,8 @@ export function Configuracion() {
       )}
 
       {tab === 'promos' && <PromocionesTab />}
+
+      {tab === 'cajas' && <CajasTab />}
 
       <Button
         className="w-full"
@@ -950,6 +954,115 @@ function PromocionesTab() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function CajasTab() {
+  const [cajas, setCajas] = React.useState<Caja[]>([])
+  const [cargando, setCargando] = React.useState(true)
+  const [editando, setEditando] = React.useState<Caja | null>(null)
+  const [form, setForm] = React.useState<Caja>(CAJA_POR_DEFECTO)
+
+  React.useEffect(() => {
+    cargarCajas().then(setCajas).finally(() => setCargando(false))
+  }, [])
+
+  function nueva() {
+    setEditando({ ...CAJA_POR_DEFECTO, id: '__nueva__' })
+    setForm({ ...CAJA_POR_DEFECTO })
+  }
+
+  function editar(c: Caja) {
+    setEditando(c)
+    setForm({ ...c })
+  }
+
+  async function guardar() {
+    const r = await guardarCaja(form)
+    if (r.success) {
+      const lista = await cargarCajas()
+      setCajas(lista)
+      setEditando(null)
+    }
+  }
+
+  async function eliminarC(id: string) {
+    if (!confirm('¿Eliminar esta caja?')) return
+    const ok = await eliminarCaja(id)
+    if (ok) setCajas((prev) => prev.filter((c) => c.id !== id))
+  }
+
+  if (cargando) {
+    return <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+  }
+
+  if (editando) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold">{editando.id === '__nueva__' ? 'Nueva Caja' : 'Editar Caja'}</h3>
+          <button onClick={() => setEditando(null)} className="text-muted-foreground hover:text-foreground cursor-pointer"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">Nombre</Label>
+            <Input value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} placeholder="Ej: Caja Principal" className="mt-1" />
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" checked={form.activo} onChange={(e) => setForm((f) => ({ ...f, activo: e.target.checked }))} className="rounded" />
+            <Label className="text-xs">Activa</Label>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-3 space-y-2">
+            <p className="text-xs font-bold text-muted-foreground">Series de comprobante</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label className="text-[10px]">Boleta</Label><Input value={form.serieBoleta} onChange={(e) => setForm((f) => ({ ...f, serieBoleta: e.target.value }))} placeholder="B001" className="mt-0.5 h-8 text-xs" /></div>
+              <div><Label className="text-[10px]">Factura</Label><Input value={form.serieFactura} onChange={(e) => setForm((f) => ({ ...f, serieFactura: e.target.value }))} placeholder="F001" className="mt-0.5 h-8 text-xs" /></div>
+              <div><Label className="text-[10px]">NV Prefijo</Label><Input value={form.seriePrefijo} onChange={(e) => setForm((f) => ({ ...f, seriePrefijo: e.target.value }))} placeholder="NV" className="mt-0.5 h-8 text-xs" /></div>
+              <div><Label className="text-[10px]">NC</Label><Input value={form.serieNC} onChange={(e) => setForm((f) => ({ ...f, serieNC: e.target.value }))} placeholder="NC" className="mt-0.5 h-8 text-xs" /></div>
+              <div><Label className="text-[10px]">ND</Label><Input value={form.serieND} onChange={(e) => setForm((f) => ({ ...f, serieND: e.target.value }))} placeholder="ND" className="mt-0.5 h-8 text-xs" /></div>
+              <div><Label className="text-[10px]">NCB</Label><Input value={form.serieNCB} onChange={(e) => setForm((f) => ({ ...f, serieNCB: e.target.value }))} placeholder="NCB" className="mt-0.5 h-8 text-xs" /></div>
+            </div>
+          </div>
+        </div>
+        <Button onClick={guardar} disabled={!form.nombre.trim()} className="w-full">
+          <Check className="h-4 w-4 mr-1" /> Guardar
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">{cajas.length} caja(s) registrada(s)</p>
+        <Button size="sm" onClick={nueva}>+ Nueva Caja</Button>
+      </div>
+      {cajas.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">No hay cajas creadas. Las cajas definen series de comprobante por terminal.</p>
+      ) : (
+        <div className="space-y-2">
+          {cajas.map((c) => (
+            <div key={c.id} className={cn('flex items-center gap-3 rounded-xl border bg-card p-3', !c.activo && 'opacity-50')}>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold">{c.nombre}</span>
+                  {!c.activo && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">Inactiva</span>}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {c.serieBoleta && `B: ${c.serieBoleta}`}
+                  {c.serieFactura && ` · F: ${c.serieFactura}`}
+                  {c.seriePrefijo && ` · NV: ${c.seriePrefijo}`}
+                </p>
+              </div>
+              <button onClick={() => editar(c)} className="text-xs font-semibold text-primary hover:underline cursor-pointer">Editar</button>
+              <button onClick={() => c.id && eliminarC(c.id)} className="text-destructive hover:text-destructive/80 cursor-pointer" aria-label="Eliminar">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

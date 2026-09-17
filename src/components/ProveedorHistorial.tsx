@@ -63,9 +63,11 @@ export function ProveedorHistorial({ proveedorId, proveedorNombre, saldoPendient
       const pidNorm = norm(pid)
       const nombreNorm = norm(proveedorNombre)
 
+      const grupos: Record<string, CompraRegistro> = {}
+
+      // 1) Compras desde tblMovimientos (Inventarios > Compras)
       const q = query(collection(db, COL.MOVIMIENTOS), where('tipoMovimiento', '==', 'compra'), orderBy('fecha', 'desc'))
       const snap = await getDocs(q)
-      const grupos: Record<string, CompraRegistro> = {}
       for (const d of snap.docs) {
         const data = d.data() as Record<string, unknown>
         const meta = (data.metadata || {}) as Record<string, unknown>
@@ -82,6 +84,28 @@ export function ProveedorHistorial({ proveedorId, proveedorNombre, saldoPendient
         }
         grupos[compraId].items.push({ productoNombre: (data.productoNombre as string) || '', cantidad: (data.cantidad as number) || 0, precioUnitario: (meta.precioUnitario as number) || 0 })
       }
+
+      // 2) Compras desde tblEgresos (Categoría "Compras")
+      const qEg = query(collection(db, COL.EGRESOS), where('categoria', '==', 'Compras'))
+      const snapEg = await getDocs(qEg)
+      for (const d of snapEg.docs) {
+        const data = d.data() as Record<string, unknown>
+        const provId = (data.proveedorId as string) || ''
+        const provNombre = (data.proveedorNombre as string) || ''
+        const ruc = (data.rucProveedor as string) || ''
+        const provIdNorm = norm(provId)
+        const provNombreNorm = norm(provNombre)
+        const rucNorm = norm(ruc)
+        const matchId = provIdNorm === pidNorm && provIdNorm !== ''
+        const matchNombre = provNombreNorm === nombreNorm && provNombreNorm !== ''
+        const matchRuc = rucNorm === pidNorm && rucNorm !== ''
+        if (!matchId && !matchNombre && !matchRuc) continue
+        const compraId = d.id
+        if (!grupos[compraId]) {
+          grupos[compraId] = { compraId, proveedor: provNombre || proveedorNombre, totalPagado: (data.monto as number) || 0, nota: (data.descripcion as string) || '', fecha: (data.fecha as string) || '', items: [] }
+        }
+      }
+
       return Object.values(grupos).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))
     } catch { return [] }
   }

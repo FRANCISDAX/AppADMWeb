@@ -14,6 +14,7 @@ export type Egreso = {
   tipoPago: 'caja' | 'transferencia' | 'otro'
   rucProveedor?: string
   proveedorNombre?: string
+  proveedorId?: string
   comprobante?: string
   usuarioId?: string
   usuarioNombre?: string

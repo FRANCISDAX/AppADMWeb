@@ -28,6 +28,8 @@ type Doc = {
   estado?: string
   consolidado?: boolean
   usuarioId?: string
+  vendedorId?: string
+  vendedorNombre?: string
   venta?: {
     total?: number
     cliente_nombre?: string
@@ -133,8 +135,8 @@ export function VentasPorEmpleado() {
     const map = new Map<string, EmpleadoVentas>()
 
     for (const d of docsFiltrados) {
-      const uid = d.usuarioId || 'sin-id'
-      const cajero = d.venta?.cajero || 'Sin nombre'
+      const uid = d.vendedorId || d.usuarioId || 'sin-id'
+      const cajero = d.vendedorNombre || d.venta?.cajero || 'Sin nombre'
       const signo = signoDoc(d)
       const total = Math.abs(d.venta?.total ?? 0) * signo
 

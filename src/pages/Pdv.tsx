@@ -43,7 +43,7 @@ import {
 } from '@/lib/pagos'
 import { CreditoPanel } from '@/components/CreditoPanel'
 import { buscarTurnoAbierto } from '@/services/turnos'
-import { registrarVenta } from '@/services/ventas'
+import { registrarVenta, crearVentaPendiente } from '@/services/ventas'
 import { abrirPDFComprobante } from '@/lib/pdf'
 import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento } from '@/lib/ui-utils'
@@ -53,6 +53,7 @@ import { broadcastCart, closeSession } from '@/lib/customer-display'
 import { calcularDescuentos } from '@/lib/descuentos'
 import { promocionesAplicables, type PromocionVolumen } from '@/services/promociones-volumen'
 import QRCode from 'qrcode'
+import { PanelVentasPendientes } from '@/components/PanelVentasPendientes'
 
 // Un producto tiene precio especial (promo) si su valor es > 0.
 const tienePromo = (p: Producto) => p?.precioEspecial != null && p.precioEspecial > 0
@@ -76,7 +77,7 @@ const nuevoPago = (medio: MedioPago, monto: string): PagoUI => ({
 
 export function Pdv() {
   const { user } = useAuth()
-  const { nombre: nombreUsuario, tienePermiso, serieBoleta, serieFactura, seriePrefijo } = usePermisos()
+  const { nombre: nombreUsuario, tienePermiso, serieBoleta, serieFactura, seriePrefijo, cajaId } = usePermisos()
   const { confirm } = useNotifications()
   const { productos, loading, error } = useProductos()
   const { activas: categoriasAdmin } = useCategorias()
@@ -124,11 +125,11 @@ export function Pdv() {
   const [listaPrecioSel, setListaPrecioSel] = React.useState('')
 
   const handleBarcodeDetectado = React.useCallback((codigo: string) => {
-    const codigoLimpio = codigo.replace(/[\s\-]/g, '').trim()
+    const codigoLimpio = codigo.replace(/[\s-]/g, '').trim()
     console.log('[Pdv] Barcode detectado:', codigo, '| Limpio:', codigoLimpio)
 
     const producto = productos.find((p) => {
-      const cod = (p.codigo || '').replace(/[\s\-]/g, '').trim()
+      const cod = (p.codigo || '').replace(/[\s-]/g, '').trim()
       return cod === codigoLimpio || cod === codigo || p.id === codigoLimpio || p.id === codigo
     })
 
@@ -302,6 +303,7 @@ export function Pdv() {
   // deshabilitados y no se muestra la lista. Se calcula del carrito en vivo, así
   // que al vaciarlo (botón, o borrando el último producto) se desactivan solos.
   const hayProductos = Object.keys(cart).length > 0 || Object.keys(manualItems).length > 0
+  const esVendedor = tienePermiso('enviarACaja') && !tienePermiso('cobrarVenta')
 
   /** Al quedarse la venta sin nada, se descarta la forma de pago elegida. */
   function limpiarPagoSiVacio(carrito: Record<string, number>, manuales: Record<string, unknown>) {
@@ -823,6 +825,93 @@ export function Pdv() {
     }
   }
 
+  async function enviarACaja() {
+    if (Object.keys(cart).length === 0 && Object.keys(manualItems).length === 0) return setToast('⚠️ Agregá al menos un producto')
+
+    if (tipoComp === 'factura') {
+      if (!clienteNombre.trim()) return setToast('⚠️ Ingresa la razón social del cliente (FACTURA)')
+    }
+
+    const ok = await confirm({
+      title: '¿Enviar a caja?',
+      message: `Total: ${fmt(total)}\nEl cajero cobrará esta venta.\nComprobante: ${tipoComp === 'nv' ? 'Nota de Venta' : tipoComp === 'boleta' ? 'Boleta' : 'Factura'}`,
+      okText: 'Enviar',
+    })
+    if (!ok) return
+
+    setCobrando(true)
+    try {
+      const invItems = Object.entries(cart).map(([id, qty]) => {
+        const p = productos.find((x) => x.id === id)
+        if (!p) return null
+        const presId = presentacionesSel[id]
+        const pres = presId ? p.presentaciones?.find((pr) => pr.id === presId) : null
+        const factor = pres?.factor ?? 1
+        const presNombre = pres?.nombre ?? 'Unidad'
+        const base = { id, nombre: p.nombre || '', quantity: qty * factor, precioVenta: precioFinal(p) * factor, presentacionNombre: presNombre, presentacionId: pres?.id ?? 'unidad', factorConversion: factor, usarPrecioEspecial: (usarPromo[id] ?? true) && tienePromo(p) }
+        if (p.isKit && p.kitItems?.length) return { ...base, kitItems: p.kitItems }
+        return base
+      }).filter(Boolean) as { id: string; nombre: string; quantity: number; precioVenta: number; presentacionNombre: string; presentacionId: string; factorConversion: number; usarPrecioEspecial: boolean; kitItems?: { productoId: string; cantidad: number }[] }[]
+      const manItems = Object.entries(manualItems).map(([id, it]) => ({
+        id,
+        nombre: it.nombre,
+        quantity: it.qty,
+        precioVenta: it.precio,
+        presentacionNombre: 'Unidad',
+        presentacionId: 'unidad',
+        factorConversion: 1,
+        usarPrecioEspecial: false,
+        manual: true,
+      }))
+      const items = [...invItems, ...manItems]
+      const res = await crearVentaPendiente({
+        items,
+        venta: {
+          tipoDoc: tipoComp === 'nv' ? 'NV' : tipoComp === 'boleta' ? 'BOLETA' : 'FACTURA',
+          tipoPago: 'efectivo',
+          total,
+          descuentoTotal: descuentosCalc.totalDescuento,
+          descuentoGlobalTipo: descuentoGlobalValor ? descuentoGlobalTipo : undefined,
+          descuentoGlobalValor: parseFloat(descuentoGlobalValor) || undefined,
+          cliente_dni: clienteDni || '',
+          cliente_nombre: clienteNombre || '',
+          cliente_direccion: clienteDireccion || '',
+          cajero: nombreUsuario || user?.email || 'sistema',
+          usuarioId: user?.uid || '',
+        },
+        config: {
+          ...cfg,
+          serieBoleta: serieBoleta || cfg.serieBoleta,
+          serieFactura: serieFactura || cfg.serieFactura,
+          serie_prefijo: seriePrefijo || cfg.serie_prefijo,
+        },
+        vendedorId: user?.uid || '',
+        vendedorNombre: nombreUsuario || user?.email || 'sistema',
+        cajaId: cajaId || '',
+      })
+      if (res.success) {
+        setToast(`✅ Enviada a caja: ${res.correlativo ?? ''}`)
+        setCart({})
+        setPagos([])
+        setPagoCredito(false)
+        setGrupoTransf(false)
+        setClienteDni('')
+        setClienteNombre('')
+        setDniConsultado(false)
+        setManualItems({})
+        setEnvio({ tipo: 'tienda', direccion: '', referencia: '', zonaId: '', costo: 0, notas: '' })
+        setDescuentoGlobalValor('')
+        setListaPrecioSel('')
+      } else {
+        setToast('❌ ' + (res.error || 'Error al enviar a caja'))
+      }
+    } catch (e) {
+      setToast('❌ ' + (e as Error).message)
+    } finally {
+      setCobrando(false)
+    }
+  }
+
   async function imprimirComprobante() {
     if (!ventaOk?.documento) return
     setImprimiendo(true)
@@ -1054,8 +1143,15 @@ export function Pdv() {
             </span>
           </div>
 
+          {tienePermiso('verVentasPendientes') && (
+            <div className="border-b px-5 py-3">
+              <PanelVentasPendientes />
+            </div>
+          )}
+
           <div className="border-b px-5 py-3 space-y-3">
-            {/* Tipo de comprobante */}
+            {/* Tipo de comprobante — solo cajero; el vendedor no elige */}
+            {!esVendedor && (
             <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Tipo de comprobante">
               {(['nv', 'boleta', 'factura'] as const).map((t) => (
                 <button
@@ -1071,6 +1167,7 @@ export function Pdv() {
                 </button>
               ))}
             </div>
+            )}
 
             {/* Cliente (colapsable para dar más espacio al carrito) */}
             <button
@@ -1388,8 +1485,9 @@ export function Pdv() {
             {/* ── Formas de pago (pago múltiple) ────────────────────────────────
                 El cajero agrega medios a una lista y el sistema valida el total.
                 Solo el efectivo puede pagar de más (da vuelto); el crédito es
-                exclusivo y va por el total de la venta. */}
-            <div className="space-y-2">
+                exclusivo y va por el total de la venta.
+                El vendedor (enviarACaja && !cobrarVenta) no ve esta sección. */}
+            {!esVendedor && <div className="space-y-2">
               <div className="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
@@ -1525,9 +1623,9 @@ export function Pdv() {
                   {resumen.motivo && <p className="text-[11px] font-semibold text-destructive">{resumen.motivo}</p>}
                 </div>
               )}
-            </div>
+            </div>}
 
-            {pagoCredito && hayProductos && (
+            {!esVendedor && pagoCredito && hayProductos && (
               <CreditoPanel dni={clienteDni.trim()} estado={estadoCredito} total={total} cargando={cargandoCredito} />
             )}
 
@@ -1584,10 +1682,17 @@ export function Pdv() {
                 <Pause className="h-4 w-4" />
                 Pausar
               </Button>
-              <Button onClick={cobrar} disabled={allItems.length === 0 || cobrando || (!pagoCredito && !resumen.puedeCobrar)}>
-                {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                {cobrando ? 'Procesando…' : 'Cobrar'}
-              </Button>
+              {tienePermiso('enviarACaja') && !tienePermiso('cobrarVenta') ? (
+                <Button onClick={enviarACaja} disabled={allItems.length === 0 || cobrando}>
+                  {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  {cobrando ? 'Enviando…' : 'Enviar a caja'}
+                </Button>
+              ) : (
+                <Button onClick={cobrar} disabled={allItems.length === 0 || cobrando || (!pagoCredito && !resumen.puedeCobrar)}>
+                  {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  {cobrando ? 'Procesando…' : 'Cobrar'}
+                </Button>
+              )}
             </div>
           </div>
         </div>

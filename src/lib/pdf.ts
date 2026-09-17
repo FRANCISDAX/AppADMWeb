@@ -325,7 +325,7 @@ export type TurnoArqueo = {
   /** Conciliación por billetera declarada al cerrar (opcional). */
   conciliacion?: ConciliacionMedios
   gastosDelTurno: { descripcion: string; monto: number; categoria: string; tipoPago: string; fecha?: string }[]
-  comprobantes: { id?: string; serieNumero: string; tipoPago: string; esCobro: boolean; operacion?: string; total: number; fecha?: string; clienteNombre: string }[]
+  comprobantes: { id?: string; serieNumero: string; tipoPago: string; esCobro: boolean; operacion?: string; total: number; fecha?: string; clienteNombre: string; vendedorNombre?: string }[]
 }
 
 /**

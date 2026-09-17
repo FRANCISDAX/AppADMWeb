@@ -11,6 +11,7 @@ const ROLES_BADGE: Record<string, { bg: string; color: string }> = {
   ADMIN: { bg: 'bg-emerald-100 text-emerald-700', color: '' },
   GERENTE: { bg: 'bg-amber-100 text-amber-700', color: '' },
   CAJERO: { bg: 'bg-sky-100 text-sky-700', color: '' },
+  VENDEDOR: { bg: 'bg-violet-100 text-violet-700', color: '' },
   PERSONALIZADO: { bg: 'bg-purple-100 text-purple-700', color: '' },
 }
 

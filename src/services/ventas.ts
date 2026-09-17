@@ -1,4 +1,4 @@
-import { collection, doc, increment, getDoc, getDocs, query, runTransaction, updateDoc, where } from 'firebase/firestore'
+import { collection, doc, increment, getDoc, getDocs, query, runTransaction, updateDoc, where, orderBy, limit } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
@@ -304,6 +304,8 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
         turnoId: venta.turnoId || '',
         usuarioId: venta.usuarioId || '',
         cajero: venta.cajero || '',
+        vendedorId: venta.usuarioId || '',
+        vendedorNombre: venta.cajero || '',
         ...(venta.tipoDoc !== 'NV' ? { sunat: { serie, numero: nuevo, puntoEmision: puntoEmisionDe(null, config), estado: 'pendiente' } } : {}),
       }
       tx.set(docRef, docData)
@@ -482,6 +484,389 @@ export async function anularNotaVenta({ documentoId, motivo, usuario = 'sistema'
     return res
   } catch (e) {
     console.error('❌ Error anulando nota de venta:', e)
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+// ─── Venta pendiente (flujo vendedor → cajero) ─────────────────────────────
+
+export type DocumentoVenta = {
+  id: string
+  tipo: 'NV' | 'BOLETA' | 'FACTURA'
+  serie: string
+  numero: number
+  serieNumero: string
+  fecha: string
+  anio: number
+  mes: number
+  anioMes: string
+  estado?: 'anulada' | 'pendiente' | 'pagado' | 'cancelado'
+  vendedorId?: string
+  vendedorNombre?: string
+  cajaId?: string
+  cajeroId?: string
+  fechaCobro?: string
+  motivoCancelacion?: string
+  turnoId?: string
+  usuarioId?: string
+  cajero?: string
+  venta?: Record<string, unknown>
+  sunat?: { estado: string }
+  anulacion?: Record<string, unknown>
+  [k: string]: unknown
+}
+
+/**
+ * Crea una venta con estado 'pendiente' SIN descontar stock ni actualizar turno.
+ * El stock se descuenta recién cuando el cajero cobra (cobrarVentaPendiente).
+ */
+export async function crearVentaPendiente({
+  items,
+  venta,
+  config,
+  vendedorId,
+  vendedorNombre,
+  cajaId,
+}: {
+  items: VentaItem[]
+  venta: VentaData
+  config: Config
+  vendedorId: string
+  vendedorNombre: string
+  cajaId?: string
+}): Promise<{ success: boolean; correlativo?: string; documento?: DocumentoVenta; error?: string }> {
+  try {
+    if (!items.length) return { success: false, error: 'No hay items para vender' }
+    if (!venta.usuarioId) return { success: false, error: 'Falta usuarioId' }
+
+    const f = new Date()
+    const anioMes = `${f.getFullYear()}-${f.getMonth() + 1}`
+    const tipoDoc = venta.tipoDoc
+    const serie = tipoDoc === 'NV'
+      ? (venta as Record<string, unknown>).seriePrefijo as string || config.serie_prefijo || 'NV'
+      : tipoDoc === 'BOLETA' ? config.serieBoleta || 'B001' : config.serieFactura || 'F001'
+
+    const counterRef = doc(db, COL.CONTADORES, `sunat_${serie}`)
+    const counterSnap = await getDoc(counterRef)
+    const nuevo = (counterSnap.exists() ? (counterSnap.data().contador || 0) : 0) + 1
+    await updateDoc(counterRef, { contador: nuevo, lastUpdated: f.toISOString() }).catch(async () => {
+      const { setDoc } = await import('firebase/firestore')
+      await setDoc(counterRef, { contador: nuevo, lastUpdated: f.toISOString() })
+    })
+
+    const numeroStr = String(nuevo).padStart(7, '0')
+    const serieNumero = `${serie}-${numeroStr}`
+
+    const importeTotal = venta.total - (venta.descuentoTotal || 0)
+
+    const ventaDoc = {
+      id: '',
+      fecha: f.toISOString(),
+      items: items.map((it) => ({
+        ...it,
+        precioVenta: it.precioVenta ?? 0,
+      })),
+      total: venta.total,
+      importe_total: importeTotal,
+      descuento_total: venta.descuentoTotal || 0,
+      descuento_global_tipo: venta.descuentoGlobalTipo,
+      descuento_global_valor: venta.descuentoGlobalValor,
+      tipoPago: venta.tipoPago,
+      forma_pago: venta.tipoPago,
+      pagos: venta.pagos || [],
+      efectivo: (venta.pagos || []).filter((p) => p.tipo === 'efectivo').reduce((s, p) => s + p.monto, 0),
+      totalTransferenciaPago: (venta.pagos || []).filter((p) => p.tipo === 'transferencia').reduce((s, p) => s + p.monto, 0),
+      cliente_nombre: venta.cliente_nombre || '',
+      cliente_dni: venta.cliente_dni || '',
+      cliente_direccion: venta.cliente_direccion || '',
+      montoRecibido: venta.montoRecibido || 0,
+      cambio: venta.cambio || 0,
+      cajero: vendedorNombre,
+      serie_numero: serieNumero,
+      sucursal: (config as Record<string, unknown>).sucursal || 'Casa Matriz',
+      mensaje: (config as Record<string, unknown>).mensajeLegal || '',
+      son_letras: numeroALetras(importeTotal),
+      turnoId: '',
+      envio: venta.envio,
+    }
+
+    const docData = {
+      tipo: tipoDoc,
+      tipoDoc,
+      serie,
+      numero: nuevo,
+      correlativo: nuevo,
+      serieNumero,
+      venta: ventaDoc,
+      fecha: f.toISOString(),
+      anio: f.getFullYear(),
+      mes: f.getMonth() + 1,
+      anioMes,
+      createdAt: f.toISOString(),
+      turnoId: '',
+      usuarioId: venta.usuarioId || '',
+      cajero: vendedorNombre,
+      estado: 'pendiente' as const,
+      vendedorId,
+      vendedorNombre,
+      cajaId: cajaId || '',
+      ...(tipoDoc !== 'NV' ? {
+        sunat: {
+          serie,
+          numero: nuevo,
+          puntoEmision: puntoEmisionDe(null, config),
+          estado: 'pendiente',
+        },
+      } : {}),
+    }
+
+    const docId = `${anioMes}_${tipoDoc}-${serieNumero}`
+    const { setDoc } = await import('firebase/firestore')
+    await setDoc(doc(db, COL.DOCUMENTOS, docId), docData)
+
+    logActividad({
+      accion: 'crear_venta_pendiente',
+      entidad: COL.DOCUMENTOS,
+      entidadId: docId,
+      detalle: { vendedor: vendedorNombre, items: items.length, total: venta.total },
+    })
+
+    return { success: true, correlativo: serieNumero, documento: { id: docId, ...docData } as DocumentoVenta }
+  } catch (e) {
+    console.error('❌ Error creando venta pendiente:', e)
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Obtiene las ventas pendientes de una caja específica.
+ */
+export async function obtenerVentasPendientes(cajaId: string): Promise<DocumentoVenta[]> {
+  try {
+    if (!cajaId) return []
+    const snap = await getDocs(
+      query(
+        collection(db, COL.DOCUMENTOS),
+        where('cajaId', '==', cajaId),
+        where('estado', '==', 'pendiente'),
+        orderBy('fecha', 'desc'),
+        limit(50),
+      ),
+    )
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as DocumentoVenta))
+  } catch (e) {
+    console.error('❌ Error obteniendo ventas pendientes:', e)
+    return []
+  }
+}
+
+/**
+ * Cobra una venta pendiente: descuenta stock, actualiza turno y marca como 'pagado'.
+ */
+export async function cobrarVentaPendiente({
+  documentoId,
+  turnoId,
+  pagos,
+  tipoPago,
+  montoRecibido,
+  cambio,
+  cajeroId,
+  cajeroNombre,
+  tipoDoc,
+  config,
+}: {
+  documentoId: string
+  turnoId: string
+  pagos?: PagoGuardado[]
+  tipoPago: 'efectivo' | 'transferencia' | 'credito' | 'mixto'
+  montoRecibido?: number
+  cambio?: number
+  cajeroId: string
+  cajeroNombre: string
+  tipoDoc?: 'NV' | 'BOLETA' | 'FACTURA'
+  config?: Config
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await runTransaction(db, async (tx) => {
+      const docRef = doc(db, COL.DOCUMENTOS, documentoId)
+      const docSnap = await tx.get(docRef)
+      if (!docSnap.exists()) return { success: false, error: 'Documento no encontrado' }
+      const docData = docSnap.data() as DocumentoVenta
+      if (docData.estado !== 'pendiente') return { success: false, error: 'La venta ya no está pendiente' }
+
+      const items = (docData.venta as Record<string, unknown>)?.items as VentaItem[] | undefined
+      if (!items?.length) return { success: false, error: 'Documento sin items' }
+
+      // Descontar stock
+      for (const it of items) {
+        if (it.manual) continue
+        if (it.kitItems?.length) {
+          for (const kit of it.kitItems) {
+            const prodRef = doc(db, COL.PRODUCTOS, kit.productoId)
+            const prodSnap = await tx.get(prodRef)
+            if (prodSnap.exists()) {
+              const stockActual = prodSnap.data().stock ?? 0
+              tx.update(prodRef, { stock: Math.max(0, stockActual - kit.cantidad) })
+            }
+          }
+        } else {
+          const prodRef = doc(db, COL.PRODUCTOS, it.id)
+          const prodSnap = await tx.get(prodRef)
+          if (prodSnap.exists()) {
+            const prod = prodSnap.data()
+            const factor = it.factorConversion || 1
+            const stockActual = prod.stock ?? 0
+            tx.update(prodRef, { stock: Math.max(0, stockActual - it.quantity) })
+            tx.set(doc(collection(db, COL.MOVIMIENTOS)), {
+              productoId: it.id,
+              productoNombre: it.nombre,
+              tipo: 'venta',
+              cantidad: it.quantity,
+              cantidadAnterior: stockActual,
+              cantidadNueva: Math.max(0, stockActual - it.quantity),
+              factorConversion: factor,
+              presentacionNombre: it.presentacionNombre || 'Unidad',
+              fecha: new Date().toISOString(),
+              documentoRef: documentoId,
+              usuario: cajeroNombre,
+            })
+          }
+        }
+      }
+
+      // Actualizar turno
+      if (turnoId) {
+        const turnoRef = doc(db, COL.TURNOS, turnoId)
+        const turnoSnap = await tx.get(turnoRef)
+        if (turnoSnap.exists()) {
+          const td = turnoSnap.data()
+          const total = (docData.venta as Record<string, unknown>)?.total as number || 0
+          const efectivo = (docData.venta as Record<string, unknown>)?.efectivo as number || 0
+          const transferencia = (docData.venta as Record<string, unknown>)?.totalTransferenciaPago as number || 0
+          tx.update(turnoRef, {
+            totalVentas: (td.totalVentas || 0) + total,
+            totalEfectivo: (td.totalEfectivo || 0) + efectivo,
+            totalTransferencia: (td.totalTransferencia || 0) + transferencia,
+            ventasDelTurno: [...(td.ventasDelTurno || []), {
+              docId: documentoId,
+              tipo: docData.tipo,
+              serieNumero: docData.serieNumero,
+              total,
+              fecha: new Date().toISOString(),
+              vendedorId: docData.vendedorId || '',
+              vendedorNombre: docData.vendedorNombre || '',
+            }],
+          })
+        }
+      }
+
+      // Marcar como pagado
+      const f = new Date()
+
+      // Si el cajero cambió el tipoDoc, reasignar serie/numero
+      let serieNumeroFinal = docData.serieNumero
+      let tipoDocFinal = docData.tipo
+      let serieFinal = docData.serie
+      let numeroFinal = docData.numero ?? docData.correlativo
+      if (tipoDoc && tipoDoc !== docData.tipo && config) {
+        const nuevaSerie = tipoDoc === 'NV'
+          ? config.serie_prefijo || 'NV'
+          : tipoDoc === 'BOLETA' ? config.serieBoleta || 'B001' : config.serieFactura || 'F001'
+        const counterRef = doc(db, COL.CONTADORES, `sunat_${nuevaSerie}`)
+        const counterSnap = await tx.get(counterRef)
+        const nuevo = (counterSnap.exists() ? (counterSnap.data().contador || 0) : 0) + 1
+        tx.set(counterRef, { contador: nuevo, lastUpdated: f.toISOString() }, { merge: true })
+        const numeroStr = String(nuevo).padStart(7, '0')
+        serieNumeroFinal = `${nuevaSerie}-${numeroStr}`
+        tipoDocFinal = tipoDoc
+        serieFinal = nuevaSerie
+        numeroFinal = nuevo
+      }
+
+      tx.update(docRef, {
+        estado: 'pagado',
+        cajeroId,
+        cajero: cajeroNombre,
+        fechaCobro: f.toISOString(),
+        turnoId: turnoId || '',
+        tipo: tipoDocFinal,
+        tipoDoc: tipoDocFinal,
+        serie: serieFinal,
+        numero: numeroFinal,
+        correlativo: numeroFinal,
+        serieNumero: serieNumeroFinal,
+        ...(pagos ? {
+          venta: {
+            ...((docData.venta || {}) as Record<string, unknown>),
+            pagos,
+            tipoPago,
+            forma_pago: tipoPago,
+            montoRecibido: montoRecibido || 0,
+            cambio: cambio || 0,
+          },
+        } : {}),
+      })
+
+      return { success: true }
+    })
+
+    if (res.success) {
+      logActividad({
+        accion: 'cobrar_venta_pendiente',
+        entidad: COL.DOCUMENTOS,
+        entidadId: documentoId,
+        detalle: { cajero: cajeroNombre },
+      })
+    }
+    return res
+  } catch (e) {
+    console.error('❌ Error cobrando venta pendiente:', e)
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Cancela una venta pendiente con motivo obligatorio.
+ */
+export async function cancelarVentaPendiente({
+  documentoId,
+  motivo,
+  usuario,
+}: {
+  documentoId: string
+  motivo: string
+  usuario?: string
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!motivo.trim()) return { success: false, error: 'El motivo es obligatorio' }
+
+    const docRef = doc(db, COL.DOCUMENTOS, documentoId)
+    const docSnap = await getDoc(docRef)
+    if (!docSnap.exists()) return { success: false, error: 'Documento no encontrado' }
+    const docData = docSnap.data() as DocumentoVenta
+    if (docData.estado !== 'pendiente') return { success: false, error: 'La venta ya no está pendiente' }
+
+    await updateDoc(docRef, {
+      estado: 'cancelado',
+      motivoCancelacion: motivo.trim(),
+      anulacion: {
+        fecha: new Date().toISOString(),
+        usuario: usuario || 'sistema',
+        motivo: motivo.trim(),
+      },
+      updatedAt: new Date().toISOString(),
+    })
+
+    logActividad({
+      accion: 'cancelar_venta_pendiente',
+      entidad: COL.DOCUMENTOS,
+      entidadId: documentoId,
+      detalle: { motivo, usuario },
+    })
+
+    return { success: true }
+  } catch (e) {
+    console.error('❌ Error cancelando venta pendiente:', e)
     return { success: false, error: (e as Error).message }
   }
 }

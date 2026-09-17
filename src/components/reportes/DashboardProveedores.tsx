@@ -8,6 +8,28 @@ import { useProductos } from '@/hooks/use-productos'
 
 const fmt = (n: number) => 'S/ ' + (Number(n) || 0).toFixed(2)
 
+type Periodo = 'mes' | 'trimestre' | 'anio' | 'todo'
+
+function filtrarPorPeriodo(fecha: string, periodo: Periodo): boolean {
+  if (periodo === 'todo') return true
+  const d = new Date(fecha)
+  if (isNaN(d.getTime())) return false
+  const ahora = new Date()
+  if (periodo === 'mes') {
+    return d.getMonth() === ahora.getMonth() && d.getFullYear() === ahora.getFullYear()
+  }
+  if (periodo === 'trimestre') {
+    const inicio = new Date(ahora)
+    inicio.setMonth(inicio.getMonth() - 3, 1)
+    inicio.setHours(0, 0, 0, 0)
+    return d >= inicio
+  }
+  if (periodo === 'anio') {
+    return d.getFullYear() === ahora.getFullYear()
+  }
+  return true
+}
+
 type ProveedorStats = {
   id: string
   nombre: string
@@ -16,42 +38,97 @@ type ProveedorStats = {
   saldoPendiente: number
 }
 
+type CompraBruta = { provId: string; provNombre: string; fecha: string; totalPagado: number }
+
+function norm(s: string) {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ')
+}
+
+function calcularStats(provs: Proveedor[], todasLasCompras: CompraBruta[], per: Periodo): ProveedorStats[] {
+  const comprasFiltradas = per === 'todo' ? todasLasCompras : todasLasCompras.filter((c) => filtrarPorPeriodo(c.fecha, per))
+
+  const nombreMap = new Map(provs.map((p) => [p.id, p.nombre]))
+  const idMap = new Map<string, ProveedorStats>()
+  const nombreIdx = new Map<string, ProveedorStats>()
+
+  for (const p of provs) {
+    if (!p.id) continue
+    const st: ProveedorStats = { id: p.id, nombre: p.nombre, totalGastado: 0, numCompras: 0, saldoPendiente: p.saldoPendiente || 0 }
+    idMap.set(p.id, st)
+    nombreIdx.set(norm(p.nombre), st)
+  }
+
+  for (const compra of comprasFiltradas) {
+    const provId = compra.provId || ''
+    const provNombre = compra.provNombre || nombreMap.get(provId) || provId || 'Sin proveedor'
+    let st = (provId && idMap.get(provId)) || (provNombre && nombreIdx.get(norm(provNombre))) || null
+    if (!st) {
+      const key = provId || norm(provNombre) || 'sin_proveedor'
+      st = { id: key, nombre: provNombre || 'Sin proveedor', totalGastado: 0, numCompras: 0, saldoPendiente: 0 }
+      idMap.set(key, st)
+    }
+    st.totalGastado += compra.totalPagado
+    st.numCompras++
+  }
+
+  return [...idMap.values()].sort((a, b) => b.totalGastado - a.totalGastado)
+}
+
 export function DashboardProveedores() {
   const [proveedores, setProveedores] = React.useState<Proveedor[]>([])
+  const [todasLasCompras, setTodasLasCompras] = React.useState<CompraBruta[]>([])
   const [stats, setStats] = React.useState<ProveedorStats[]>([])
   const [cargando, setCargando] = React.useState(true)
+  const [periodo, setPeriodo] = React.useState<Periodo>('mes')
   const { productos } = useProductos()
 
   React.useEffect(() => {
     Promise.all([
       cargarProveedores(),
-      cargarStats(),
-    ]).then(([provs, st]) => { setProveedores(provs); setStats(st) }).finally(() => setCargando(false))
+      cargarTodasLasCompras(),
+    ]).then(([provs, compras]) => {
+      setProveedores(provs)
+      setTodasLasCompras(compras)
+      setStats(calcularStats(provs, compras, 'mes'))
+    }).finally(() => setCargando(false))
   }, [])
 
-  async function cargarStats(): Promise<ProveedorStats[]> {
-    const provs = await cargarProveedores()
+  React.useEffect(() => {
+    if (proveedores.length === 0 || todasLasCompras.length === 0) return
+    setStats(calcularStats(proveedores, todasLasCompras, periodo))
+  }, [periodo, proveedores, todasLasCompras])
+
+  async function cargarTodasLasCompras(): Promise<CompraBruta[]> {
     const q = query(collection(db, COL.MOVIMIENTOS), where('tipoMovimiento', '==', 'compra'), orderBy('fecha', 'desc'))
-    const snap = await getDocs(q)
+    const qEg = query(collection(db, COL.EGRESOS), where('categoria', '==', 'Compras'))
+    const [snap, snapEg] = await Promise.all([getDocs(q), getDocs(qEg)])
 
-    const mapa: Record<string, ProveedorStats> = {}
-    for (const p of provs) {
-      if (!p.id) continue
-      mapa[p.id] = { id: p.id, nombre: p.nombre, totalGastado: 0, numCompras: 0, saldoPendiente: p.saldoPendiente || 0 }
-    }
-
+    const comprasMap: Record<string, CompraBruta> = {}
     for (const d of snap.docs) {
       const data = d.data() as Record<string, unknown>
       const meta = (data.metadata || {}) as Record<string, unknown>
-      const provId = (meta.proveedorId as string) || ''
-      if (!mapa[provId]) {
-        mapa[provId] = { id: provId, nombre: (meta.proveedor as string) || provId, totalGastado: 0, numCompras: 0, saldoPendiente: 0 }
+      const compraId = (meta.compraId as string) || d.id
+      if (!comprasMap[compraId]) {
+        comprasMap[compraId] = {
+          provId: (meta.proveedorId as string) || '',
+          provNombre: (meta.proveedor as string) || '',
+          fecha: (data.fecha as string) || '',
+          totalPagado: (meta.totalPagado as number) || 0,
+        }
       }
-      mapa[provId].totalGastado += (meta.totalPagado as number) || 0
-      mapa[provId].numCompras++
     }
 
-    return Object.values(mapa).sort((a, b) => b.totalGastado - a.totalGastado)
+    const todas: CompraBruta[] = Object.values(comprasMap)
+    for (const d of snapEg.docs) {
+      const data = d.data() as Record<string, unknown>
+      todas.push({
+        provId: (data.proveedorId as string) || '',
+        provNombre: (data.proveedorNombre as string) || '',
+        fecha: (data.fecha as string) || '',
+        totalPagado: (data.monto as number) || 0,
+      })
+    }
+    return todas
   }
 
   const totalGastado = stats.reduce((s, r) => s + r.totalGastado, 0)
@@ -62,7 +139,7 @@ export function DashboardProveedores() {
     return productos.filter((p) => p.activo !== false && (p.minStock ?? 0) > 0 && (p.stock ?? 0) <= (p.minStock ?? 0))
   }, [productos])
 
-  const top5 = stats.slice(0, 5)
+  const top5 = stats.filter((s) => s.totalGastado > 0).slice(0, 5)
 
   if (cargando) {
     return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -70,6 +147,15 @@ export function DashboardProveedores() {
 
   return (
     <div className="space-y-5">
+      {/* Filtro período */}
+      <div className="flex gap-1 rounded-xl bg-muted p-1 text-xs w-fit">
+        {(['mes', 'trimestre', 'anio', 'todo'] as Periodo[]).map((p) => (
+          <button key={p} onClick={() => setPeriodo(p)} className={`rounded-lg px-3 py-1.5 font-bold cursor-pointer ${periodo === p ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}>
+            {p === 'mes' ? 'Mes' : p === 'trimestre' ? '3 meses' : p === 'anio' ? 'Año' : 'Todo'}
+          </button>
+        ))}
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl border bg-card p-4 shadow-card">
@@ -78,7 +164,7 @@ export function DashboardProveedores() {
             <span className="text-xs font-bold">Total compras</span>
           </div>
           <p className="mt-1 text-2xl font-extrabold">{fmt(totalGastado)}</p>
-          <p className="text-[11px] text-muted-foreground">{stats.length} proveedor{stats.length !== 1 ? 'es' : ''}</p>
+          <p className="text-[11px] text-muted-foreground">{stats.filter((s) => s.totalGastado > 0).length} proveedor{stats.filter((s) => s.totalGastado > 0).length !== 1 ? 'es' : ''}</p>
         </div>
         <div className="rounded-2xl border bg-card p-4 shadow-card">
           <div className="flex items-center gap-2 text-muted-foreground">
@@ -101,7 +187,7 @@ export function DashboardProveedores() {
             <ShoppingCart className="h-4 w-4" />
             <span className="text-xs font-bold">Total proveedores</span>
           </div>
-          <p className="mt-1 text-2xl font-extrabold">{stats.length}</p>
+          <p className="mt-1 text-2xl font-extrabold">{proveedores.length}</p>
           <p className="text-[11px] text-muted-foreground">{proveedores.filter((p) => p.activo !== false).length} activos</p>
         </div>
       </div>
