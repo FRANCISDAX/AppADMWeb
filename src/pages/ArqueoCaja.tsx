@@ -11,7 +11,8 @@ import { rectificarTurno } from '@/services/turnos'
 import { cn } from '@/lib/utils'
 import { abrirPDFArqueo, type TurnoArqueo } from '@/lib/pdf'
 import { diagnosticarDiferencia, type Diagnostico } from '@/lib/diagnosticos'
-import { lineasDeOrigen, type DesgloseBolsillo, type DesgloseTurno } from '@/lib/arqueo'
+import { useConfiguracion } from '@/hooks/use-configuracion'
+import { lineasDeOrigen, type ConciliacionMedios, type DesgloseBolsillo, type DesgloseTurno } from '@/lib/arqueo'
 
 const MESES_CORTO = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
 const fmt = (n: number) => 'S/ ' + (n ?? 0).toFixed(2)
@@ -23,6 +24,8 @@ const formatearFechaLarga = (fecha: Date) => {
 }
 
 export function ArqueoCaja() {
+  // Empresa para el encabezado de los PDF (nombre, RUC, dirección).
+  const { config } = useConfiguracion()
   const { tienePermiso } = usePermisos()
   const { user } = useAuth()
   const verTodo = tienePermiso('verTodo')
@@ -151,7 +154,7 @@ export function ArqueoCaja() {
 
       {arqueo && arqueo.turnos.length > 0 && (
         <div className="flex justify-end">
-          <Button variant="outline" size="sm" onClick={() => abrirPDFArqueo({ fecha: fechaSel, turnos: arqueo.turnos, resumen: { totalVentas: arqueo.totalVentas, totalEfectivo: arqueo.totalEfectivo, totalTransferencia: arqueo.totalTransferencia, totalGastos: arqueo.totalGastos, totalNeto: arqueo.totalNeto, numTurnos: arqueo.numTurnos, numCierres: arqueo.numCierres, numTransacciones: arqueo.numTransacciones, montoInicialTotal: arqueo.montoInicialTotal, efectivoEsperadoTotal: arqueo.efectivoEsperadoTotal, efectivoContadoTotal: arqueo.efectivoContadoTotal, diferenciaTotal: arqueo.diferenciaTotal } })}>
+          <Button variant="outline" size="sm" onClick={() => abrirPDFArqueo({ fecha: fechaSel, turnos: arqueo.turnos, empresa: config, resumen: { totalVentas: arqueo.totalVentas, totalEfectivo: arqueo.totalEfectivo, totalTransferencia: arqueo.totalTransferencia, totalGastos: arqueo.totalGastos, totalNeto: arqueo.totalNeto, numTurnos: arqueo.numTurnos, numCierres: arqueo.numCierres, numTransacciones: arqueo.numTransacciones, montoInicialTotal: arqueo.montoInicialTotal, efectivoEsperadoTotal: arqueo.efectivoEsperadoTotal, efectivoContadoTotal: arqueo.efectivoContadoTotal, diferenciaTotal: arqueo.diferenciaTotal } })}>
             <FileText className="mr-2 h-4 w-4" /> Exportar PDF
           </Button>
         </div>
@@ -306,6 +309,7 @@ export function ArqueoCaja() {
                     <Origenes desglose={turno.desglose?.efectivo} className="pl-3" />
                     <Row label="Transferencia" value={fmt(turno.totalTransferencia)} />
                     <Origenes desglose={turno.desglose?.transferencia} className="pl-3" />
+                    <ConciliacionBilleteras conciliacion={turno.conciliacion} />
                     <Row label="Gastos en efectivo" value={'- ' + fmt(turno.totalGastosEfectivo)} valueClass="text-destructive" />
                     {turno.gastosDelTurno.filter((g) => g.tipoPago === 'caja').length > 0 && (
                       <div className="rounded-lg border border-border/60 bg-background px-3 py-2">
@@ -523,9 +527,34 @@ function Origenes({ desglose, className }: { desglose?: DesgloseBolsillo; classN
   )
 }
 
+/**
+ * Conciliación por billetera declarada al cerrar: lo que dice el sistema vs lo que
+ * realmente llegó a Yape/Plin/tarjeta. Solo se muestra si el cajero declaró algo
+ * (es un control **opcional** del cierre).
+ */
+function ConciliacionBilleteras({ conciliacion }: { conciliacion?: ConciliacionMedios }) {
+  const filas = Object.entries(conciliacion ?? {}).filter(([, v]) => v.declarado !== 0)
+  if (filas.length === 0) return null
+  return (
+    <div className="mt-1 rounded-lg border border-border/60 bg-background px-3 py-2">
+      <div className="text-[11px] font-bold text-muted-foreground">Conciliación con la billetera</div>
+      {filas.map(([medio, v]) => (
+        <div key={medio} className="flex items-center justify-between text-[11px]">
+          <span className="capitalize text-muted-foreground">{medio}</span>
+          <span className="num">
+            <span className="text-muted-foreground">sistema {fmt(v.sistema)} · declarado {fmt(v.declarado)} · </span>
+            <span className={cn('font-bold', v.diferencia === 0 ? 'text-emerald-600' : 'text-destructive')}>
+              {v.diferencia === 0 ? 'OK' : `dif ${fmt(v.diferencia)}`}
+            </span>
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /** Versión de una línea para las tarjetas del encabezado del día (achicada). */
-function OrigenesCorto({ desglose }: { desglose?: DesgloseBolsillo }) {
-  if (!desglose) return null
+function OrigenesCorto({ desglose }: { desglose?: DesgloseBolsillo }) {  if (!desglose) return null
   const partes = lineasDeOrigen(desglose)
   if (partes.length <= 1) return null
   return (

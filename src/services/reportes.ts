@@ -243,6 +243,8 @@ export async function obtenerArqueoDelDia(fecha: Date | string, usuarioFiltro?: 
         efectivoContado,
         diferencia,
         desglose,
+        // Conciliación por billetera declarada al cerrar (opcional: puede no existir).
+        conciliacion: t.conciliacion,
         observaciones: t.observaciones || '',
         numVentas: activas.length,
         gastosDelTurno: t.gastosDelTurno || [],

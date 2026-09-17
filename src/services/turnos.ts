@@ -4,7 +4,7 @@ import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
 import { exigirRateLimit } from '@/lib/rate-limit'
 import { analizarCierre } from '@/lib/auditoria-caja'
-import { efectivoEsperadoDe } from '@/lib/arqueo'
+import { efectivoEsperadoDe, type ConciliacionMedios } from '@/lib/arqueo'
 
 export type Turno = {
   id?: string
@@ -78,7 +78,7 @@ export async function abrirTurno({ tipoTurno, montoInicial, usuarioId, usuarioNo
   }
 }
 
-export async function cerrarTurno({ turnoId, montoFinalEfectivo, observaciones, usuarioId, esSupervisor = false }: { turnoId: string; montoFinalEfectivo: number; observaciones: string; usuarioId: string; esSupervisor?: boolean }) {
+export async function cerrarTurno({ turnoId, montoFinalEfectivo, observaciones, usuarioId, esSupervisor = false, conciliacion }: { turnoId: string; montoFinalEfectivo: number; observaciones: string; usuarioId: string; esSupervisor?: boolean; conciliacion?: ConciliacionMedios }) {
   exigirRateLimit('cerrar_turno')
   try {
     const fechaCierre = new Date().toISOString()
@@ -135,12 +135,21 @@ export async function cerrarTurno({ turnoId, montoFinalEfectivo, observaciones, 
           recomendaciones: analisis.recomendaciones,
         },
         observaciones,
+        // Conciliación por billetera declarada por el cajero (opcional).
+        ...(conciliacion ? { conciliacion } : {}),
         ventas: t.ventasDelTurno || [],
         gastos: t.gastosDelTurno || [],
         createdAt: fechaCierre,
       }
       transaction.set(cierreRef, cierreDoc)
-      transaction.update(turnoDocRef, { estado: 'cerrado', fechaCierre, montoFinalEfectivo, efectivoEsperado, diferencia })
+      transaction.update(turnoDocRef, {
+        estado: 'cerrado',
+        fechaCierre,
+        montoFinalEfectivo,
+        efectivoEsperado,
+        diferencia,
+        ...(conciliacion ? { conciliacion } : {}),
+      })
       return cierreDoc
     })
 

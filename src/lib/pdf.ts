@@ -3,7 +3,7 @@ import { numeroALetras } from '@/lib/numero-a-letras'
 import { etiquetaPago, formaPagoLabel } from '@/lib/pagos'
 import { itemsConDescuento } from '@/lib/sunat-importes'
 import { esc } from '@/lib/ui-utils'
-import { desglosarTurno, lineasDeOrigen, type DesgloseTurno, type ItemTurno } from '@/lib/arqueo'
+import { desglosarTurno, lineasDeOrigen, type ConciliacionMedios, type DesgloseTurno, type ItemTurno } from '@/lib/arqueo'
 
 const TITULOS: Record<string, string> = {
   NV: 'NOTA DE VENTA',
@@ -322,8 +322,56 @@ export type TurnoArqueo = {
   numVentas: number
   /** Desglose por origen dentro de cada bolsillo (ventas del día / cobranzas / notas). */
   desglose?: DesgloseTurno
+  /** Conciliación por billetera declarada al cerrar (opcional). */
+  conciliacion?: ConciliacionMedios
   gastosDelTurno: { descripcion: string; monto: number; categoria: string; tipoPago: string; fecha?: string }[]
   comprobantes: { id?: string; serieNumero: string; tipoPago: string; esCobro: boolean; operacion?: string; total: number; fecha?: string; clienteNombre: string }[]
+}
+
+/**
+ * Encabezado de empresa para los documentos de caja (nombre, RUC, dirección).
+ * El dato ya vive en Configuración → Empresa: antes los PDF no lo recibían, así que el
+ * arqueo y el cierre salían como un papel sin identificar.
+ */
+export type EmpresaPDF = { nombre?: string; ruc?: string; direccion?: string }
+
+function empresaHTML(empresa?: EmpresaPDF): string {
+  if (!empresa?.nombre && !empresa?.ruc) return ''
+  return `<div style="font-size:10px;color:#444;margin-top:2px;">
+    <b>${esc(empresa.nombre || '')}</b>${empresa.ruc ? ` · RUC ${esc(empresa.ruc)}` : ''}${empresa.direccion ? `<br>${esc(empresa.direccion)}` : ''}
+  </div>`
+}
+
+/**
+ * Bloque de firmas para los documentos de caja. Se imprime siempre: el arqueo y el cierre
+ * son los papeles que respaldan la plata y se archivan firmados.
+ */
+function firmasHTML(cerroElTurno?: string): string {
+  const linea = 'border-top:1px solid #333;width:200px;margin:0 auto 4px;'
+  return `<div style="margin-top:26px;display:flex;gap:40px;justify-content:space-around;text-align:center;font-size:9px;color:#444;">
+    <div><div style="${linea}"></div>Cajero${cerroElTurno ? ` — cerró el turno: ${esc(cerroElTurno)}` : ''}</div>
+    <div><div style="${linea}"></div>Supervisor / Administración</div>
+  </div>`
+}
+
+/**
+ * Conciliación por billetera declarada por el cajero (sistema vs lo que realmente llegó).
+ * Solo se imprime si hay datos: es un control **opcional** del cierre.
+ */
+function conciliacionHTML(conciliacion: ConciliacionMedios | undefined, fmt: (n: number) => string): string {
+  const filas = Object.entries(conciliacion ?? {})
+  if (filas.length === 0) return ''
+  const conDato = filas.filter(([, v]) => v.declarado !== 0)
+  return `<div class="section-title">Conciliación de billeteras${conDato.length === 0 ? ' <span style="font-weight:normal;color:#92400e;">(sin declarar)</span>' : ''}</div>
+  <table style="width:100%;font-size:10px;border-collapse:collapse;">
+    <tr style="border-bottom:1px solid #e2e8f0;color:#64748b;"><td>Medio</td><td style="text-align:right;">Sistema</td><td style="text-align:right;">Declarado</td><td style="text-align:right;">Diferencia</td></tr>
+    ${filas
+      .map(
+        ([medio, v]) =>
+          `<tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:4px 0;text-transform:capitalize;">${esc(medio)}</td><td style="text-align:right;">${fmt(v.sistema)}</td><td style="text-align:right;">${v.declarado === 0 ? '—' : fmt(v.declarado)}</td><td style="text-align:right;font-weight:bold;color:${v.declarado === 0 ? '#94a3b8' : v.diferencia === 0 ? '#16a34a' : '#dc2626'};">${v.declarado === 0 ? '—' : v.diferencia === 0 ? 'OK' : fmt(v.diferencia)}</td></tr>`,
+      )
+      .join('')}
+  </table>`
 }
 
 /**
@@ -339,7 +387,7 @@ function origenesHTML(desglose: DesgloseTurno['efectivo'] | undefined, fmt: (n: 
     .join('')
 }
 
-export async function abrirPDFArqueo({ fecha, turnos, resumen }: { fecha: Date; turnos: TurnoArqueo[]; resumen: { totalVentas: number; totalEfectivo: number; totalTransferencia: number; totalGastos: number; totalNeto: number; numTurnos: number; numCierres: number; numTransacciones: number; montoInicialTotal: number; efectivoEsperadoTotal: number; efectivoContadoTotal: number; diferenciaTotal: number } }) {
+export async function abrirPDFArqueo({ fecha, turnos, resumen, empresa }: { fecha: Date; turnos: TurnoArqueo[]; resumen: { totalVentas: number; totalEfectivo: number; totalTransferencia: number; totalGastos: number; totalNeto: number; numTurnos: number; numCierres: number; numTransacciones: number; montoInicialTotal: number; efectivoEsperadoTotal: number; efectivoContadoTotal: number; diferenciaTotal: number }; empresa?: EmpresaPDF }) {
   const w = window.open('', '_blank', 'width=500,height=800')
   if (!w) return
 
@@ -409,6 +457,7 @@ export async function abrirPDFArqueo({ fecha, turnos, resumen }: { fecha: Date; 
   <div class="header">
     <div class="title">ARQUEO DE CAJA</div>
     <div class="subtitle">${fechaStr.charAt(0).toUpperCase() + fechaStr.slice(1)}</div>
+    ${empresaHTML(empresa)}
   </div>
   <div class="summary">
     <div class="kpi"><div class="kpi-label">Ventas Totales</div><div class="kpi-value" style="color:#2563eb;">${fmt(resumen.totalVentas)}</div></div>
@@ -433,6 +482,7 @@ export async function abrirPDFArqueo({ fecha, turnos, resumen }: { fecha: Date; 
   </div>
   <div class="section-title">Detalle por Turno</div>
   ${turnosHTML || '<div style="text-align:center;color:#999;padding:20px;">No hay turnos registrados este día.</div>'}
+  ${firmasHTML()}
   <div class="footer">Generado el ${new Date().toLocaleDateString('es-PE')} a las ${horaImpresion}</div>
   </body></html>`
 
@@ -467,13 +517,15 @@ export type CierreCajaPDF = {
   /** Items del turno (`tblCierresCaja.ventas`). Con esto se muestra el **origen** de cada
    *  bolsillo (ventas del día / cobranza de crédito / notas), igual que en el arqueo. */
   ventas?: ItemTurno[]
+  /** Conciliación por billetera declarada por el cajero al cerrar (opcional). */
+  conciliacion?: ConciliacionMedios
   analisis?: {
     causas: { tipo: string; descripcion: string; ventaId?: string; monto?: number; hora?: string }[]
     recomendaciones: string[]
   }
 }
 
-export function abrirPDFCierreCaja(cierre: CierreCajaPDF) {
+export function abrirPDFCierreCaja(cierre: CierreCajaPDF, empresa?: EmpresaPDF) {
   const w = window.open('', '_blank', 'width=500,height=800')
   if (!w) return
 
@@ -525,6 +577,7 @@ export function abrirPDFCierreCaja(cierre: CierreCajaPDF) {
     <div class="title">CIERRE DE CAJA</div>
     <div class="subtitle">${fechaStr.charAt(0).toUpperCase() + fechaStr.slice(1)}</div>
     <div class="subtitle" style="margin-top:2px;">Turno: ${cierre.tipoTurno === 'tarde' ? '🌙 Tarde' : '🌅 Mañana'} · Cajero: ${esc(cierre.usuarioNombre ?? '—')}</div>
+    ${empresaHTML(empresa)}
   </div>
 
   <div class="diff-banner" style="background:${diffOk ? '#dcfce7' : diff > 0 ? '#fef3c7' : '#fee2e2'}; color:${diffOk ? '#16a34a' : diff > 0 ? '#92400e' : '#dc2626'};">
@@ -567,6 +620,8 @@ export function abrirPDFCierreCaja(cierre: CierreCajaPDF) {
     <div>ID: ${cierre.id}</div>
   </div>
 
+  ${conciliacionHTML(cierre.conciliacion, fmt)}
+  ${firmasHTML(cierre.usuarioNombre)}
   <div class="footer">Generado el ${new Date().toLocaleDateString('es-PE')} a las ${horaImpresion}</div>
   </body></html>`
 

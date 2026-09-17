@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { analizarCierre, type ResultadoAuditoria } from '@/lib/auditoria-caja'
-import { efectivoEsperadoDe } from '@/lib/arqueo'
+import { efectivoEsperadoDe, mediosDelTurno, type ConciliacionMedios } from '@/lib/arqueo'
 import { cn } from '@/lib/utils'
 
 const fmt = (n: number) => 'S/ ' + n.toFixed(2)
@@ -18,22 +18,43 @@ type Props = {
     vueltoTransferencia?: number
     ventasDelTurno: any[]
   }
-  onConfirm: (montoFinal: number, observaciones: string) => Promise<void>
+  /** Conteo ciego: no muestra el "Debería haber" hasta que el cajero registre el conteo. */
+  conteoCiego?: boolean
+  onConfirm: (montoFinal: number, observaciones: string, conciliacion: ConciliacionMedios) => Promise<void>
   onCancel: () => void
   procesando: boolean
 }
 
-export function CierreCaja({ turno, onConfirm, onCancel, procesando }: Props) {
+/** Lo que el cajero declara que le llegó por cada billetera, y la diferencia contra el sistema. */
+export type { ConciliacionMedios }
+
+export function CierreCaja({ turno, conteoCiego = false, onConfirm, onCancel, procesando }: Props) {
   const [montoFinal, setMontoFinal] = React.useState('')
   const [observaciones, setObservaciones] = React.useState('')
   const [paso, setPaso] = React.useState<'conteo' | 'analisis'>('conteo')
   const [resultado, setResultado] = React.useState<ResultadoAuditoria | null>(null)
+  const [declarados, setDeclarados] = React.useState<Record<string, string>>({})
 
   const monto = parseFloat(montoFinal) || 0
   // Misma fórmula que usa el cierre y el arqueo: antes acá faltaba el vuelto por
   // transferencia, así que el cajero podía ver un "Debería haber" distinto al que
   // el sistema guardaba.
   const esperado = efectivoEsperadoDe(turno)
+  // Medios electrónicos del turno (lo que dice el sistema) para conciliar billetera por
+  // billetera. Si el cajero no declara nada, queda sin dato: la conciliación es opcional.
+  const medios = React.useMemo(
+    () => mediosDelTurno({ ventasDelTurno: turno.ventasDelTurno }),
+    [turno.ventasDelTurno],
+  )
+
+  function armarConciliacion(): ConciliacionMedios {
+    const res: ConciliacionMedios = {}
+    for (const m of medios) {
+      const declarado = parseFloat(String(declarados[m.medio] ?? '').replace(',', '.')) || 0
+      res[m.medio] = { sistema: m.monto, declarado, diferencia: Math.round((declarado - m.monto) * 100) / 100 }
+    }
+    return res
+  }
 
   function handleAnalizar() {
     if (monto <= 0) return
@@ -50,7 +71,7 @@ export function CierreCaja({ turno, onConfirm, onCancel, procesando }: Props) {
   }
 
   async function handleConfirmar() {
-    await onConfirm(monto, observaciones)
+    await onConfirm(monto, observaciones, armarConciliacion())
   }
 
   if (paso === 'analisis' && resultado) {
@@ -154,29 +175,36 @@ export function CierreCaja({ turno, onConfirm, onCancel, procesando }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-muted/30 p-3 text-sm">
-        <div className="mb-2 font-bold text-muted-foreground">Resumen del turno</div>
-        <div className="space-y-1">
-          <div className="flex justify-between">
-            <span>Fondo inicial</span>
-            <span className="font-semibold">{fmt(turno.montoInicial)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>+ Ventas en efectivo</span>
-            <span className="font-semibold text-emerald-600">{fmt(turno.totalEfectivo)}</span>
-          </div>
-          {(turno.totalGastosEfectivo ?? 0) > 0 && (
+      {conteoCiego ? (
+        <div className="rounded-xl border border-dashed p-3 text-xs text-muted-foreground">
+          <b>Conteo ciego activado.</b> Contá el cajón y escribí el total: el sistema recién
+          después te muestra cuánto debería haber y la diferencia.
+        </div>
+      ) : (
+        <div className="rounded-xl bg-muted/30 p-3 text-sm">
+          <div className="mb-2 font-bold text-muted-foreground">Resumen del turno</div>
+          <div className="space-y-1">
             <div className="flex justify-between">
-              <span>- Gastos en efectivo</span>
-              <span className="font-semibold text-red-600">-{fmt(turno.totalGastosEfectivo)}</span>
+              <span>Fondo inicial</span>
+              <span className="font-semibold">{fmt(turno.montoInicial)}</span>
             </div>
-          )}
-          <div className="flex justify-between border-t pt-1 font-bold">
-            <span>Debería haber</span>
-            <span>{fmt(esperado)}</span>
+            <div className="flex justify-between">
+              <span>+ Ventas en efectivo</span>
+              <span className="font-semibold text-emerald-600">{fmt(turno.totalEfectivo)}</span>
+            </div>
+            {(turno.totalGastosEfectivo ?? 0) > 0 && (
+              <div className="flex justify-between">
+                <span>- Gastos en efectivo</span>
+                <span className="font-semibold text-red-600">-{fmt(turno.totalGastosEfectivo)}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t pt-1 font-bold">
+              <span>Debería haber</span>
+              <span>{fmt(esperado)}</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div>
         <Label>¿Cuánto contaste en caja? (S/)</Label>
@@ -190,7 +218,48 @@ export function CierreCaja({ turno, onConfirm, onCancel, procesando }: Props) {
         />
       </div>
 
-      {monto > 0 && (
+      {/* Conciliación por billetera: opcional, se guarda con el cierre. El dato fino
+          (Yape/Plin/tarjeta) existe desde el 16/09; antes queda "Transferencia (sin detalle)". */}
+      {medios.length > 0 && (
+        <div className="rounded-xl border p-3">
+          <div className="text-sm font-bold">Cobros por billetera (opcional)</div>
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Escribí lo que <b>realmente te llegó</b> a cada una. Si no lo revisaste, dejalas vacías.
+          </p>
+          <div className="space-y-2">
+            {medios.map((m) => {
+              const declarado = parseFloat(String(declarados[m.medio] ?? '').replace(',', '.')) || 0
+              const diferencia = Math.round((declarado - m.monto) * 100) / 100
+              return (
+                <div key={m.medio} className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-xs">
+                    {m.icono} {m.label}
+                    <span className="ml-1 text-muted-foreground">(sistema {fmt(m.monto)})</span>
+                  </span>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={declarados[m.medio] ?? ''}
+                    onChange={(e) => setDeclarados((d) => ({ ...d, [m.medio]: e.target.value }))}
+                    placeholder="—"
+                    className="h-8 w-24 text-right"
+                  />
+                  <span
+                    className={cn(
+                      'num w-20 text-right text-[11px] font-bold',
+                      declarado === 0 ? 'text-muted-foreground' : diferencia === 0 ? 'text-emerald-600' : 'text-destructive',
+                    )}
+                  >
+                    {declarado === 0 ? '—' : diferencia === 0 ? 'OK' : fmt(diferencia)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {!conteoCiego && monto > 0 && (
         <div className={cn(
           'rounded-lg p-2.5 text-center text-sm font-bold',
           monto === esperado

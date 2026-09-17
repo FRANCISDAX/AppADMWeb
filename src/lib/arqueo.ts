@@ -210,3 +210,78 @@ export function lineasDeOrigen(d: DesgloseBolsillo): { origen: OrigenPago; label
   if (d.notas !== 0) lineas.push({ origen: 'notas', label: 'notas', monto: d.notas })
   return lineas
 }
+
+/** Un medio electrónico con lo que el sistema dice que entró. */
+export type MedioDelTurno = {
+  /** `yape` | `plin` | `transferencia` | `tarjeta`; `transferencia` agrupa lo que no tiene detalle. */
+  medio: string
+  label: string
+  icono: string
+  /** Monto que entró por ese medio según el sistema (ventas + cobranzas + notas). */
+  monto: number
+}
+
+/**
+ * Conciliación por billetera que declara el cajero al cerrar: por cada medio, lo que dice
+ * el sistema, lo que realmente llegó y la diferencia. Es **opcional** (y por eso un medio
+ * sin declarar queda con `declarado: 0` y su diferencia igual al total del sistema).
+ */
+export type ConciliacionMedios = Record<string, { sistema: number; declarado: number; diferencia: number }>
+
+/**
+ * Cuánto entró por **cada medio electrónico** según el sistema — la base para conciliar
+ * contra la billetera o el banco ("¿me llegó realmente lo que dice la app?").
+ *
+ * ⚠️ El dato fino (`medio`: yape/plin/tarjeta) **solo existe desde el 16/09/2026**; los
+ * documentos anteriores guardan el bolsillo (`transferencia`) y se agrupan como
+ * **"Transferencia (sin detalle)"**, en vez de inventar un medio. Lo mismo pasa con una
+ * **nota de crédito/débito**: `notas.ts` guarda `tipoPago` = bolsillo del original, así que
+ * una NC de una venta por Yape resta del grupo genérico (no de Yape).
+ * No incluye el efectivo: para eso está `desglosarTurno().efectivo.total`.
+ */
+export function mediosDelTurno(turno: TurnoParaDesglose): MedioDelTurno[] {
+  const acumulado = new Map<string, number>()
+  const sumar = (medio: string, monto: number) => acumulado.set(medio, (acumulado.get(medio) || 0) + monto)
+
+  for (const item of (turno.ventasDelTurno ?? [])) {
+    if (!item || item.estado === 'anulada') continue
+    const esNota = item.tipo === 'nota_credito' || item.tipo === 'nota_debito'
+    if (item.tipo === 'cobro_credito' || esNota) {
+      // El item de un cobro/nota no tiene `pagos`: su `tipoPago` es el medio (o el bolsillo).
+      // En una NC el `total` ya viene negativo, así que resta solo.
+      const monto = esNota ? Number(item.total ?? 0) || 0 : Number(item.monto ?? item.total ?? 0) || 0
+      const clave = claveDeMedio(item.tipoPago)
+      if (clave) sumar(clave, monto)
+      continue
+    }
+    const pagos = Array.isArray(item.pagos) ? item.pagos : []
+    if (pagos.length > 0) {
+      for (const p of pagos) {
+        const clave = claveDeMedio(p.medio ?? p.tipo ?? '')
+        if (clave) sumar(clave, Number(p.monto) || 0)
+      }
+      continue
+    }
+    const clave = claveDeMedio(item.tipoPago)
+    if (clave) sumar(clave, Number(item.total) || 0)
+  }
+
+  const ORDEN = ['yape', 'plin', 'transferencia', 'tarjeta']
+  const INFO: Record<string, { label: string; icono: string }> = {
+    yape: { label: 'Yape', icono: '📱' },
+    plin: { label: 'Plin', icono: '📱' },
+    transferencia: { label: 'Transferencia (sin detalle)', icono: '📲' },
+    tarjeta: { label: 'Tarjeta', icono: '💳' },
+  }
+  return ORDEN
+    .map((medio) => ({ medio, label: INFO[medio].label, icono: INFO[medio].icono, monto: r2(acumulado.get(medio) || 0) }))
+    .filter((m) => m.monto !== 0)
+}
+
+/** Medio de un pago/cobro, o `null` si es efectivo o crédito (no se concilian con billetera). */
+function claveDeMedio(medio?: string): string | null {
+  const b = bolsilloDe(medio ?? '')
+  if (b !== 'transferencia') return null
+  const clave = String(medio ?? '').trim().toLowerCase()
+  return clave === 'yape' || clave === 'plin' || clave === 'tarjeta' ? clave : 'transferencia'
+}

@@ -12,7 +12,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { desglosarTurno, efectivoEsperadoDe, lineasDeOrigen, sumarDesgloses, type ItemTurno } from './arqueo.ts'
+import { desglosarTurno, efectivoEsperadoDe, lineasDeOrigen, mediosDelTurno, sumarDesgloses, type ItemTurno } from './arqueo.ts'
 
 describe('efectivoEsperadoDe — la fórmula única del arqueo', () => {
   it('fondo + efectivo − gastos (el caso normal)', () => {
@@ -222,6 +222,84 @@ describe('desglosarTurno — items anulados y consistencia', () => {
     assert.equal(d.efectivo.total, 100)
     assert.equal(d.efectivo.ventas, 100, 'el total manda')
     assert.equal(d.efectivo.ventas + d.efectivo.cobranzas + d.efectivo.notas, 100)
+  })
+})
+
+describe('mediosDelTurno — conciliación por billetera', () => {
+  it('separa Yape, Plin y tarjeta de una venta (con `pagos`)', () => {
+    const medios = mediosDelTurno({
+      totalEfectivo: 0,
+      totalTransferencia: 30,
+      ventasDelTurno: [
+        venta(10, 'yape', { pagos: [{ tipo: 'transferencia', medio: 'yape', monto: 10 }] }),
+        venta(12, 'plin', { pagos: [{ tipo: 'transferencia', medio: 'plin', monto: 12 }] }),
+        venta(8, 'tarjeta', { pagos: [{ tipo: 'transferencia', medio: 'tarjeta', monto: 8 }] }),
+      ],
+    })
+    assert.deepEqual(medios.map((m) => [m.medio, m.monto]), [['yape', 10], ['plin', 12], ['tarjeta', 8]])
+  })
+
+  it('suma ventas + cobranzas del mismo medio (lo que realmente entró)', () => {
+    // Venta de S/ 2 por Yape + cobranza de S/ 47 por Yape = 49 en la billetera.
+    const medios = mediosDelTurno({
+      totalEfectivo: 0,
+      totalTransferencia: 49,
+      ventasDelTurno: [
+        venta(2, 'yape', { pagos: [{ tipo: 'transferencia', medio: 'yape', monto: 2 }] }),
+        cobro(47, 'yape'),
+      ],
+    })
+    assert.deepEqual(medios.map((m) => [m.medio, m.monto]), [['yape', 49]])
+  })
+
+  it('⚠️ lo viejo (sin `medio`) se agrupa como "Transferencia (sin detalle)", no se inventa un medio', () => {
+    const medios = mediosDelTurno({
+      totalEfectivo: 0,
+      totalTransferencia: 12,
+      ventasDelTurno: [venta(12, 'transferencia')],
+    })
+    assert.deepEqual(medios.map((m) => [m.medio, m.monto, m.label]), [['transferencia', 12, 'Transferencia (sin detalle)']])
+  })
+
+  it('el efectivo no entra (se cuadra aparte, contra el cajón)', () => {
+    const medios = mediosDelTurno({
+      totalEfectivo: 30,
+      totalTransferencia: 0,
+      ventasDelTurno: [venta(20, 'efectivo'), cobro(10, 'efectivo')],
+    })
+    assert.deepEqual(medios, [])
+  })
+
+  it('la venta al fiado no entra a ninguna billetera', () => {
+    const medios = mediosDelTurno({ totalEfectivo: 0, totalTransferencia: 0, ventasDelTurno: [venta(59, 'credito')] })
+    assert.deepEqual(medios, [])
+  })
+
+  it('⚠️ una NC cae en "Transferencia (sin detalle)": la nota guarda el bolsillo, no el medio', () => {
+    // `notas.ts` registra `tipoPago: ventaOriginal.tipoPago`, que para una venta por Yape
+    // es el BOLSILLO ('transferencia'), no el medio. Así que la NC resta del grupo genérico
+    // y no de Yape: es la información que existe (y es coherente con cómo se movió la caja).
+    const medios = mediosDelTurno({
+      totalEfectivo: 0,
+      totalTransferencia: 5,
+      ventasDelTurno: [
+        venta(10, 'yape', { pagos: [{ tipo: 'transferencia', medio: 'yape', monto: 10 }] }),
+        { tipo: 'nota_credito', total: -5, tipoPago: 'transferencia' },
+      ],
+    })
+    assert.deepEqual(medios.map((m) => [m.medio, m.monto]), [['yape', 10], ['transferencia', -5]])
+  })
+
+  it('los items anulados no cuentan', () => {
+    const medios = mediosDelTurno({
+      totalEfectivo: 0,
+      totalTransferencia: 10,
+      ventasDelTurno: [
+        venta(10, 'yape', { pagos: [{ tipo: 'transferencia', medio: 'yape', monto: 10 }] }),
+        { ...venta(99, 'yape', { pagos: [{ tipo: 'transferencia', medio: 'yape', monto: 99 }] }), estado: 'anulada' },
+      ],
+    })
+    assert.deepEqual(medios.map((m) => [m.medio, m.monto]), [['yape', 10]])
   })
 })
 

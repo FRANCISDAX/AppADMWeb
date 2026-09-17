@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
 import { CierreCaja } from '@/components/CierreCaja'
+import { useConfiguracion } from '@/hooks/use-configuracion'
 import { abrirTurno, buscarTurnoAbierto, cerrarTurno, editarMontoInicial, type Turno } from '@/services/turnos'
 import { obtenerEnviosPendientesAnteriores, actualizarEstadoEnvio, type EnvioPendiente, type EnvioEstado } from '@/services/envios'
 import { cn } from '@/lib/utils'
@@ -16,6 +17,9 @@ const fmt = (n: number) => 'S/ ' + n.toFixed(2)
 export function Turnos() {
   const { user } = useAuth()
   const { tienePermiso } = usePermisos()
+  // `config.conteoCiego` (Configuración → Empresa): oculta el "Debería haber" hasta que el
+  // cajero registre el conteo.
+  const { config } = useConfiguracion()
   const [turno, setTurno] = React.useState<Turno | null>(null)
   const esDueno = !!turno?.usuarioId && turno.usuarioId === user?.uid
   const esSupervisor = tienePermiso('verTodo')
@@ -386,9 +390,10 @@ export function Turnos() {
                   vueltoTransferencia: turno.vueltoTransferencia ?? 0,
                   ventasDelTurno: turno.ventasDelTurno ?? [],
                 }}
-                onConfirm={async (montoFinal, obs) => {
+                conteoCiego={config.conteoCiego === true}
+                onConfirm={async (montoFinal, obs, conciliacion) => {
                   setProcesando(true)
-                  const r = await cerrarTurno({ turnoId: turno.id!, montoFinalEfectivo: montoFinal, observaciones: obs, usuarioId: user?.uid || '', esSupervisor })
+                  const r = await cerrarTurno({ turnoId: turno.id!, montoFinalEfectivo: montoFinal, observaciones: obs, usuarioId: user?.uid || '', esSupervisor, conciliacion })
                   setProcesando(false)
                   if (r.success) {
                     setToast('✅ Turno cerrado · Diferencia ' + fmt(r.cierre?.diferencia ?? 0))

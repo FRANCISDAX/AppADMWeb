@@ -8,10 +8,10 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 
 ## Estado actual
 
-- **Última sesión**: bloque ·10 (+ huecos 1, 2 y 6 de los pendientes del rubro, cerrados el 16/09). **Desplegado** en https://appadm-b359e.web.app.
-- **Verde**: `npm test` **86/86**, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 warnings (baseline: no subirlo)**, `npm run build` ✓.
+- **Última sesión**: bloque ·10 + los **6 huecos** de la comparación con el rubro, cerrados el 16/09. **Desplegado** en https://appadm-b359e.web.app.
+- **Verde**: `npm test` **93/93**, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 warnings (baseline: no subirlo)**, `npm run build` ✓.
 - **Producción real** (medida, no supuesta): ~93 turnos, ~234 documentos, 40 productos **todos exonerados (`'20'`)** porque la región está exenta de IGV.
-- **Pendiente** (los tres que quedan de la comparación con el rubro, y ninguno cambia totales): **"declarado vs sistema" por billetera** (Yape/Plin/tarjeta), **conteo ciego** en el cierre y **firmas/RUC** en los PDF. Los tres necesitan una decisión del usuario (¿el declarado es obligatorio para cerrar? ¿conteo ciego siempre o configurable? ¿quién firma?). El detalle está en el `Next Move` del bloque ·10 del historial.
+- **Decisiones tomadas con el usuario** (16/09) sobre los controles del cierre: **conciliación por billetera opcional** (no bloquea el cierre), **conteo ciego configurable y apagado por defecto** (`config.conteoCiego`, Configuración → Empresa) y **firmas**: los PDF imprimen nombre/RUC del negocio, quién cerró el turno y dos líneas de firma (cajero / supervisor).
 
 ## Invariantes y trampas (leer antes de tocar código)
 
@@ -25,6 +25,9 @@ Reglas que ya costaron un bug o que salieron de una decisión explícita del usu
 - ⚠️ **`bolsilloDe()` devuelve `'credito'` para `'credito'`, `'mixto'` y cualquier valor desconocido** — **nunca cae a efectivo**. Un medio desconocido que cayera a efectivo **infla el cajón** y produce un faltante fantasma (fue un bug real, ver bloque ·10). Reparto de una venta: **`bolsillosDeVenta()`** (`lib/pagos.ts`) como **regla única**, usada por el alta **y** la anulación.
 - **Una venta a crédito no entra a ningún bolsillo** (queda por cobrar); **un cobro de crédito sí**, en el bolsillo del medio con que se cobró.
 - **Cada bolsillo tiene dos ejes**: el **total** (plata que entró al cajón/banco: contra eso se concilia) y el **origen** (`lib/arqueo.ts`: ventas del día / cobranza de crédito / notas). Ahí `ventas` es el **residuo** — las partes siempre suman el total guardado, y `consistente: false` avisa si lo derivado no lo explica.
+- **Conciliación por billetera (`mediosDelTurno`, `lib/arqueo.ts`)** = lo que el sistema dice que entró por Yape/Plin/tarjeta, para cruzarlo contra la app/banco. Se declara al cerrar (**opcional**, se guarda como `conciliacion` en el turno y en `tblCierresCaja`) y se muestra en el arqueo y en el PDF del cierre. ⚠️ **El `medio` fino (yape/plin/tarjeta) existe desde el 16/09/2026**: antes todo cae en **"Transferencia (sin detalle)"** — no inventar un medio. Y una **NC** también cae ahí, porque `notas.ts` guarda el bolsillo del original, no su medio. Verificado: en **49/49** turnos con medios, la suma por medio coincide con el `totalTransferencia` guardado.
+- **Conteo ciego** (`config.conteoCiego`, Configuración → Empresa, **apagado por defecto**): al cerrar, el cajero escribe el conteo **sin ver** el "Debería haber"; la diferencia aparece recién en el paso de análisis. Es el control que evita que alguien "cuadre" copiando el esperado.
+- **Los documentos de caja van identificados y firmados**: `abrirPDFArqueo`/`abrirPDFCierreCaja` reciben `empresa` (`EmpresaPDF`: nombre, RUC, dirección) e imprimen **dos líneas de firma** (cajero —con quién cerró el turno— y supervisor). ⚠️ Si se agrega un PDF de caja nuevo, **pasarle la empresa y las firmas**: el dato ya está en Configuración → Empresa, solo hay que pasarlo.
 - **`tblTurnos` es registro de caja: no se reescribe.** Para corregir un turno histórico se pide permiso, se toca **solo** el campo necesario (el turno **y** su doc de `tblCierresCaja`), se deja `observaciones` y se registra en `tblAuditLog`.
 - ⚠️ **Las fechas de los items del turno se guardan en UTC**; las de turno/reportes son locales. Un cobro de las 21:43 del 14 figura como **15/09 02:43Z**: un turno del 14 puede tener items "del 15" sin que nada esté mal.
 - El cajero opera con **su** turno, salvo `verTodo` (supervisor). No se emite comprobante **ni se cobra crédito** con el turno cerrado.

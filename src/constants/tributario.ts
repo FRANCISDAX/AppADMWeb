@@ -67,6 +67,9 @@ export const CONFIG_POR_DEFECTO = {
   logo_url: '',
   tipoRegimen: 'general',
   regionExonerada: false,
+  /** Conteo ciego: al cerrar el turno NO se muestra el "Debería haber" hasta que el cajero
+   *  registre lo que contó (control anti-fraude; apagado por defecto). */
+  conteoCiego: false,
   sunatApiUrlProd: 'http://192.168.1.7:8000',
   sunatApiUrlTest: 'http://192.168.1.7:8000',
   consultaApiBase: '',

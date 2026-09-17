@@ -255,6 +255,27 @@ export function Configuracion() {
                 {config.regionExonerada ? 'SÍ' : 'NO'}
               </span>
             </button>
+
+            <button
+              onClick={() => set('conteoCiego', !config.conteoCiego)}
+              className={cn(
+                'flex w-full items-start justify-between gap-3 rounded-lg border p-3 text-left text-sm cursor-pointer',
+                config.conteoCiego ? 'border-amber-300 bg-amber-50' : 'border-input'
+              )}
+            >
+              <span>
+                <span className={cn('font-medium', config.conteoCiego && 'text-amber-700')}>
+                  Conteo ciego al cerrar el turno
+                </span>
+                <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                  El cajero escribe cuánto contó <b>sin ver</b> el “Debería haber”; recién después
+                  el sistema muestra la diferencia. Evita que se “cuadre” copiando el esperado.
+                </span>
+              </span>
+              <span className={cn('shrink-0 rounded-md px-2.5 py-1 text-xs font-bold text-white', config.conteoCiego ? 'bg-amber-600' : 'bg-slate-400')}>
+                {config.conteoCiego ? 'SÍ' : 'NO'}
+              </span>
+            </button>
           </div>
         </div>
       )}

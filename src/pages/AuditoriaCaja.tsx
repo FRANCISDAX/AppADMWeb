@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase'
 import { COL } from '@/constants/colecciones'
 import { cn } from '@/lib/utils'
 import { abrirPDFCierreCaja, type CierreCajaPDF } from '@/lib/pdf'
+import { useConfiguracion } from '@/hooks/use-configuracion'
 
 const fmt = (n: number) => 'S/ ' + n.toFixed(2)
 
@@ -35,6 +36,8 @@ type Cierre = {
 }
 
 export function AuditoriaCaja() {
+  // Empresa para el encabezado de los PDF (nombre, RUC, dirección y firmas).
+  const { config } = useConfiguracion()
   const [cierres, setCierres] = React.useState<Cierre[]>([])
   const [cargando, setCargando] = React.useState(true)
   const [busqueda, setBusqueda] = React.useState('')
@@ -270,7 +273,7 @@ export function AuditoriaCaja() {
                       variant="outline"
                       size="sm"
                       className="w-full"
-                      onClick={() => abrirPDFCierreCaja(c as CierreCajaPDF)}
+                      onClick={() => abrirPDFCierreCaja(c as CierreCajaPDF, config)}
                     >
                       <Printer className="mr-2 h-4 w-4" />
                       Imprimir PDF
