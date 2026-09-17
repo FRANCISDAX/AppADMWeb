@@ -13,8 +13,9 @@ import { cn } from '@/lib/utils'
 const TIPO_LABEL: Record<string, string> = {
   compra: 'Compra',
   venta: 'Venta',
-  venta_pendiente: 'Reserva de pedido (a caja)',
-  reposicion_venta_pendiente: 'Reposición (pedido eliminado)',
+  // Compat de lectura: el flujo de pedidos ya no toca el stock (se descuenta al cobrar).
+  venta_pendiente: 'Reserva de pedido (histórico)',
+  reposicion_venta_pendiente: 'Reposición (histórico)',
   ajuste_entrada: 'Ajuste entrada',
   ajuste_salida: 'Ajuste salida',
   inventario_fisico_entrada: 'Inventario físico (+)',

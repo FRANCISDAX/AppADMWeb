@@ -4,8 +4,10 @@ import { db } from '@/lib/firebase'
 import type { Producto } from '@/hooks/use-productos'
 
 // Port de services/kardex.js de la app RN.
-// `venta_pendiente` (reserva de un pedido enviado a caja) es SALIDA; su marcha atrás al
-// eliminar el pedido, `reposicion_venta_pendiente`, es ENTRADA (son el par que se cancela).
+// El único movimiento de una venta (incluidos los pedidos que el vendedor manda a caja) es
+// `venta`, que es SALIDA. `venta_pendiente`/`reposicion_venta_pendiente` quedaron como compat
+// de lectura: el flujo de pedidos **ya no toca el stock** (se descuenta al cobrar), así que no
+// se escriben más; si algún movimiento viejo aparece, se clasifica bien igual.
 const esEntrada = (tipo: string) =>
   ['compra', 'ajuste_entrada', 'inventario_fisico_entrada', 'anulacion_venta', 'nota_credito', 'reposicion_venta_pendiente'].includes(tipo)
 

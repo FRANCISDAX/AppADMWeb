@@ -1,4 +1,4 @@
-import { collection, doc, increment, getDoc, getDocs, query, runTransaction, updateDoc, where, orderBy, limit, type DocumentReference } from 'firebase/firestore'
+import { collection, doc, increment, getDoc, getDocs, query, runTransaction, updateDoc, where, orderBy, limit } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
@@ -525,8 +525,9 @@ export type DocumentoVenta = {
  * (`cobrarVentaPendiente`), que es cuando **se genera el comprobante**. Por eso acá no se pide
  * `tipoDoc` ni `tipoPago`.
  *
- * **Reserva el stock** (el vendedor ya apartó los productos) con movimientos `venta_pendiente`;
- * eliminarlo los devuelve (`cancelarVentaPendiente`).
+ * ⚠️ **No toca el stock**: el inventario se descuenta recién al cobrar, en un solo lugar
+ * (`cobrarVentaPendiente`). Un pedido es un ticket en espera, no una reserva: si nadie lo cobra
+ * —o el cajero lo elimina— el inventario queda intacto y no hay nada que devolver.
  */
 export async function crearVentaPendiente({
   items,
@@ -559,9 +560,8 @@ export async function crearVentaPendiente({
 
     const importeTotal = venta.total - (venta.descuentoTotal || 0)
 
-    // Contador del pedido + documento + **reserva de stock**, todo en una transacción: el
-    // pedido aparta los productos (el vendedor ya los tiene en la mano) y al eliminar la
-    // venta se devuelven; nada queda a medias.
+    // Contador del pedido + documento, en una transacción (nada queda a medias). El stock **no**
+    // se toca: se descuenta al cobrar.
     const guardada = await runTransaction(db, async (tx) => {
       const pedidoSnap = await tx.get(pedidoRef)
       const numeroPedido = Number(pedidoSnap.data()?.[CAMPO_CONTADOR] ?? 0) + 1
@@ -624,57 +624,9 @@ export async function crearVentaPendiente({
         cajaId: cajaId || '',
       }
 
-      // ── Reserva de stock: el vendedor ya apartó los productos para ese cliente ──
-      // ⚠️ El movimiento sigue el formato del kardex (`tipoMovimiento` + `cantidad` **positiva**;
-      // el signo lo decide `esEntrada`, en `services/kardex.ts`). Un `venta_pendiente` es salida.
-      const stockPrevio = new Map<string, number | null>()
-      for (const it of items) {
-        if (it.manual) continue
-        const ids = it.kitItems?.length ? it.kitItems.map((k) => k.productoId) : [it.id]
-        for (const id of ids) {
-          if (stockPrevio.has(id)) continue
-          const s = await tx.get(doc(db, COL.PRODUCTOS, id))
-          stockPrevio.set(id, s.exists() ? (s.data().stock ?? 0) : null)
-        }
-      }
-      const movimientos: string[] = []
-      for (const it of items) {
-        if (it.manual) continue
-        const partes = it.kitItems?.length
-          ? it.kitItems.map((k) => ({ id: k.productoId, cantidad: k.cantidad * it.quantity }))
-          : [{ id: it.id, cantidad: it.quantity }]
-        for (const parte of partes) {
-          const stockActual = stockPrevio.get(parte.id)
-          if (stockActual == null) continue
-          if (stockActual < parte.cantidad) {
-            throw new Error(`Stock insuficiente para ${it.nombre}: disponible ${stockActual}, pedido ${parte.cantidad}`)
-          }
-          const stockNuevo = Math.max(0, stockActual - parte.cantidad)
-          tx.update(doc(db, COL.PRODUCTOS, parte.id), { stock: stockNuevo })
-          const movRef = doc(collection(db, COL.MOVIMIENTOS))
-          movimientos.push(movRef.id)
-          tx.set(movRef, {
-            productoId: parte.id,
-            productoNombre: it.nombre,
-            tipoMovimiento: 'venta_pendiente',
-            cantidad: parte.cantidad,
-            stockAnterior: stockActual,
-            stockNuevo,
-            factorConversion: it.factorConversion || 1,
-            presentacionUsada: it.presentacionNombre || 'Unidad',
-            cantidadPresentacion: parte.cantidad,
-            fecha: f.toISOString(),
-            timestamp: f.getTime(),
-            documentoRef: docId,
-            usuario: vendedorNombre,
-            motivo: `Pedido ${codigo} enviado a caja`,
-          })
-        }
-      }
-
       tx.set(pedidoRef, { [CAMPO_CONTADOR]: numeroPedido, updatedAt: f.toISOString() }, { merge: true })
-      tx.set(doc(db, COL.DOCUMENTOS, docId), { ...docData, movimientos })
-      return { docId, docData: { ...docData, movimientos } as unknown as DocumentoVenta }
+      tx.set(doc(db, COL.DOCUMENTOS, docId), docData)
+      return { docId, docData: docData as unknown as DocumentoVenta }
     })
     const { docId, docData } = guardada
 
@@ -798,29 +750,18 @@ export async function cobrarVentaPendiente({
       const turnoSnap = turnoRef ? await tx.get(turnoRef) : null
       const contSnapDestino = await tx.get(contadorDestino)
 
-      // El pedido ya **reservó** el stock al enviarse a caja: sus movimientos existen y solo
-      // hay que convertirlos en venta (`venta_pendiente` → `venta`). Descontar otra vez
-      // duplicaría la salida de inventario.
-      const movIds = Array.isArray(docData.movimientos) ? (docData.movimientos as unknown as string[]) : []
-      const movSnaps: { ref: DocumentReference; data: Record<string, unknown> }[] = []
-      for (const movId of movIds) {
-        const ref = doc(db, COL.MOVIMIENTOS, movId)
-        const s = await tx.get(ref)
-        if (s.exists()) movSnaps.push({ ref, data: s.data() as Record<string, unknown> })
-      }
-
-      // Compatibilidad: un pedido viejo (creado antes de reservar stock) sí necesita el
-      // descuento acá; se lee el stock actual de cada producto del documento.
+      // 🔑 **Acá y solo acá se descuenta el stock de un pedido.** El pedido no reservó nada, así
+      // que el cobro lee el stock actual de cada producto y lo descuenta con el formato del
+      // kardex (`tipoMovimiento` + `cantidad` positiva; el signo lo decide `esEntrada`).
+      // Un solo camino de escritura ⇒ no puede haber doble descuento ni descuento faltante.
       const stockPrevio = new Map<string, number | null>()
-      if (!movSnaps.length) {
-        for (const it of items) {
-          if (it.manual) continue
-          const ids = it.kitItems?.length ? it.kitItems.map((k) => k.productoId) : [it.id]
-          for (const id of ids) {
-            if (stockPrevio.has(id)) continue
-            const s = await tx.get(doc(db, COL.PRODUCTOS, id))
-            stockPrevio.set(id, s.exists() ? (s.data().stock ?? 0) : null)
-          }
+      for (const it of items) {
+        if (it.manual) continue
+        const ids = it.kitItems?.length ? it.kitItems.map((k) => k.productoId) : [it.id]
+        for (const id of ids) {
+          if (stockPrevio.has(id)) continue
+          const s = await tx.get(doc(db, COL.PRODUCTOS, id))
+          stockPrevio.set(id, s.exists() ? (s.data().stock ?? 0) : null)
         }
       }
 
@@ -838,47 +779,45 @@ export async function cobrarVentaPendiente({
       const serieNumeroFinal = `${serieDestino}-${String(nuevo).padStart(6, '0')}`
       tx.set(contadorDestino, { serie: serieDestino, [CAMPO_CONTADOR]: nuevo, updatedAt: f.toISOString() }, { merge: true })
 
-      if (movSnaps.length) {
-        // La reserva se vuelve venta: mismo movimiento, otro tipo (el kardex lo lee como salida
-        // definitiva) y el documento real en `documentoRef`.
-        for (const m of movSnaps) {
-          tx.update(m.ref, {
+      for (const it of items) {
+        if (it.manual) continue
+        const partes = it.kitItems?.length
+          ? it.kitItems.map((k) => ({ id: k.productoId, cantidad: k.cantidad * it.quantity }))
+          : [{ id: it.id, cantidad: it.quantity }]
+        for (const parte of partes) {
+          const stockActual = stockPrevio.get(parte.id)
+          if (stockActual == null) continue
+          // El pedido estuvo esperando en caja: si otro vendió esas unidades, el cajero tiene que
+          // enterarse (antes de cobrar) en vez de que el inventario quede mintiendo.
+          if (stockActual < parte.cantidad) {
+            throw new Error(
+              `El stock de ${it.nombre} se agotó mientras el pedido esperaba en caja: disponible ${stockActual}, pedido ${parte.cantidad}.`,
+            )
+          }
+          const stockNuevo = stockActual - parte.cantidad
+          tx.update(doc(db, COL.PRODUCTOS, parte.id), {
+            stock: stockNuevo,
+            // Igual que una venta normal: si no, un cobro de pedido no cuenta en "más vendidos".
+            vecesVendido: increment(1),
+            ultimaActualizacion: f.toISOString(),
+            updatedAt: f.toISOString(),
+          })
+          tx.set(doc(collection(db, COL.MOVIMIENTOS)), {
+            productoId: parte.id,
+            productoNombre: it.nombre,
             tipoMovimiento: 'venta',
+            cantidad: parte.cantidad,
+            stockAnterior: stockActual,
+            stockNuevo,
+            factorConversion: it.factorConversion || 1,
+            presentacionUsada: it.presentacionNombre || 'Unidad',
+            cantidadPresentacion: parte.cantidad,
+            fecha: f.toISOString(),
+            timestamp: f.getTime(),
             documentoRef: documentoId,
             serieNumero: serieNumeroFinal,
             usuario: cajeroNombre,
-            fechaCobro: f.toISOString(),
           })
-        }
-      } else {
-        // Pedido viejo sin reserva: descontar stock + movimiento como antes.
-        for (const it of items) {
-          if (it.manual) continue
-          const partes = it.kitItems?.length
-            ? it.kitItems.map((k) => ({ id: k.productoId, cantidad: k.cantidad * it.quantity }))
-            : [{ id: it.id, cantidad: it.quantity }]
-          for (const parte of partes) {
-            const stockActual = stockPrevio.get(parte.id)
-            if (stockActual == null) continue
-            const stockNuevo = Math.max(0, stockActual - parte.cantidad)
-            tx.update(doc(db, COL.PRODUCTOS, parte.id), { stock: stockNuevo })
-            tx.set(doc(collection(db, COL.MOVIMIENTOS)), {
-              productoId: parte.id,
-              productoNombre: it.nombre,
-              tipoMovimiento: 'venta',
-              cantidad: parte.cantidad,
-              stockAnterior: stockActual,
-              stockNuevo,
-              factorConversion: it.factorConversion || 1,
-              presentacionUsada: it.presentacionNombre || 'Unidad',
-              cantidadPresentacion: parte.cantidad,
-              fecha: f.toISOString(),
-              timestamp: f.getTime(),
-              documentoRef: documentoId,
-              serieNumero: serieNumeroFinal,
-              usuario: cajeroNombre,
-            })
-          }
         }
       }
 
@@ -977,11 +916,11 @@ export async function cobrarVentaPendiente({
 /**
  * Elimina una venta pendiente (el cajero la descarta antes de cobrarla) con motivo obligatorio.
  *
- * ⚠️ **Acá no se anula ningún comprobante, porque todavía no existe**: el pedido se creó sin
- * serie ni correlativo (solo con un código `PED-…`). Lo único que hay que deshacer es la
- * **reserva de stock**, devolviendo los productos a su estado original (+cantidad) y dejando el
- * movimiento `reposicion_venta_pendiente` que lo explica en el kardex. Por eso eliminar un
- * pedido **no deja huecos** en las series fiscales.
+ * ⚠️ **Acá no se anula ningún comprobante y tampoco se repone stock, porque no hay nada que
+ * deshacer**: el pedido se creó sin serie ni correlativo (solo un código `PED-…`) y **sin tocar
+ * el inventario** (el descuento ocurre recién al cobrar). Se marca `cancelado` con el motivo y
+ * queda el registro en el historial de auditoría; los productos nunca salieron de su estado
+ * original.
  */
 export async function cancelarVentaPendiente({
   documentoId,
@@ -991,7 +930,7 @@ export async function cancelarVentaPendiente({
   documentoId: string
   motivo: string
   usuario?: string
-}): Promise<{ success: boolean; error?: string; repuestos?: number }> {
+}): Promise<{ success: boolean; error?: string }> {
   try {
     if (!motivo.trim()) return { success: false, error: 'El motivo es obligatorio' }
 
@@ -1002,56 +941,7 @@ export async function cancelarVentaPendiente({
       const docData = docSnap.data() as DocumentoVenta
       if (docData.estado !== 'pendiente') return { success: false, error: 'La venta ya no está pendiente' }
 
-      // ─── LECTURAS (todas antes de cualquier escritura) ───
-      const movIds = Array.isArray(docData.movimientos) ? (docData.movimientos as unknown as string[]) : []
-      const reservas: { ref: DocumentReference; productoId: string; cantidad: number; nombre: string }[] = []
-      for (const movId of movIds) {
-        const ref = doc(db, COL.MOVIMIENTOS, movId)
-        const s = await tx.get(ref)
-        if (!s.exists()) continue
-        const m = s.data() as Record<string, unknown>
-        // Solo se revierte lo que efectivamente reservó stock; un `venta` ya cobrado no se toca.
-        if (m.tipoMovimiento !== 'venta_pendiente') continue
-        const cantidad = Math.abs(Number(m.cantidad ?? 0))
-        if (!cantidad) continue
-        reservas.push({
-          ref,
-          productoId: String(m.productoId ?? ''),
-          cantidad,
-          nombre: String(m.productoNombre ?? ''),
-        })
-      }
-      const stockPrevio = new Map<string, number | null>()
-      for (const r of reservas) {
-        if (stockPrevio.has(r.productoId)) continue
-        const s = await tx.get(doc(db, COL.PRODUCTOS, r.productoId))
-        stockPrevio.set(r.productoId, s.exists() ? (s.data().stock ?? 0) : null)
-      }
-
-      // ─── ESCRITURAS ───
       const f = new Date()
-      const repuestos = new Map<string, number>()
-      for (const r of reservas) {
-        const stockActual = stockPrevio.get(r.productoId)
-        if (stockActual == null) continue
-        const stockNuevo = stockActual + r.cantidad
-        tx.update(doc(db, COL.PRODUCTOS, r.productoId), { stock: stockNuevo })
-        tx.set(doc(collection(db, COL.MOVIMIENTOS)), {
-          productoId: r.productoId,
-          productoNombre: r.nombre,
-          tipoMovimiento: 'reposicion_venta_pendiente',
-          cantidad: r.cantidad,
-          stockAnterior: stockActual,
-          stockNuevo,
-          fecha: f.toISOString(),
-          timestamp: f.getTime(),
-          documentoRef: documentoId,
-          usuario: usuario || 'sistema',
-          motivo: `Venta eliminada: ${motivo.trim()}`,
-        })
-        repuestos.set(r.productoId, (repuestos.get(r.productoId) || 0) + r.cantidad)
-      }
-
       tx.update(docRef, {
         estado: 'cancelado',
         motivoCancelacion: motivo.trim(),
@@ -1059,14 +949,15 @@ export async function cancelarVentaPendiente({
           fecha: f.toISOString(),
           usuario: usuario || 'sistema',
           motivo: motivo.trim(),
-          // Sin comprobante emitido no hay nada que anular: solo se devolvió el stock.
+          // Sin comprobante emitido no hay nada que anular, y sin descuento de stock no hay nada
+          // que reponer: el pedido se descarta tal como estaba.
           comprobante: null,
-          reposicionStock: [...repuestos].map(([productoId, cantidad]) => ({ productoId, cantidad })),
+          tocoStock: false,
         },
         updatedAt: f.toISOString(),
       })
 
-      return { success: true, repuestos: [...repuestos.values()].reduce((s, n) => s + n, 0) }
+      return { success: true }
     })
 
     if (res.success) {
@@ -1074,7 +965,7 @@ export async function cancelarVentaPendiente({
         accion: 'eliminar_venta_pendiente',
         entidad: COL.DOCUMENTOS,
         entidadId: documentoId,
-        detalle: { motivo, usuario, unidadesRepuestas: res.repuestos },
+        detalle: { motivo, usuario },
       })
     }
 

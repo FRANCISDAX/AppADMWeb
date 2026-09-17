@@ -145,7 +145,7 @@ export function PanelVentasPendientes() {
     if (!motivoCancel.trim()) return toast('⚠️ Ingresá un motivo')
     const ok = await confirm({
       title: '¿Eliminar esta venta?',
-      message: 'No hay comprobante emitido, así que no se anula nada: los productos vuelven a su stock original y la venta queda registrada como eliminada con su motivo.',
+      message: 'No hay comprobante emitido, así que no se anula nada. El stock nunca se tocó (se descuenta al cobrar), así que los productos quedan como estaban y la venta se registra como eliminada con su motivo.',
       okText: 'Eliminar venta',
     })
     if (!ok) return
@@ -157,7 +157,7 @@ export function PanelVentasPendientes() {
         usuario: nombreUsuario || user?.email || 'sistema',
       })
       if (res.success) {
-        toast(res.repuestos ? `Venta eliminada · ${res.repuestos} unidad(es) devueltas al stock` : 'Venta eliminada')
+        toast('Venta eliminada · el stock no se tocó')
         setVentas((prev) => prev.filter((x) => x.id !== v.id))
         setCancelandoId(null)
         setMotivoCancel('')
@@ -201,7 +201,7 @@ export function PanelVentasPendientes() {
                       <span className="text-xs font-bold">{v.serieNumero}</span>
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Pendiente</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">Pedido sin comprobante: se genera al cobrar</p>
+                    <p className="text-[10px] text-muted-foreground">Pedido sin comprobante · el stock se descuenta al cobrar</p>
                     <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground">
                       <User className="h-3 w-3" />
                       <span>{v.vendedorNombre || '—'}</span>
@@ -301,7 +301,7 @@ export function PanelVentasPendientes() {
                       autoFocus
                     />
                     <p className="text-[10px] text-muted-foreground">
-                      Los productos vuelven al stock. No se anula comprobante porque todavía no se generó ninguno.
+                      No hay comprobante que anular y el stock aún no se descontó: se descuenta al cobrar.
                     </p>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" className="flex-1" onClick={() => setCancelandoId(null)}>Volver</Button>
@@ -325,7 +325,7 @@ export function PanelVentasPendientes() {
                         className="text-destructive hover:text-destructive"
                         onClick={() => cancelar(v)}
                         disabled={procesando}
-                        title="Eliminar la venta y devolver los productos al stock"
+                        title="Eliminar la venta (el stock no se toca: se descuenta al cobrar)"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         Eliminar
