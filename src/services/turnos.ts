@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
 import { exigirRateLimit } from '@/lib/rate-limit'
 import { analizarCierre } from '@/lib/auditoria-caja'
+import { efectivoEsperadoDe } from '@/lib/arqueo'
 
 export type Turno = {
   id?: string
@@ -95,13 +96,19 @@ export async function cerrarTurno({ turnoId, montoFinalEfectivo, observaciones, 
       const totalVentas = t.totalVentas || 0
       const totalGastos = t.totalGastos || 0
       const vueltoTransferencia = t.vueltoTransferencia || 0
-      const efectivoEsperado = (t.montoInicial || 0) + (t.totalEfectivo || 0) - (t.totalGastosEfectivo || 0) - vueltoTransferencia
+      const efectivoEsperado = efectivoEsperadoDe({
+        montoInicial: t.montoInicial,
+        totalEfectivo: t.totalEfectivo,
+        totalGastosEfectivo: t.totalGastosEfectivo,
+        vueltoTransferencia,
+      })
       const diferencia = montoFinalEfectivo - efectivoEsperado
 
       const analisis = analizarCierre({
         montoInicial: t.montoInicial || 0,
         totalEfectivo: t.totalEfectivo || 0,
         totalGastosEfectivo: t.totalGastosEfectivo || 0,
+        vueltoTransferencia,
         ventasDelTurno: t.ventasDelTurno || [],
         efectivoReal: montoFinalEfectivo,
       })
@@ -193,7 +200,12 @@ export async function rectificarTurno({ turnoId, montoInicialReal, motivo, usuar
       const totalEfectivo = t.totalEfectivo || 0
       const totalGastosEfectivo = t.totalGastosEfectivo || 0
       const vueltoTransferencia = t.vueltoTransferencia || 0
-      const efectivoEsperado = montoInicialReal + totalEfectivo - totalGastosEfectivo - vueltoTransferencia
+      const efectivoEsperado = efectivoEsperadoDe({
+        montoInicial: montoInicialReal,
+        totalEfectivo,
+        totalGastosEfectivo,
+        vueltoTransferencia,
+      })
       const montoFinalEfectivo = t.montoFinalEfectivo || 0
       const diferencia = montoFinalEfectivo - efectivoEsperado
 

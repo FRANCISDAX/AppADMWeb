@@ -8,10 +8,10 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 
 ## Estado actual
 
-- **Última sesión**: bloque ·10 — arqueo con desglose por origen + fix del bolsillo del crédito. **Desplegado** en https://appadm-b359e.web.app.
-- **Verde**: `npm test` **81/81**, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 warnings (baseline: no subirlo)**, `npm run build` ✓.
+- **Última sesión**: bloque ·10 (+ huecos 1, 2 y 6 de los pendientes del rubro, cerrados el 16/09). **Desplegado** en https://appadm-b359e.web.app.
+- **Verde**: `npm test` **86/86**, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 warnings (baseline: no subirlo)**, `npm run build` ✓.
 - **Producción real** (medida, no supuesta): ~93 turnos, ~234 documentos, 40 productos **todos exonerados (`'20'`)** porque la región está exenta de IGV.
-- **Pendiente inmediato** (decisión del usuario: **primero probar en el navegador**, sin más cambios): el **consolidado del día esperado/contado** (se calcula y no se muestra), el **PDF del cierre de caja** con el rótulo viejo ("Ventas en transferencia" incluyendo cobranzas), **"declarado vs sistema" por billetera**, **conteo ciego** y las **firmas/RUC** del arqueo. Detalle y contexto en el `Next Move` del bloque ·10 del historial.
+- **Pendiente** (los tres que quedan de la comparación con el rubro, y ninguno cambia totales): **"declarado vs sistema" por billetera** (Yape/Plin/tarjeta), **conteo ciego** en el cierre y **firmas/RUC** en los PDF. Los tres necesitan una decisión del usuario (¿el declarado es obligatorio para cerrar? ¿conteo ciego siempre o configurable? ¿quién firma?). El detalle está en el `Next Move` del bloque ·10 del historial.
 
 ## Invariantes y trampas (leer antes de tocar código)
 
@@ -19,6 +19,8 @@ Reglas que ya costaron un bug o que salieron de una decisión explícita del usu
 
 ### Caja y arqueo
 - **El arqueo cuadra el efectivo, y nada más**: `efectivoEsperado = montoInicial + totalEfectivo − gastosEfectivo − vueltoTransferencia`. Las transferencias **no entran** (ni ahí, ni en `totalNeto = totalVentas − totalGastos`, ni en la diferencia). Cambiar `totalTransferencia` de un turno **no puede** mover el esperado, el contado ni la diferencia: en el arqueo la transferencia es **informativa**.
+- 🔑 **Esa fórmula vive en UN solo lugar: `efectivoEsperadoDe()` (`lib/arqueo.ts`).** Estaba escrita a mano en **6** sitios y **dos** de ellos **sin restar `vueltoTransferencia`** (el modal de cierre que ve el cajero y `analizarCierre`): el cajero podía estar comparando contra un número distinto al que el sistema guardaba. **No volver a escribirla a mano** (la usan `turnos.ts` ×2, `reportes.ts`, `egresos.ts`, `compras.ts`, `CierreCaja.tsx` y `auditoria-caja.ts`). Verificado: **92/92 turnos cerrados** dan idéntico al `efectivoEsperado` guardado.
+- ⚠️ **El consolidado "Caja del día" suma SOLO turnos cerrados.** Un turno abierto tiene esperado pero **todavía no tiene contado**, así que incluirlo inventa una diferencia: con el 16/09 (un cerrado + uno abierto) daba **−11.00** falso. Ahora `montoInicialTotal` / `efectivoEsperadoTotal` / `efectivoContadoTotal` se acumulan solo si `estado === 'cerrado'`, y el rótulo avisa cuántos quedaron abiertos.
 - **`tipo` = bolsillo, `medio` = detalle.** Se guarda `{ tipo: 'efectivo' | 'transferencia', medio: 'efectivo' | 'yape' | 'plin' | 'transferencia' | 'tarjeta', monto, operacion? }`. `tipo` es lo que ya entienden el arqueo, los reportes, las anulaciones, el cobro y la RN: **poner `tipo: 'yape'` rompe ~8 lugares en silencio**.
 - ⚠️ **`bolsilloDe()` devuelve `'credito'` para `'credito'`, `'mixto'` y cualquier valor desconocido** — **nunca cae a efectivo**. Un medio desconocido que cayera a efectivo **infla el cajón** y produce un faltante fantasma (fue un bug real, ver bloque ·10). Reparto de una venta: **`bolsillosDeVenta()`** (`lib/pagos.ts`) como **regla única**, usada por el alta **y** la anulación.
 - **Una venta a crédito no entra a ningún bolsillo** (queda por cobrar); **un cobro de crédito sí**, en el bolsillo del medio con que se cobró.

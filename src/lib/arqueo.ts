@@ -74,6 +74,31 @@ export type TurnoParaDesglose = {
 }
 
 /**
+ * Efectivo que **debería haber** en el cajón al cerrar el turno.
+ *
+ * Es la **fórmula única** del arqueo. Estaba escrita a mano en **6 lugares** y **dos de
+ * ellas sin restar `vueltoTransferencia`** (el modal de cierre que ve el cajero y
+ * `analizarCierre`), así que el número que el cajero comparaba podía no ser el que el
+ * sistema guardaba. **Las transferencias no entran**: la caja cuadra solo el efectivo.
+ *
+ * Sin redondeo a propósito: así el resultado es idéntico al que ya estaba guardado en los
+ * turnos históricos (redondear acá podría mover un céntimo en un turno viejo).
+ */
+export function efectivoEsperadoDe(turno: {
+  montoInicial?: number
+  totalEfectivo?: number
+  totalGastosEfectivo?: number
+  vueltoTransferencia?: number
+}): number {
+  return (
+    (Number(turno.montoInicial) || 0) +
+    (Number(turno.totalEfectivo) || 0) -
+    (Number(turno.totalGastosEfectivo) || 0) -
+    (Number(turno.vueltoTransferencia) || 0)
+  )
+}
+
+/**
  * Bolsillo de un item de cobro o de nota, según su `tipoPago`.
  *
  * Las **notas** siguen la regla que ya usa `services/notas.ts` al mover la caja: una NC
@@ -147,8 +172,7 @@ export function desglosarTurno(turno: TurnoParaDesglose): DesgloseTurno {
   }
 }
 
-/** Suma el desglose de varios turnos (para el encabezado del día en el arqueo). */
-export function sumarDesgloses(desgloses: readonly DesgloseTurno[]): DesgloseTurno {
+/** Suma el desglose de varios turnos (para el encabezado del día en el arqueo). */export function sumarDesgloses(desgloses: readonly DesgloseTurno[]): DesgloseTurno {
   const acc = {
     efectivo: { total: 0, ventas: 0, cobranzas: 0, notas: 0 },
     transferencia: { total: 0, ventas: 0, cobranzas: 0, notas: 0 },

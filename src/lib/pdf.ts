@@ -3,7 +3,7 @@ import { numeroALetras } from '@/lib/numero-a-letras'
 import { etiquetaPago, formaPagoLabel } from '@/lib/pagos'
 import { itemsConDescuento } from '@/lib/sunat-importes'
 import { esc } from '@/lib/ui-utils'
-import { lineasDeOrigen, type DesgloseTurno } from '@/lib/arqueo'
+import { desglosarTurno, lineasDeOrigen, type DesgloseTurno, type ItemTurno } from '@/lib/arqueo'
 
 const TITULOS: Record<string, string> = {
   NV: 'NOTA DE VENTA',
@@ -339,7 +339,7 @@ function origenesHTML(desglose: DesgloseTurno['efectivo'] | undefined, fmt: (n: 
     .join('')
 }
 
-export async function abrirPDFArqueo({ fecha, turnos, resumen }: { fecha: Date; turnos: TurnoArqueo[]; resumen: { totalVentas: number; totalEfectivo: number; totalTransferencia: number; totalGastos: number; totalNeto: number; numTurnos: number; numTransacciones: number; montoInicialTotal: number; efectivoEsperadoTotal: number; efectivoContadoTotal: number; diferenciaTotal: number } }) {
+export async function abrirPDFArqueo({ fecha, turnos, resumen }: { fecha: Date; turnos: TurnoArqueo[]; resumen: { totalVentas: number; totalEfectivo: number; totalTransferencia: number; totalGastos: number; totalNeto: number; numTurnos: number; numCierres: number; numTransacciones: number; montoInicialTotal: number; efectivoEsperadoTotal: number; efectivoContadoTotal: number; diferenciaTotal: number } }) {
   const w = window.open('', '_blank', 'width=500,height=800')
   if (!w) return
 
@@ -420,7 +420,16 @@ export async function abrirPDFArqueo({ fecha, turnos, resumen }: { fecha: Date; 
     <div class="kpi"><div class="kpi-label">Neto</div><div class="kpi-value" style="color:#2563eb;">${fmt(resumen.totalNeto)}</div></div>
     <div class="kpi"><div class="kpi-label">Turnos</div><div class="kpi-value">${resumen.numTurnos}</div></div>
     <div class="kpi"><div class="kpi-label">Transacciones</div><div class="kpi-value">${resumen.numTransacciones}</div></div>
-    <div class="kpi"><div class="kpi-label">Diferencia Total</div><div class="kpi-value" style="color:${Math.abs(resumen.diferenciaTotal) < 0.01 ? '#16a34a' : '#dc2626'};">${resumen.diferenciaTotal > 0 ? '+ ' : ''}${fmt(resumen.diferenciaTotal)}</div></div>
+    <div class="kpi"><div class="kpi-label">Fondo inicial</div><div class="kpi-value">${fmt(resumen.montoInicialTotal)}</div></div>
+  </div>
+  <div class="summary" style="grid-template-columns:1fr 1fr 1fr;">
+    <div class="kpi"><div class="kpi-label">Efectivo esperado</div><div class="kpi-value" style="color:#2563eb;">${fmt(resumen.efectivoEsperadoTotal)}</div></div>
+    <div class="kpi"><div class="kpi-label">Efectivo contado</div><div class="kpi-value">${fmt(resumen.efectivoContadoTotal)}</div></div>
+    <div class="kpi"><div class="kpi-label">Diferencia total</div><div class="kpi-value" style="color:${Math.abs(resumen.diferenciaTotal) < 0.01 ? '#16a34a' : '#dc2626'};">${resumen.diferenciaTotal > 0 ? '+ ' : ''}${fmt(resumen.diferenciaTotal)}</div></div>
+  </div>
+  <div style="font-size:9px;color:#666;margin:-8px 0 12px;">
+    Caja del día = turnos <b>cerrados</b> (${resumen.numCierres} de ${resumen.numTurnos})${resumen.numTurnos > resumen.numCierres ? ' — los abiertos todavía no se contaron' : ''}.
+    La caja cuadra <b>solo el efectivo</b>: las transferencias (Yape, Plin, tarjeta) se concilian aparte.
   </div>
   <div class="section-title">Detalle por Turno</div>
   ${turnosHTML || '<div style="text-align:center;color:#999;padding:20px;">No hay turnos registrados este día.</div>'}
@@ -450,10 +459,14 @@ export type CierreCajaPDF = {
   totalGastos?: number
   totalGastosEfectivo?: number
   totalGastosTransferencia?: number
+  vueltoTransferencia?: number
   efectivoEsperado?: number
   montoFinalEfectivo?: number
   diferencia?: number
   observaciones?: string
+  /** Items del turno (`tblCierresCaja.ventas`). Con esto se muestra el **origen** de cada
+   *  bolsillo (ventas del día / cobranza de crédito / notas), igual que en el arqueo. */
+  ventas?: ItemTurno[]
   analisis?: {
     causas: { tipo: string; descripcion: string; ventaId?: string; monto?: number; hora?: string }[]
     recomendaciones: string[]
@@ -470,6 +483,16 @@ export function abrirPDFCierreCaja(cierre: CierreCajaPDF) {
   const horaImpresion = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
   const diffOk = Math.abs(cierre.diferencia ?? 0) < 0.01
   const diff = cierre.diferencia ?? 0
+  // Desglose por origen de cada bolsillo (ventas del día / cobranza de crédito / notas).
+  // ⚠️ Antes estas filas decían "Ventas en efectivo/transferencia" y el monto incluía
+  // **cobranzas**: el papel que acompaña la plata mentía sobre cuánto se vendió.
+  const desgloseCierre = cierre.ventas
+    ? desglosarTurno({
+        totalEfectivo: cierre.totalEfectivo ?? 0,
+        totalTransferencia: cierre.totalTransferencia ?? 0,
+        ventasDelTurno: cierre.ventas,
+      })
+    : null
 
   const causasHTML = cierre.analisis?.causas && cierre.analisis.causas.length > 0
     ? `<div style="margin-top:10px;"><div style="font-size:11px;font-weight:bold;margin-bottom:5px;">POSIBLES CAUSAS</div>
@@ -510,7 +533,7 @@ export function abrirPDFCierreCaja(cierre: CierreCajaPDF) {
 
   <div class="summary">
     <div class="kpi"><div class="kpi-label">Fondo Inicial</div><div class="kpi-value">${fmt(cierre.montoInicial ?? 0)}</div></div>
-    <div class="kpi"><div class="kpi-label">Efectivo Vendido</div><div class="kpi-value" style="color:#16a34a;">${fmt(cierre.totalEfectivo ?? 0)}</div></div>
+    <div class="kpi"><div class="kpi-label">Efectivo (cajón)</div><div class="kpi-value" style="color:#16a34a;">${fmt(cierre.totalEfectivo ?? 0)}</div></div>
     <div class="kpi"><div class="kpi-label">Transferencia</div><div class="kpi-value" style="color:#8b5cf6;">${fmt(cierre.totalTransferencia ?? 0)}</div></div>
   </div>
   <div class="summary">
@@ -522,8 +545,10 @@ export function abrirPDFCierreCaja(cierre: CierreCajaPDF) {
   <div class="section-title">Resumen Financiero</div>
   <table style="width:100%;font-size:10px;border-collapse:collapse;">
     <tr style="border-bottom:1px solid #eee;"><td style="padding:5px 0;">Monto inicial</td><td style="text-align:right;font-weight:bold;">${fmt(cierre.montoInicial ?? 0)}</td></tr>
-    <tr style="border-bottom:1px solid #eee;"><td style="padding:5px 0;">Ventas en efectivo</td><td style="text-align:right;color:#16a34a;font-weight:bold;">+ ${fmt(cierre.totalEfectivo ?? 0)}</td></tr>
-    <tr style="border-bottom:1px solid #eee;"><td style="padding:5px 0;">Ventas en transferencia</td><td style="text-align:right;font-weight:bold;">${fmt(cierre.totalTransferencia ?? 0)}</td></tr>
+    <tr style="border-bottom:1px solid #eee;"><td style="padding:5px 0;">Efectivo (cajón)</td><td style="text-align:right;color:#16a34a;font-weight:bold;">+ ${fmt(cierre.totalEfectivo ?? 0)}</td></tr>
+    ${origenesHTML(desgloseCierre?.efectivo, fmt)}
+    <tr style="border-bottom:1px solid #eee;"><td style="padding:5px 0;">Transferencia</td><td style="text-align:right;font-weight:bold;">${fmt(cierre.totalTransferencia ?? 0)}</td></tr>
+    ${origenesHTML(desgloseCierre?.transferencia, fmt)}
     <tr style="border-bottom:1px solid #eee;"><td style="padding:5px 0;">Gastos en efectivo</td><td style="text-align:right;color:#dc2626;font-weight:bold;">- ${fmt(cierre.totalGastosEfectivo ?? 0)}</td></tr>
     ${cierre.totalGastosTransferencia ? `<tr style="border-bottom:1px solid #eee;"><td style="padding:5px 0;">Gastos en transferencia</td><td style="text-align:right;color:#dc2626;font-weight:bold;">- ${fmt(cierre.totalGastosTransferencia)}</td></tr>` : ''}
     <tr style="border-top:2px solid #222;"><td style="padding:5px 0;font-weight:bold;color:#2563eb;">Efectivo esperado</td><td style="text-align:right;font-weight:bold;color:#2563eb;">${fmt(cierre.efectivoEsperado ?? 0)}</td></tr>

@@ -3,6 +3,7 @@ import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
 import { exigirRateLimit } from '@/lib/rate-limit'
+import { efectivoEsperadoDe } from '@/lib/arqueo'
 
 export type Egreso = {
   id?: string
@@ -61,7 +62,12 @@ export async function registrarEgresoEnTurno(egreso: Omit<Egreso, 'id' | 'create
 
       // Validar saldo si es pago desde caja
       if (egreso.tipoPago === 'caja') {
-        const efectivoDisponible = (turnoData.montoInicial || 0) + (turnoData.totalEfectivo || 0) - (turnoData.totalGastosEfectivo || 0) - (turnoData.vueltoTransferencia || 0)
+        const efectivoDisponible = efectivoEsperadoDe({
+          montoInicial: turnoData.montoInicial,
+          totalEfectivo: turnoData.totalEfectivo,
+          totalGastosEfectivo: turnoData.totalGastosEfectivo,
+          vueltoTransferencia: turnoData.vueltoTransferencia,
+        })
         if (egreso.monto > efectivoDisponible) {
           return { success: false, error: `Saldo insuficiente. Disponible: S/ ${efectivoDisponible.toFixed(2)}` }
         }

@@ -151,7 +151,7 @@ export function ArqueoCaja() {
 
       {arqueo && arqueo.turnos.length > 0 && (
         <div className="flex justify-end">
-          <Button variant="outline" size="sm" onClick={() => abrirPDFArqueo({ fecha: fechaSel, turnos: arqueo.turnos, resumen: { totalVentas: arqueo.totalVentas, totalEfectivo: arqueo.totalEfectivo, totalTransferencia: arqueo.totalTransferencia, totalGastos: arqueo.totalGastos, totalNeto: arqueo.totalNeto, numTurnos: arqueo.numTurnos, numTransacciones: arqueo.numTransacciones, montoInicialTotal: arqueo.montoInicialTotal, efectivoEsperadoTotal: arqueo.efectivoEsperadoTotal, efectivoContadoTotal: arqueo.efectivoContadoTotal, diferenciaTotal: arqueo.diferenciaTotal } })}>
+          <Button variant="outline" size="sm" onClick={() => abrirPDFArqueo({ fecha: fechaSel, turnos: arqueo.turnos, resumen: { totalVentas: arqueo.totalVentas, totalEfectivo: arqueo.totalEfectivo, totalTransferencia: arqueo.totalTransferencia, totalGastos: arqueo.totalGastos, totalNeto: arqueo.totalNeto, numTurnos: arqueo.numTurnos, numCierres: arqueo.numCierres, numTransacciones: arqueo.numTransacciones, montoInicialTotal: arqueo.montoInicialTotal, efectivoEsperadoTotal: arqueo.efectivoEsperadoTotal, efectivoContadoTotal: arqueo.efectivoContadoTotal, diferenciaTotal: arqueo.diferenciaTotal } })}>
             <FileText className="mr-2 h-4 w-4" /> Exportar PDF
           </Button>
         </div>
@@ -198,6 +198,38 @@ export function ArqueoCaja() {
           <div className="num mt-1 font-bold">{fmt(arqueo?.totalNeto ?? 0)}</div>
         </div>
       </div>
+
+      {
+        /* Cierre del día: el consolidado que antes se calculaba y se tiraba.
+           Solo tiene sentido si hay al menos un turno cerrado (si no, no hay "contado"). */
+        (arqueo?.numCierres ?? 0) > 0 && (
+          <div className="rounded-2xl border bg-card shadow-card">
+            <div className="border-b px-4 py-3">
+              <span className="text-sm font-bold">Caja del día</span>
+              <span className="ml-2 text-[11px] text-muted-foreground">
+                (solo turnos cerrados: {arqueo?.numCierres}
+                {(arqueo?.numTurnos ?? 0) > (arqueo?.numCierres ?? 0)
+                  ? ` de ${arqueo?.numTurnos} — el resto sigue abierto y todavía no se contó`
+                  : ''}
+                )
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
+              <Mini label="Fondo inicial" value={fmt(arqueo?.montoInicialTotal ?? 0)} />
+              <Mini label="Efectivo esperado" value={fmt(arqueo?.efectivoEsperadoTotal ?? 0)} />
+              <Mini label="Efectivo contado" value={fmt(arqueo?.efectivoContadoTotal ?? 0)} />
+              <Mini
+                label="Diferencia"
+                value={fmt(arqueo?.diferenciaTotal ?? 0)}
+                accent={Math.abs(arqueo?.diferenciaTotal ?? 0) > 0.009}
+              />
+            </div>
+            <div className="border-t px-4 py-2 text-[11px] text-muted-foreground">
+              La caja cuadra <b>solo el efectivo</b>: las transferencias (Yape, Plin, tarjeta) se concilian aparte.
+            </div>
+          </div>
+        )
+      }
 
       {/* Turnos del día (por fecha de apertura) */}
       <div className="rounded-2xl border bg-card shadow-card">

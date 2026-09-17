@@ -383,6 +383,7 @@ export function Turnos() {
                   montoInicial: turno.montoInicial ?? 0,
                   totalEfectivo: turno.totalEfectivo ?? 0,
                   totalGastosEfectivo: turno.totalGastosEfectivo ?? 0,
+                  vueltoTransferencia: turno.vueltoTransferencia ?? 0,
                   ventasDelTurno: turno.ventasDelTurno ?? [],
                 }}
                 onConfirm={async (montoFinal, obs) => {

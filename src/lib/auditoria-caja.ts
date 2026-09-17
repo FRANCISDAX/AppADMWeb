@@ -1,3 +1,6 @@
+import { efectivoEsperadoDe } from './arqueo.ts'
+import { bolsillosDeVenta } from './pagos.ts'
+
 export type TipoCausa = 'error_cambio' | 'pago_no_registrado' | 'gasto_no_registrado' | 'diferencia_conteo' | 'otro'
 
 export type Causa = {
@@ -20,12 +23,13 @@ export function analizarCierre(opts: {
   montoInicial: number
   totalEfectivo: number
   totalGastosEfectivo: number
+  /** Vuelto pagado por transferencia: **sale** del cajón (fórmula única en `lib/arqueo.ts`). */
+  vueltoTransferencia?: number
   ventasDelTurno: any[]
   efectivoReal: number
 }): ResultadoAuditoria {
-  const { montoInicial, totalEfectivo, totalGastosEfectivo, ventasDelTurno, efectivoReal } = opts
-
-  const efectivoEsperado = montoInicial + totalEfectivo - totalGastosEfectivo
+  const { totalGastosEfectivo, ventasDelTurno, efectivoReal } = opts
+  const efectivoEsperado = efectivoEsperadoDe(opts)
   const diferencia = efectivoReal - efectivoEsperado
 
   const causas = detectarCausas(ventasDelTurno, totalGastosEfectivo, diferencia)
@@ -37,8 +41,10 @@ export function analizarCierre(opts: {
 function detectarCausas(ventasDelTurno: any[], totalGastosEfectivo: number, diferencia: number): Causa[] {
   const causas: Causa[] = []
 
+  // Ventas con **parte en efectivo** (no `tipoPago === 'efectivo'`: una venta MIXTA
+  // también deja efectivo en el cajón y antes se salteaba esta revisión).
   const ventasEfectivo = ventasDelTurno.filter(
-    (v) => v.tipoPago === 'efectivo' && v.estado !== 'anulada'
+    (v) => v.estado !== 'anulada' && bolsillosDeVenta({ tipoPago: v.tipoPago, pagos: v.pagos, total: v.total }).efectivo > 0
   )
 
   for (const v of ventasEfectivo) {

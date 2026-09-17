@@ -12,7 +12,31 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { desglosarTurno, lineasDeOrigen, sumarDesgloses, type ItemTurno } from './arqueo.ts'
+import { desglosarTurno, efectivoEsperadoDe, lineasDeOrigen, sumarDesgloses, type ItemTurno } from './arqueo.ts'
+
+describe('efectivoEsperadoDe — la fórmula única del arqueo', () => {
+  it('fondo + efectivo − gastos (el caso normal)', () => {
+    assert.equal(efectivoEsperadoDe({ montoInicial: 10, totalEfectivo: 2, totalGastosEfectivo: 0 }), 12)
+  })
+
+  it('resta los gastos de efectivo', () => {
+    assert.equal(efectivoEsperadoDe({ montoInicial: 10, totalEfectivo: 50, totalGastosEfectivo: 8.5 }), 51.5)
+  })
+
+  it('⚠️ resta el vuelto por transferencia (lo que faltaba en 2 de los 6 lugares)', () => {
+    // Este es el caso que dejaba al cajero viendo un "Debería haber" distinto al guardado.
+    assert.equal(efectivoEsperadoDe({ montoInicial: 10, totalEfectivo: 40, totalGastosEfectivo: 0, vueltoTransferencia: 15 }), 35)
+  })
+
+  it('las transferencias no entran (no hay campo: no puede sumarlas por error)', () => {
+    assert.equal(efectivoEsperadoDe({ montoInicial: 0, totalEfectivo: 0, totalGastosEfectivo: 0 }), 0)
+  })
+
+  it('campos ausentes o basura cuentan como 0', () => {
+    assert.equal(efectivoEsperadoDe({}), 0)
+    assert.equal(efectivoEsperadoDe({ montoInicial: NaN, totalEfectivo: undefined }), 0)
+  })
+})
 
 /** Venta simple: tal como la escribe `services/ventas.ts` cuando no hay pago múltiple. */
 function venta(total: number, tipoPago: string, extra: Partial<ItemTurno> = {}): ItemTurno {

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { analizarCierre, type ResultadoAuditoria } from '@/lib/auditoria-caja'
+import { efectivoEsperadoDe } from '@/lib/arqueo'
 import { cn } from '@/lib/utils'
 
 const fmt = (n: number) => 'S/ ' + n.toFixed(2)
@@ -13,6 +14,8 @@ type Props = {
     montoInicial: number
     totalEfectivo: number
     totalGastosEfectivo: number
+    /** Vuelto pagado por transferencia (sale del cajón). Fórmula única: `efectivoEsperadoDe`. */
+    vueltoTransferencia?: number
     ventasDelTurno: any[]
   }
   onConfirm: (montoFinal: number, observaciones: string) => Promise<void>
@@ -27,6 +30,10 @@ export function CierreCaja({ turno, onConfirm, onCancel, procesando }: Props) {
   const [resultado, setResultado] = React.useState<ResultadoAuditoria | null>(null)
 
   const monto = parseFloat(montoFinal) || 0
+  // Misma fórmula que usa el cierre y el arqueo: antes acá faltaba el vuelto por
+  // transferencia, así que el cajero podía ver un "Debería haber" distinto al que
+  // el sistema guardaba.
+  const esperado = efectivoEsperadoDe(turno)
 
   function handleAnalizar() {
     if (monto <= 0) return
@@ -34,6 +41,7 @@ export function CierreCaja({ turno, onConfirm, onCancel, procesando }: Props) {
       montoInicial: turno.montoInicial,
       totalEfectivo: turno.totalEfectivo,
       totalGastosEfectivo: turno.totalGastosEfectivo || 0,
+      vueltoTransferencia: turno.vueltoTransferencia || 0,
       ventasDelTurno: turno.ventasDelTurno || [],
       efectivoReal: monto,
     })
@@ -165,7 +173,7 @@ export function CierreCaja({ turno, onConfirm, onCancel, procesando }: Props) {
           )}
           <div className="flex justify-between border-t pt-1 font-bold">
             <span>Debería haber</span>
-            <span>{fmt(turno.montoInicial + turno.totalEfectivo - (turno.totalGastosEfectivo || 0))}</span>
+            <span>{fmt(esperado)}</span>
           </div>
         </div>
       </div>
@@ -185,12 +193,11 @@ export function CierreCaja({ turno, onConfirm, onCancel, procesando }: Props) {
       {monto > 0 && (
         <div className={cn(
           'rounded-lg p-2.5 text-center text-sm font-bold',
-          monto === (turno.montoInicial + turno.totalEfectivo - (turno.totalGastosEfectivo || 0))
+          monto === esperado
             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
             : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
         )}>
           {(() => {
-            const esperado = turno.montoInicial + turno.totalEfectivo - (turno.totalGastosEfectivo || 0)
             const diff = monto - esperado
             return diff === 0 ? '✅ Caja cuadrada' : `Diferencia: ${fmt(diff)}`
           })()}

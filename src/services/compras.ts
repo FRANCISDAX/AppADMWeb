@@ -1,6 +1,7 @@
 import { collection, doc, runTransaction, type DocumentSnapshot } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
+import { efectivoEsperadoDe } from '@/lib/arqueo'
 
 type ItemCompra = { productoId: string; productoNombre: string; codigo?: string; cantidad: number; costoUnitario: number; factor?: number; presentacionId?: string; presentacionNombre?: string }
 
@@ -44,7 +45,12 @@ export async function registrarCompra({
         turnoSnap = await tx.get(turnoRef)
         if (!turnoSnap.exists()) throw new Error('No se encontró el turno abierto.')
         const td = turnoSnap.data() as Record<string, unknown>
-        const efectivoDisponible = ((td.montoInicial as number) || 0) + ((td.totalEfectivo as number) || 0) - ((td.totalGastosEfectivo as number) || 0) - ((td.vueltoTransferencia as number) || 0)
+        const efectivoDisponible = efectivoEsperadoDe({
+          montoInicial: td.montoInicial as number,
+          totalEfectivo: td.totalEfectivo as number,
+          totalGastosEfectivo: td.totalGastosEfectivo as number,
+          vueltoTransferencia: td.vueltoTransferencia as number,
+        })
         if (totalPagado > efectivoDisponible) {
           throw new Error(`Saldo insuficiente en caja. Disponible: S/ ${efectivoDisponible.toFixed(2)}`)
         }

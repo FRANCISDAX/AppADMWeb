@@ -1,7 +1,7 @@
 import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, updateDoc, where, type QueryConstraint } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
-import { desglosarTurno, sumarDesgloses, type DesgloseTurno } from '@/lib/arqueo'
+import { desglosarTurno, efectivoEsperadoDe, sumarDesgloses, type DesgloseTurno } from '@/lib/arqueo'
 
 // Una "venta" contable para reportes es un comprobante real (NV/BOLETA/FACTURA), NO anulado,
 // y NO un cobro de crédito ni una nota de crédito/débito (esos no son ventas nuevas).
@@ -185,9 +185,14 @@ export async function obtenerArqueoDelDia(fecha: Date | string, usuarioFiltro?: 
       const gastosEfectivo = t.totalGastosEfectivo || 0
       const gastosTransferencia = t.totalGastosTransferencia || 0
       const vueltoTransferencia = t.vueltoTransferencia || 0
-      // Mismo cálculo que cerrarTurno → live también para turnos abiertos.
-      // El vuelto por transferencia (pago con Yape mayor al total) SALE del cajón y se descuenta.
-      const efectivoEsperado = montoInicial + efectivo - gastosEfectivo - vueltoTransferencia
+      // Fórmula única del arqueo (`lib/arqueo.ts`): las transferencias no entran, y el
+      // vuelto por transferencia sale del cajón.
+      const efectivoEsperado = efectivoEsperadoDe({
+        montoInicial,
+        totalEfectivo: efectivo,
+        totalGastosEfectivo: gastosEfectivo,
+        vueltoTransferencia,
+      })
       const cerrado = t.estado === 'cerrado'
       const efectivoContado = cerrado ? (t.montoFinalEfectivo || 0) : 0
       const diferencia = cerrado ? efectivoContado - efectivoEsperado : 0
@@ -208,12 +213,17 @@ export async function obtenerArqueoDelDia(fecha: Date | string, usuarioFiltro?: 
       totalGastos += gastos
       totalGastosEfectivo += gastosEfectivo
       totalGastosTransferencia += gastosTransferencia
-      montoInicialTotal += montoInicial
-      efectivoEsperadoTotal += efectivoEsperado
-      efectivoContadoTotal += efectivoContado
-      if (cerrado) numCierres++
       numTransacciones += activas.length
       desgloses.push(desglose)
+      // Los totales de CAJA (el "Caja del día") solo suman turnos **cerrados**: un turno
+      // abierto tiene esperado pero todavía no tiene contado, así que incluirlo mostraba
+      // una diferencia falsa (verificado con el 16/09: daba −11.00 por el turno abierto).
+      if (cerrado) {
+        numCierres++
+        montoInicialTotal += montoInicial
+        efectivoEsperadoTotal += efectivoEsperado
+        efectivoContadoTotal += efectivoContado
+      }
 
       turnos.push({
         id: d.id,
