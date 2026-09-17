@@ -4,8 +4,18 @@ import { Button } from '@/components/ui/button'
 import { useNotifications } from '@/components/notifications'
 import { usePermisos } from '@/context/permisos'
 import { useAuth } from '@/context/auth'
+import { useConfiguracion } from '@/hooks/use-configuracion'
 import { fmt } from '@/lib/ui-utils'
+import { MEDIOS, bolsilloDe, infoMedio, tipoPagoDe, type PagoGuardado } from '@/lib/pagos'
 import { obtenerVentasPendientes, cobrarVentaPendiente, cancelarVentaPendiente, type DocumentoVenta } from '@/services/ventas'
+import { cn } from '@/lib/utils'
+
+/** Tipos de comprobante que el cajero puede asignar al cobrar una venta pendiente. */
+const TIPOS_COMP = [
+  { id: 'NV', label: 'Nota de Venta' },
+  { id: 'BOLETA', label: 'Boleta' },
+  { id: 'FACTURA', label: 'Factura' },
+] as const
 
 function tiempoTranscurrido(fechaIso: string): string {
   const diff = Date.now() - new Date(fechaIso).getTime()
@@ -21,12 +31,19 @@ function tiempoTranscurrido(fechaIso: string): string {
 export function PanelVentasPendientes() {
   const { user } = useAuth()
   const { cajaId, nombre: nombreUsuario, tienePermiso } = usePermisos()
+  const { config } = useConfiguracion()
   const { toast, confirm } = useNotifications()
   const [ventas, setVentas] = React.useState<DocumentoVenta[]>([])
   const [cargando, setCargando] = React.useState(true)
   const [procesandoId, setProcesandoId] = React.useState<string | null>(null)
   const [cancelandoId, setCancelandoId] = React.useState<string | null>(null)
   const [motivoCancel, setMotivoCancel] = React.useState('')
+  // Cobro: el cajero elige el comprobante y la forma de pago (el vendedor no los decide).
+  const [cobrandoId, setCobrandoId] = React.useState<string | null>(null)
+  const [tipoDocSel, setTipoDocSel] = React.useState<'NV' | 'BOLETA' | 'FACTURA'>('NV')
+  const [medioSel, setMedioSel] = React.useState<string>('efectivo')
+  const [operacion, setOperacion] = React.useState('')
+  const [recibido, setRecibido] = React.useState('')
 
   const cargar = React.useCallback(async () => {
     if (!cajaId) { setCargando(false); return }
@@ -52,29 +69,51 @@ export function PanelVentasPendientes() {
     const turno = await buscarTurnoAbierto(user?.uid, tienePermiso('verTodo'))
     if (!turno) return toast('🚫 No hay un turno abierto. Abrí un turno antes de cobrar.', 'error')
 
-    const items = (v.venta as Record<string, unknown>)?.items as { nombre: string; quantity: number }[] | undefined
-    const itemCount = items?.length ?? 0
-    const total = (v.venta as Record<string, unknown>)?.total as number ?? 0
+    const venta = (v.venta || {}) as Record<string, unknown>
+    const total = Number(venta.total || 0)
+    const docCliente = String(venta.cliente_dni || '').trim()
 
-    const ok = await confirm({
-      title: '¿Cobrar esta venta?',
-      message: `Vendedor: ${v.vendedorNombre || '—'}\nItems: ${itemCount}\nTotal: ${fmt(total)}\nComprobante: ${v.serieNumero}`,
-      okText: 'Cobrar',
-    })
-    if (!ok) return
+    // Mismas validaciones que el PDV: Factura exige RUC y Boleta grande exige DNI.
+    if (tipoDocSel === 'FACTURA' && !/^\d{11}$/.test(docCliente)) {
+      return toast('⚠️ La Factura necesita el RUC (11 dígitos) del cliente en la venta', 'error')
+    }
+    const tope = Number(config.topeBoletaDni) > 0 ? Number(config.topeBoletaDni) : 700
+    if (tipoDocSel === 'BOLETA' && total > tope && !/^\d{8}$/.test(docCliente)) {
+      return toast(`⚠️ Boletas mayores a ${fmt(tope)} requieren DNI (8 dígitos) del cliente`, 'error')
+    }
+
+    const esEfectivo = medioSel === 'efectivo'
+    const recibidoNum = esEfectivo ? (parseFloat(recibido.replace(',', '.')) || total) : total
+    if (esEfectivo && recibidoNum < total) {
+      return toast(`⚠️ Recibiste ${fmt(recibidoNum)} y el total es ${fmt(total)}`, 'error')
+    }
+    const info = infoMedio(medioSel)
+    const pagos: PagoGuardado[] = [{
+      tipo: bolsilloDe(medioSel),
+      medio: info.medio,
+      monto: total,
+      ...(info.pideOperacion && operacion.trim() ? { operacion: operacion.trim() } : {}),
+    }]
 
     setProcesandoId(v.id)
     try {
       const res = await cobrarVentaPendiente({
         documentoId: v.id,
         turnoId: turno.id || '',
-        tipoPago: 'efectivo',
+        pagos,
+        tipoPago: tipoPagoDe(pagos),
+        montoRecibido: esEfectivo ? recibidoNum : total,
+        cambio: esEfectivo ? Math.max(0, recibidoNum - total) : 0,
         cajeroId: user?.uid || '',
         cajeroNombre: nombreUsuario || user?.email || 'sistema',
+        // El comprobante lo define el cajero: puede mantener el que puso el vendedor o cambiarlo.
+        tipoDoc: tipoDocSel,
+        config,
       })
       if (res.success) {
-        toast(`✅ Venta ${v.serieNumero} cobrada`)
+        toast(`✅ Venta ${v.serieNumero} cobrada${tipoDocSel !== v.tipoDoc ? ` (${tipoDocSel})` : ''}`)
         setVentas((prev) => prev.filter((x) => x.id !== v.id))
+        setCobrandoId(null)
       } else {
         toast(`❌ ${res.error || 'Error al cobrar'}`, 'error')
       }
@@ -83,6 +122,14 @@ export function PanelVentasPendientes() {
     } finally {
       setProcesandoId(null)
     }
+  }
+
+  function abrirCobro(v: DocumentoVenta) {
+    setCobrandoId(v.id)
+    setTipoDocSel(((v.tipoDoc || v.tipo || 'NV') as 'NV' | 'BOLETA' | 'FACTURA'))
+    setMedioSel('efectivo')
+    setOperacion('')
+    setRecibido('')
   }
 
   async function cancelar(v: DocumentoVenta) {
@@ -160,7 +207,86 @@ export function PanelVentasPendientes() {
                   <span className="text-sm font-extrabold">{fmt(total)}</span>
                 </div>
 
-                {cancelando ? (
+                {cobrandoId === v.id ? (
+                  <div className="space-y-2 rounded-lg border bg-muted/30 p-2">
+                    <div>
+                      <div className="mb-1 text-[11px] font-bold text-muted-foreground">Comprobante</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {TIPOS_COMP.map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => setTipoDocSel(t.id)}
+                            className={cn(
+                              'rounded-lg border px-2.5 py-1 text-[11px] font-bold cursor-pointer',
+                              tipoDocSel === t.id ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-background',
+                            )}
+                          >
+                            {t.label}
+                            {t.id === v.tipoDoc ? ' ·' : ''}
+                          </button>
+                        ))}
+                      </div>
+                      {tipoDocSel !== v.tipoDoc && (
+                        <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">
+                          Se emitirá con la serie de {tipoDocSel} y tomará un correlativo nuevo.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="mb-1 text-[11px] font-bold text-muted-foreground">Forma de pago</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {MEDIOS.map((m) => (
+                          <button
+                            key={m.medio}
+                            onClick={() => setMedioSel(m.medio)}
+                            className={cn(
+                              'rounded-lg border px-2.5 py-1 text-[11px] font-bold cursor-pointer',
+                              medioSel === m.medio ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-background',
+                            )}
+                          >
+                            {m.icono} {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {infoMedio(medioSel).pideOperacion && (
+                      <input
+                        value={operacion}
+                        onChange={(e) => setOperacion(e.target.value)}
+                        placeholder="N° de operación (opcional)"
+                        className="w-full rounded-lg border bg-background px-3 py-1.5 text-xs"
+                      />
+                    )}
+
+                    {medioSel === 'efectivo' && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground">Recibí</span>
+                        <input
+                          value={recibido}
+                          onChange={(e) => setRecibido(e.target.value)}
+                          placeholder={total.toFixed(2)}
+                          inputMode="decimal"
+                          className="w-24 rounded-lg border bg-background px-2 py-1.5 text-right text-xs"
+                        />
+                        {(() => {
+                          const r = parseFloat(recibido.replace(',', '.')) || total
+                          const cambio = r - total
+                          return cambio > 0 ? <span className="text-[11px] font-bold text-primary">Vuelto {fmt(cambio)}</span> : null
+                        })()}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="flex-1" onClick={() => setCobrandoId(null)}>Volver</Button>
+                      <Button size="sm" className="flex-1" onClick={() => cobrar(v)} disabled={procesando}>
+                        {procesando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        {procesando ? 'Cobrando…' : `Cobrar ${fmt(total)}`}
+                      </Button>
+                    </div>
+                  </div>
+                ) : cancelando ? (
                   <div className="space-y-2">
                     <input
                       value={motivoCancel}
@@ -179,9 +305,9 @@ export function PanelVentasPendientes() {
                 ) : (
                   <div className="flex gap-2">
                     {tienePermiso('cobrarVenta') && (
-                      <Button size="sm" className="flex-1" onClick={() => cobrar(v)} disabled={procesando}>
-                        {procesando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                        {procesando ? 'Cobrando…' : 'Cobrar'}
+                      <Button size="sm" className="flex-1" onClick={() => abrirCobro(v)} disabled={procesando}>
+                        <Check className="h-3.5 w-3.5" />
+                        Cobrar
                       </Button>
                     )}
                     {tienePermiso('cancelarVentaPendiente') && (

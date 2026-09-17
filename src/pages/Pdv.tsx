@@ -828,13 +828,15 @@ export function Pdv() {
   async function enviarACaja() {
     if (Object.keys(cart).length === 0 && Object.keys(manualItems).length === 0) return setToast('⚠️ Agregá al menos un producto')
 
-    if (tipoComp === 'factura') {
-      if (!clienteNombre.trim()) return setToast('⚠️ Ingresa la razón social del cliente (FACTURA)')
-    }
+    // El vendedor **no** elige comprobante: manda la venta como Nota de Venta y el cajero,
+    // al cobrarla, decide si sale boleta o factura (y ahí se asigna la serie y el correlativo
+    // fiscal). Antes se usaba `tipoComp`, que arranca en 'boleta' y está oculto para el
+    // vendedor → creaba boletas sin que nadie las eligiera (y consumía correlativo de B001).
+    const tipoDocPendiente = esVendedor ? 'NV' : (tipoComp === 'nv' ? 'NV' : tipoComp === 'boleta' ? 'BOLETA' : 'FACTURA')
 
     const ok = await confirm({
       title: '¿Enviar a caja?',
-      message: `Total: ${fmt(total)}\nEl cajero cobrará esta venta.\nComprobante: ${tipoComp === 'nv' ? 'Nota de Venta' : tipoComp === 'boleta' ? 'Boleta' : 'Factura'}`,
+      message: `Total: ${fmt(total)}\nEl cajero cobrará esta venta.\nComprobante: ${tipoDocPendiente === 'NV' ? 'Nota de Venta (el cajero define el comprobante al cobrar)' : tipoDocPendiente === 'BOLETA' ? 'Boleta' : 'Factura'}`,
       okText: 'Enviar',
     })
     if (!ok) return
@@ -867,7 +869,7 @@ export function Pdv() {
       const res = await crearVentaPendiente({
         items,
         venta: {
-          tipoDoc: tipoComp === 'nv' ? 'NV' : tipoComp === 'boleta' ? 'BOLETA' : 'FACTURA',
+          tipoDoc: tipoDocPendiente,
           tipoPago: 'efectivo',
           total,
           descuentoTotal: descuentosCalc.totalDescuento,

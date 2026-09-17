@@ -53,6 +53,10 @@ export function espacioDe(campo: CampoSerie): EspacioSerie {
   return campo === 'seriePrefijo' ? 'notaVenta' : 'sunat'
 }
 
+// La clave del contador vive en `lib/contadores.ts` (módulo puro, sin imports, testeado):
+// se reexporta acá porque este archivo ya es el punto de entrada de "series" en la app.
+export { CAMPO_CONTADOR, claveContador, espacioContador } from './contadores.ts'
+
 export type SeriesUsuario = Partial<Record<CampoSerie, string>>
 
 /** Serie ya tomada por otro usuario de `tblUsuarios`. */

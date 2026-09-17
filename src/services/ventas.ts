@@ -4,6 +4,7 @@ import { numeroALetras } from '@/lib/numero-a-letras'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
 import { AFECTACION_POR_DEFECTO } from '@/constants/tributario'
 import { bolsillosDeVenta, formaPagoLabel, type PagoGuardado } from '@/lib/pagos'
+import { CAMPO_CONTADOR, claveContador } from '@/lib/contadores'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
@@ -546,83 +547,112 @@ export async function crearVentaPendiente({
       ? (venta as Record<string, unknown>).seriePrefijo as string || config.serie_prefijo || 'NV'
       : tipoDoc === 'BOLETA' ? config.serieBoleta || 'B001' : config.serieFactura || 'F001'
 
-    const counterRef = doc(db, COL.CONTADORES, `sunat_${serie}`)
-    const counterSnap = await getDoc(counterRef)
-    const nuevo = (counterSnap.exists() ? (counterSnap.data().contador || 0) : 0) + 1
-    await updateDoc(counterRef, { contador: nuevo, lastUpdated: f.toISOString() }).catch(async () => {
-      const { setDoc } = await import('firebase/firestore')
-      await setDoc(counterRef, { contador: nuevo, lastUpdated: f.toISOString() })
-    })
+    // ⚠️ Clave y campo del contador: regla única en `lib/series.ts`. Antes esta función
+    // usaba `sunat_${serie}` para TODO (incluido NV, que numera con `notaVenta_`) y el
+    // campo `contador` (el resto del sistema lee `ultimoCorrelativo`) → creaba un contador
+    // paralelo que arrancaba en 000001 y chocaba con NV ya emitidas.
+    const counterRef = doc(db, COL.CONTADORES, claveContador(tipoDoc, serie))
 
-    const numeroStr = String(nuevo).padStart(7, '0')
-    const serieNumero = `${serie}-${numeroStr}`
+    // Siembra (solo lectura): si el contador no existe, arranca desde el máximo ya emitido.
+    // La escritura va DENTRO de la transacción, junto con el documento: así no queda un
+    // contador huérfano (subido pero sin venta) como pasó con `sunat_NV01`.
+    let maxExistente = 0
+    try {
+      const counterSnap = await getDoc(counterRef)
+      if (!counterSnap.exists()) {
+        const previos = await getDocs(
+          query(collection(db, COL.DOCUMENTOS), where('tipoDoc', '==', tipoDoc), where('serie', '==', serie))
+        )
+        previos.forEach((d) => {
+          const n = Number(d.data().numero ?? d.data().correlativo ?? 0)
+          if (n > maxExistente) maxExistente = n
+        })
+      }
+    } catch (e) {
+      console.warn('⚠️ Lectura de correlativos existentes (pendiente):', e)
+    }
+
+    const numeroStr = (n: number) => String(n).padStart(7, '0')
 
     const importeTotal = venta.total - (venta.descuentoTotal || 0)
 
-    const ventaDoc = {
-      id: '',
-      fecha: f.toISOString(),
-      items: items.map((it) => ({
-        ...it,
-        precioVenta: it.precioVenta ?? 0,
-      })),
-      total: venta.total,
-      importe_total: importeTotal,
-      descuento_total: venta.descuentoTotal || 0,
-      descuento_global_tipo: venta.descuentoGlobalTipo,
-      descuento_global_valor: venta.descuentoGlobalValor,
-      tipoPago: venta.tipoPago,
-      forma_pago: venta.tipoPago,
-      pagos: venta.pagos || [],
-      efectivo: (venta.pagos || []).filter((p) => p.tipo === 'efectivo').reduce((s, p) => s + p.monto, 0),
-      totalTransferenciaPago: (venta.pagos || []).filter((p) => p.tipo === 'transferencia').reduce((s, p) => s + p.monto, 0),
-      cliente_nombre: venta.cliente_nombre || '',
-      cliente_dni: venta.cliente_dni || '',
-      cliente_direccion: venta.cliente_direccion || '',
-      montoRecibido: venta.montoRecibido || 0,
-      cambio: venta.cambio || 0,
-      cajero: vendedorNombre,
-      serie_numero: serieNumero,
-      sucursal: (config as Record<string, unknown>).sucursal || 'Casa Matriz',
-      mensaje: (config as Record<string, unknown>).mensajeLegal || '',
-      son_letras: numeroALetras(importeTotal),
-      turnoId: '',
-      envio: venta.envio,
-    }
+    // Correlativo + documento en UNA transacción (igual que el alta normal): el número
+    // se asigna y se guarda o no pasa nada. Antes el contador se subía antes, fuera de
+    // transacción, y quedaba subido aunque la venta fallara.
+    const guardada = await runTransaction(db, async (tx) => {
+      const contSnap = await tx.get(counterRef)
+      const nuevo = contSnap.exists()
+        ? Number(contSnap.data()?.[CAMPO_CONTADOR] ?? 0) + 1
+        : maxExistente + 1
+      const serieNumeroTx = `${serie}-${numeroStr(nuevo)}`
+      const docId = `${anioMes}_${tipoDoc}-${serieNumeroTx}`
 
-    const docData = {
-      tipo: tipoDoc,
-      tipoDoc,
-      serie,
-      numero: nuevo,
-      correlativo: nuevo,
-      serieNumero,
-      venta: ventaDoc,
-      fecha: f.toISOString(),
-      anio: f.getFullYear(),
-      mes: f.getMonth() + 1,
-      anioMes,
-      createdAt: f.toISOString(),
-      turnoId: '',
-      usuarioId: venta.usuarioId || '',
-      cajero: vendedorNombre,
-      estado: 'pendiente' as const,
-      vendedorId,
-      vendedorNombre,
-      cajaId: cajaId || '',
-      ...(tipoDoc !== 'NV' ? {
-        sunat: {
-          serie,
-          numero: nuevo,
-          puntoEmision: puntoEmisionDe(null, config),
-          estado: 'pendiente',
-        },
-      } : {}),
-    }
+      const ventaDoc = {
+        id: '',
+        fecha: f.toISOString(),
+        items: items.map((it) => ({
+          ...it,
+          precioVenta: it.precioVenta ?? 0,
+        })),
+        total: venta.total,
+        importe_total: importeTotal,
+        descuento_total: venta.descuentoTotal || 0,
+        descuento_global_tipo: venta.descuentoGlobalTipo,
+        descuento_global_valor: venta.descuentoGlobalValor,
+        tipoPago: venta.tipoPago,
+        forma_pago: venta.tipoPago,
+        pagos: venta.pagos || [],
+        efectivo: (venta.pagos || []).filter((p) => p.tipo === 'efectivo').reduce((s, p) => s + p.monto, 0),
+        totalTransferenciaPago: (venta.pagos || []).filter((p) => p.tipo === 'transferencia').reduce((s, p) => s + p.monto, 0),
+        cliente_nombre: venta.cliente_nombre || '',
+        cliente_dni: venta.cliente_dni || '',
+        cliente_direccion: venta.cliente_direccion || '',
+        montoRecibido: venta.montoRecibido || 0,
+        cambio: venta.cambio || 0,
+        cajero: vendedorNombre,
+        serie_numero: serieNumeroTx,
+        sucursal: (config as Record<string, unknown>).sucursal || 'Casa Matriz',
+        mensaje: (config as Record<string, unknown>).mensajeLegal || '',
+        son_letras: numeroALetras(importeTotal),
+        turnoId: '',
+        envio: venta.envio,
+      }
 
-    const docId = `${anioMes}_${tipoDoc}-${serieNumero}`
-    const { setDoc } = await import('firebase/firestore')
-    await setDoc(doc(db, COL.DOCUMENTOS, docId), docData)
+      const docData = {
+        tipo: tipoDoc,
+        tipoDoc,
+        serie,
+        numero: nuevo,
+        correlativo: nuevo,
+        serieNumero: serieNumeroTx,
+        venta: ventaDoc,
+        fecha: f.toISOString(),
+        anio: f.getFullYear(),
+        mes: f.getMonth() + 1,
+        anioMes,
+        createdAt: f.toISOString(),
+        turnoId: '',
+        usuarioId: venta.usuarioId || '',
+        cajero: vendedorNombre,
+        estado: 'pendiente' as const,
+        vendedorId,
+        vendedorNombre,
+        cajaId: cajaId || '',
+        ...(tipoDoc !== 'NV' ? {
+          sunat: {
+            serie,
+            numero: nuevo,
+            puntoEmision: puntoEmisionDe(null, config),
+            estado: 'pendiente',
+          },
+        } : {}),
+      }
+
+      tx.set(counterRef, { serie, [CAMPO_CONTADOR]: nuevo, updatedAt: f.toISOString() }, { merge: true })
+      tx.set(doc(db, COL.DOCUMENTOS, docId), docData)
+      return { docId, docData: docData as unknown as DocumentoVenta }
+    })
+    const { docId, docData } = guardada
 
     logActividad({
       accion: 'crear_venta_pendiente',
@@ -631,7 +661,7 @@ export async function crearVentaPendiente({
       detalle: { vendedor: vendedorNombre, items: items.length, total: venta.total },
     })
 
-    return { success: true, correlativo: serieNumero, documento: { id: docId, ...docData } as DocumentoVenta }
+    return { success: true, correlativo: docData.serieNumero, documento: { ...docData, id: docId } as DocumentoVenta }
   } catch (e) {
     console.error('❌ Error creando venta pendiente:', e)
     return { success: false, error: (e as Error).message }
@@ -687,6 +717,34 @@ export async function cobrarVentaPendiente({
   config?: Config
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    // Si el cajero cambia el tipo de comprobante, el correlativo sale de la serie destino.
+    // Se calcula acá (y se siembra desde el máximo ya emitido si el contador no existe)
+    // para poder leer ese contador DENTRO de la transacción, antes de escribir.
+    const cambiaTipo = Boolean(tipoDoc && config)
+    const serieDestino = !cambiaTipo
+      ? ''
+      : tipoDoc === 'NV'
+        ? config!.serie_prefijo || 'NV'
+        : tipoDoc === 'BOLETA' ? config!.serieBoleta || 'B001' : config!.serieFactura || 'F001'
+    const contadorDestino = cambiaTipo ? doc(db, COL.CONTADORES, claveContador(tipoDoc!, serieDestino)) : null
+    let maxDestino = 0
+    if (contadorDestino) {
+      try {
+        const snap = await getDoc(contadorDestino)
+        if (!snap.exists()) {
+          const previos = await getDocs(
+            query(collection(db, COL.DOCUMENTOS), where('tipoDoc', '==', tipoDoc), where('serie', '==', serieDestino))
+          )
+          previos.forEach((d) => {
+            const n = Number(d.data().numero ?? d.data().correlativo ?? 0)
+            if (n > maxDestino) maxDestino = n
+          })
+        }
+      } catch (e) {
+        console.warn('⚠️ Lectura del contador destino:', e)
+      }
+    }
+
     const res = await runTransaction(db, async (tx) => {
       const docRef = doc(db, COL.DOCUMENTOS, documentoId)
       const docSnap = await tx.get(docRef)
@@ -697,65 +755,53 @@ export async function cobrarVentaPendiente({
       const items = (docData.venta as Record<string, unknown>)?.items as VentaItem[] | undefined
       if (!items?.length) return { success: false, error: 'Documento sin items' }
 
-      // Descontar stock
+      // ⚠️ **Firestore exige TODAS las lecturas antes de cualquier escritura.** Antes esta
+      // transacción leía el turno (y el contador) DESPUÉS de descontar stock, así que
+      // cobrar una venta pendiente fallaba siempre con "transactions require all reads to
+      // be executed before all writes". Acá se lee todo primero y recién después se escribe.
+      const turnoRef = turnoId ? doc(db, COL.TURNOS, turnoId) : null
+      const turnoSnap = turnoRef ? await tx.get(turnoRef) : null
+      const contSnapDestino = contadorDestino ? await tx.get(contadorDestino) : null
+
+      // Stock actual de cada producto del documento (una lectura por producto, sin repetir).
+      const stockPrevio = new Map<string, number | null>()
+      for (const it of items) {
+        if (it.manual) continue
+        const ids = it.kitItems?.length ? it.kitItems.map((k) => k.productoId) : [it.id]
+        for (const id of ids) {
+          if (stockPrevio.has(id)) continue
+          const s = await tx.get(doc(db, COL.PRODUCTOS, id))
+          stockPrevio.set(id, s.exists() ? (s.data().stock ?? 0) : null)
+        }
+      }
+
+      // ─── ESCRITURAS ───
+      // Descontar stock + movimiento
       for (const it of items) {
         if (it.manual) continue
         if (it.kitItems?.length) {
           for (const kit of it.kitItems) {
-            const prodRef = doc(db, COL.PRODUCTOS, kit.productoId)
-            const prodSnap = await tx.get(prodRef)
-            if (prodSnap.exists()) {
-              const stockActual = prodSnap.data().stock ?? 0
-              tx.update(prodRef, { stock: Math.max(0, stockActual - kit.cantidad) })
-            }
+            const stockActual = stockPrevio.get(kit.productoId)
+            if (stockActual == null) continue
+            tx.update(doc(db, COL.PRODUCTOS, kit.productoId), { stock: Math.max(0, stockActual - kit.cantidad) })
           }
         } else {
-          const prodRef = doc(db, COL.PRODUCTOS, it.id)
-          const prodSnap = await tx.get(prodRef)
-          if (prodSnap.exists()) {
-            const prod = prodSnap.data()
-            const factor = it.factorConversion || 1
-            const stockActual = prod.stock ?? 0
-            tx.update(prodRef, { stock: Math.max(0, stockActual - it.quantity) })
-            tx.set(doc(collection(db, COL.MOVIMIENTOS)), {
-              productoId: it.id,
-              productoNombre: it.nombre,
-              tipo: 'venta',
-              cantidad: it.quantity,
-              cantidadAnterior: stockActual,
-              cantidadNueva: Math.max(0, stockActual - it.quantity),
-              factorConversion: factor,
-              presentacionNombre: it.presentacionNombre || 'Unidad',
-              fecha: new Date().toISOString(),
-              documentoRef: documentoId,
-              usuario: cajeroNombre,
-            })
-          }
-        }
-      }
-
-      // Actualizar turno
-      if (turnoId) {
-        const turnoRef = doc(db, COL.TURNOS, turnoId)
-        const turnoSnap = await tx.get(turnoRef)
-        if (turnoSnap.exists()) {
-          const td = turnoSnap.data()
-          const total = (docData.venta as Record<string, unknown>)?.total as number || 0
-          const efectivo = (docData.venta as Record<string, unknown>)?.efectivo as number || 0
-          const transferencia = (docData.venta as Record<string, unknown>)?.totalTransferenciaPago as number || 0
-          tx.update(turnoRef, {
-            totalVentas: (td.totalVentas || 0) + total,
-            totalEfectivo: (td.totalEfectivo || 0) + efectivo,
-            totalTransferencia: (td.totalTransferencia || 0) + transferencia,
-            ventasDelTurno: [...(td.ventasDelTurno || []), {
-              docId: documentoId,
-              tipo: docData.tipo,
-              serieNumero: docData.serieNumero,
-              total,
-              fecha: new Date().toISOString(),
-              vendedorId: docData.vendedorId || '',
-              vendedorNombre: docData.vendedorNombre || '',
-            }],
+          const stockActual = stockPrevio.get(it.id)
+          if (stockActual == null) continue
+          const factor = it.factorConversion || 1
+          tx.update(doc(db, COL.PRODUCTOS, it.id), { stock: Math.max(0, stockActual - it.quantity) })
+          tx.set(doc(collection(db, COL.MOVIMIENTOS)), {
+            productoId: it.id,
+            productoNombre: it.nombre,
+            tipo: 'venta',
+            cantidad: it.quantity,
+            cantidadAnterior: stockActual,
+            cantidadNueva: Math.max(0, stockActual - it.quantity),
+            factorConversion: factor,
+            presentacionNombre: it.presentacionNombre || 'Unidad',
+            fecha: new Date().toISOString(),
+            documentoRef: documentoId,
+            usuario: cajeroNombre,
           })
         }
       }
@@ -763,24 +809,50 @@ export async function cobrarVentaPendiente({
       // Marcar como pagado
       const f = new Date()
 
-      // Si el cajero cambió el tipoDoc, reasignar serie/numero
+      // Si el cajero cambió el tipoDoc, reasignar serie/numero con el contador correcto.
       let serieNumeroFinal = docData.serieNumero
-      let tipoDocFinal = docData.tipo
+      let tipoDocFinal: string = docData.tipo
       let serieFinal = docData.serie
-      let numeroFinal = docData.numero ?? docData.correlativo
-      if (tipoDoc && tipoDoc !== docData.tipo && config) {
-        const nuevaSerie = tipoDoc === 'NV'
-          ? config.serie_prefijo || 'NV'
-          : tipoDoc === 'BOLETA' ? config.serieBoleta || 'B001' : config.serieFactura || 'F001'
-        const counterRef = doc(db, COL.CONTADORES, `sunat_${nuevaSerie}`)
-        const counterSnap = await tx.get(counterRef)
-        const nuevo = (counterSnap.exists() ? (counterSnap.data().contador || 0) : 0) + 1
-        tx.set(counterRef, { contador: nuevo, lastUpdated: f.toISOString() }, { merge: true })
-        const numeroStr = String(nuevo).padStart(7, '0')
-        serieNumeroFinal = `${nuevaSerie}-${numeroStr}`
-        tipoDocFinal = tipoDoc
-        serieFinal = nuevaSerie
+      let numeroFinal: number = docData.numero ?? docData.correlativo ?? 0
+      if (cambiaTipo && tipoDoc !== docData.tipo && contSnapDestino) {
+        const nuevo = contSnapDestino.exists()
+          ? Number(contSnapDestino.data()?.[CAMPO_CONTADOR] ?? 0) + 1
+          : maxDestino + 1
+        tx.set(contadorDestino!, { serie: serieDestino, [CAMPO_CONTADOR]: nuevo, updatedAt: f.toISOString() }, { merge: true })
+        serieNumeroFinal = `${serieDestino}-${String(nuevo).padStart(7, '0')}`
+        tipoDocFinal = tipoDoc!
+        serieFinal = serieDestino
         numeroFinal = nuevo
+      }
+
+      // Actualizar turno: los bolsillos salen del **pago real** del cajero (regla única), no
+      // de los campos guardados al crear la venta pendiente (sin cobro venían en 0 y la caja
+      // quedaba corta al cerrar).
+      const totalVenta = Number((docData.venta as Record<string, unknown>)?.total || 0)
+      const bolsillos = bolsillosDeVenta({ tipoPago, pagos, total: totalVenta })
+      if (turnoRef && turnoSnap?.exists()) {
+        const td = turnoSnap.data()
+        tx.update(turnoRef, {
+          totalVentas: (td.totalVentas || 0) + totalVenta,
+          totalEfectivo: (td.totalEfectivo || 0) + bolsillos.efectivo,
+          totalTransferencia: (td.totalTransferencia || 0) + bolsillos.transferencia,
+          ventasDelTurno: [...(td.ventasDelTurno || []), {
+            // Mismo formato que una venta normal (`ventaDoc`) para que el arqueo, el desglose
+            // por origen y los reportes la lean igual.
+            ...((docData.venta || {}) as Record<string, unknown>),
+            pagos: pagos || [],
+            tipoPago,
+            forma_pago: formaPagoLabel(pagos || [], tipoPago),
+            efectivo: bolsillos.efectivo,
+            totalTransferenciaPago: bolsillos.transferencia,
+            serie_numero: serieNumeroFinal,
+            cajero: cajeroNombre,
+            turnoId: turnoId || '',
+            vendedorId: docData.vendedorId || '',
+            vendedorNombre: docData.vendedorNombre || '',
+            cobradaPorCajero: true,
+          }],
+        })
       }
 
       tx.update(docRef, {
@@ -795,14 +867,31 @@ export async function cobrarVentaPendiente({
         numero: numeroFinal,
         correlativo: numeroFinal,
         serieNumero: serieNumeroFinal,
+        // ⚠️ El bloque `sunat` tiene que seguir al comprobante real: si el cajero cambió el
+        // tipo, el envío a SUNAT usaría la serie/numero viejos (el XML declararía un número
+        // distinto al emitido). Y si pasó a NV, **no debe existir** (una NV no va a SUNAT).
+        ...(tipoDocFinal !== 'NV'
+          ? {
+              sunat: {
+                ...((docData.sunat || {}) as Record<string, unknown>),
+                serie: serieFinal,
+                numero: numeroFinal,
+                puntoEmision: puntoEmisionDe(null, config || ({} as Config)),
+                estado: 'pendiente',
+              },
+            }
+          : { sunat: null }),
         ...(pagos ? {
           venta: {
             ...((docData.venta || {}) as Record<string, unknown>),
             pagos,
             tipoPago,
-            forma_pago: tipoPago,
+            forma_pago: formaPagoLabel(pagos, tipoPago),
             montoRecibido: montoRecibido || 0,
             cambio: cambio || 0,
+            efectivo: bolsillos.efectivo,
+            totalTransferenciaPago: bolsillos.transferencia,
+            serie_numero: serieNumeroFinal,
           },
         } : {}),
       })
