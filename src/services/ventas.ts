@@ -591,7 +591,10 @@ export async function crearVentaPendiente({
         cliente_direccion: venta.cliente_direccion || '',
         montoRecibido: 0,
         cambio: 0,
-        cajero: vendedorNombre,
+        // Todavía nadie cobró (eso lo hace el cajero) y el vendedor va en su propio campo: si se
+        // escribiera al vendedor en `cajero`, el comprobante diría que él cobró la venta.
+        vendedor: vendedorNombre,
+        cajero: '',
         serie_numero: codigo,
         sucursal: (config as Record<string, unknown>).sucursal || 'Casa Matriz',
         mensaje: (config as Record<string, unknown>).mensajeLegal || '',
@@ -617,7 +620,8 @@ export async function crearVentaPendiente({
         createdAt: f.toISOString(),
         turnoId: '',
         usuarioId: venta.usuarioId || '',
-        cajero: vendedorNombre,
+        // El pedido no tiene cajero todavía: `cajero` se llena recién al cobrar.
+        cajero: '',
         estado: 'pendiente' as const,
         vendedorId,
         vendedorNombre,
@@ -880,19 +884,22 @@ export async function cobrarVentaPendiente({
               },
             }
           : { sunat: null }),
-        ...(pagos ? {
-          venta: {
-            ...((docData.venta || {}) as Record<string, unknown>),
-            pagos,
-            tipoPago,
-            forma_pago: formaPagoLabel(pagos, tipoPago),
-            montoRecibido: montoRecibido || 0,
-            cambio: cambio || 0,
-            efectivo: bolsillos.efectivo,
-            totalTransferenciaPago: bolsillos.transferencia,
-            serie_numero: serieNumeroFinal,
-          },
-        } : {}),
+        // La venta queda con las DOS personas identificadas: quién la armó (`vendedor`, del
+        // pedido) y quién la cobró (`cajero`, este cobro). Antes `venta.cajero` guardaba al
+        // vendedor y el comprobante lo imprimía como si hubiera cobrado él.
+        venta: {
+          ...((docData.venta || {}) as Record<string, unknown>),
+          vendedor: docData.vendedorNombre || (docData.venta as Record<string, unknown>)?.vendedor || '',
+          cajero: cajeroNombre,
+          tipoPago,
+          forma_pago: formaPagoLabel(pagos || [], tipoPago),
+          pagos: pagos || [],
+          montoRecibido: montoRecibido || 0,
+          cambio: cambio || 0,
+          efectivo: bolsillos.efectivo,
+          totalTransferenciaPago: bolsillos.transferencia,
+          serie_numero: serieNumeroFinal,
+        },
       })
 
       return { success: true, correlativo: serieNumeroFinal }

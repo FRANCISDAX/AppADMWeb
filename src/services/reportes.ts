@@ -257,7 +257,10 @@ export async function obtenerArqueoDelDia(fecha: Date | string, usuarioFiltro?: 
           total: v.total || 0,
           fecha: v.fecha,
           clienteNombre: v.cliente_nombre || v.clienteNombre || '-',
-          vendedorNombre: v.vendedorNombre || v.cajero || '',
+          // Vendedor y cajero por separado (no "vendedor = cajero || vendedor"): en una venta
+          // directa los dos campos son la misma persona y el papel repetiría su nombre.
+          vendedorNombre: v.vendedorNombre || '',
+          cajero: v.cajero || '',
         })),
       })
     })

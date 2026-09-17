@@ -4,6 +4,7 @@ import { etiquetaPago, formaPagoLabel } from '@/lib/pagos'
 import { itemsConDescuento } from '@/lib/sunat-importes'
 import { esc } from '@/lib/ui-utils'
 import { desglosarTurno, lineasDeOrigen, type ConciliacionMedios, type DesgloseTurno, type ItemTurno } from '@/lib/arqueo'
+import { lineasPersonal, personalDeVenta } from '@/lib/personal'
 
 const TITULOS: Record<string, string> = {
   NV: 'NOTA DE VENTA',
@@ -143,6 +144,12 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   const serieNumero = venta.serie_numero || `${tipoDoc === 'FACTURA' ? 'F001' : tipoDoc === 'BOLETA' ? 'B001' : 'NV'}-${correlativo}`
   const docLabel = tipoDoc === 'FACTURA' ? 'RUC' : 'DNI'
 
+  // Quién vendió y quién cobró (regla única en `lib/personal.ts`): con vendedor y cajero salen
+  // las dos personas; si la venta la hizo una sola, sale una sola vez y no se repite el nombre.
+  const personalLineas = lineasPersonal(personalDeVenta({ cajero: venta.cajero, vendedor: venta.vendedor, vendedorNombre: venta.vendedorNombre }))
+    .map((l) => `${esc(l.etiqueta)}: ${esc(l.nombre)}`)
+    .join(' · ')
+
   // ⚠️ Los totales se calculan sobre los importes COBRADOS: si la venta tiene
   // descuento (promo de volumen, cupón, cliente o global), se reparte por línea y
   // el comprobante cuadra con lo que pagó el cliente. Sin esto la tabla de
@@ -255,7 +262,8 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   ${esElectronico && qrSvg ? `<hr class="sep"><table class="qr-row"><tr><td><img src="${qrSvg}" /></td><td class="qr-txt">Representación impresa de la ${TITULOS[tipoDoc] || 'comprobante'}. consúltelo en www.sunat.gob.pe${hashText ? '<br>' + hashText : ''}</td></tr></table>` : ''}
   ${anulacion ? `<div class="anulado-box"><div class="anulado-titulo">ESTE DOCUMENTO HA SIDO ANULADO</div><div class="anulado-texto">Motivo: ${esc(anulacion.motivo || 'sin motivo')}</div></div>` : ''}
   <hr class="sep">
-  <div class="c s">Usuario: ${esc(venta.cajero || '-')}  ${esc(fechaStr)} ${esc(horaStr)}</div>
+  ${personalLineas ? `<div class="c s">${personalLineas}</div>` : ''}
+  <div class="c s">${esc(fechaStr)} ${esc(horaStr)}</div>
   <div class="c s">${esc(mensaje || '¡Gracias por su preferencia, vuelva pronto!')}</div>
   <div class="c s">AppAdm</div>
   </body></html>`
@@ -285,6 +293,11 @@ export async function abrirPDFComprobante(doc: any, config: Record<string, any>)
   const w = window.open('', '_blank', 'width=400,height=700')
   if (!w) return
   const venta = doc.venta || {}
+  // Los nombres también pueden vivir a nivel del documento (la NC/ND guarda solo el cajero, y un
+  // pedido cobrado guarda al vendedor en `vendedorNombre`): se completan para que el papel
+  // siempre identifique a las personas.
+  if (!venta.cajero && doc.cajero) venta.cajero = doc.cajero
+  if (!venta.vendedor && doc.vendedorNombre) venta.vendedor = doc.vendedorNombre
   const tipoDoc = doc.tipoDoc || doc.tipo || 'NV'
   const correlativo = doc.numero || doc.correlativo || '000000'
   const html = await construirHTMLComprobante({ venta, correlativo, config, tipoDoc, sunat: doc.sunat, anulacion: doc.anulacion })
@@ -325,7 +338,7 @@ export type TurnoArqueo = {
   /** Conciliación por billetera declarada al cerrar (opcional). */
   conciliacion?: ConciliacionMedios
   gastosDelTurno: { descripcion: string; monto: number; categoria: string; tipoPago: string; fecha?: string }[]
-  comprobantes: { id?: string; serieNumero: string; tipoPago: string; esCobro: boolean; operacion?: string; total: number; fecha?: string; clienteNombre: string; vendedorNombre?: string }[]
+  comprobantes: { id?: string; serieNumero: string; tipoPago: string; esCobro: boolean; operacion?: string; total: number; fecha?: string; clienteNombre: string; vendedorNombre?: string; cajero?: string }[]
 }
 
 /**
@@ -410,7 +423,11 @@ export async function abrirPDFArqueo({ fecha, turnos, resumen, empresa }: { fech
           ${turno.comprobantes.map(c => {
             const tipoLabel = c.tipoPago === 'efectivo' ? '💵 Efectivo' : c.tipoPago === 'transferencia' ? '📲 Transferencia' : c.tipoPago === 'yape' ? '📱 Yape' : c.tipoPago === 'plin' ? '📱 Plin' : c.esCobro ? '💳 Crédito' : c.tipoPago
             const cobroInfo = c.esCobro ? ` · Op: ${c.operacion || 'SN'}` : ''
-            return `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ddd;"><span>${esc(c.serieNumero || 'S/C')} · ${esc(c.clienteNombre)}<br/><span style="font-size:8px;color:#888;">${tipoLabel}${cobroInfo}</span></span><b>${fmt(c.total)}</b></div>`
+            // Si la venta la armó un vendedor y la cobró el cajero del turno, se aclara: el papel
+            // tiene que decir quién vendió cada comprobante, no solo quién cerró la caja.
+            const p = personalDeVenta({ cajero: c.cajero, vendedorNombre: c.vendedorNombre, usuarioNombre: turno.usuarioNombre })
+            const vendInfo = p.vendedor ? ` · Vend: ${esc(p.vendedor)}` : ''
+            return `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ddd;"><span>${esc(c.serieNumero || 'S/C')} · ${esc(c.clienteNombre)}<br/><span style="font-size:8px;color:#888;">${tipoLabel}${cobroInfo}${vendInfo}</span></span><b>${fmt(c.total)}</b></div>`
           }).join('')}</div>`
       : ''
 
