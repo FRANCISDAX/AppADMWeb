@@ -828,15 +828,13 @@ export function Pdv() {
   async function enviarACaja() {
     if (Object.keys(cart).length === 0 && Object.keys(manualItems).length === 0) return setToast('⚠️ Agregá al menos un producto')
 
-    // El vendedor **no** elige comprobante: manda la venta como Nota de Venta y el cajero,
-    // al cobrarla, decide si sale boleta o factura (y ahí se asigna la serie y el correlativo
-    // fiscal). Antes se usaba `tipoComp`, que arranca en 'boleta' y está oculto para el
-    // vendedor → creaba boletas sin que nadie las eligiera (y consumía correlativo de B001).
-    const tipoDocPendiente = esVendedor ? 'NV' : (tipoComp === 'nv' ? 'NV' : tipoComp === 'boleta' ? 'BOLETA' : 'FACTURA')
-
+    // ⚠️ El pedido **no** lleva comprobante: se manda como pedido (`PED-…`) y el cajero, al
+    // cobrarlo, elige NV / boleta / factura y recién ahí se asigna la serie y el correlativo.
+    // Antes se usaba `tipoComp` (arranca en 'boleta' y está oculto para el vendedor) → creaba
+    // boletas sin que nadie las eligiera y consumía un correlativo de B001 por cada intento.
     const ok = await confirm({
       title: '¿Enviar a caja?',
-      message: `Total: ${fmt(total)}\nEl cajero cobrará esta venta.\nComprobante: ${tipoDocPendiente === 'NV' ? 'Nota de Venta (el cajero define el comprobante al cobrar)' : tipoDocPendiente === 'BOLETA' ? 'Boleta' : 'Factura'}`,
+      message: `Total: ${fmt(total)}\nEl cajero cobrará esta venta.\nComprobante y forma de pago los elige el cajero al cobrar.`,
       okText: 'Enviar',
     })
     if (!ok) return
@@ -869,8 +867,6 @@ export function Pdv() {
       const res = await crearVentaPendiente({
         items,
         venta: {
-          tipoDoc: tipoDocPendiente,
-          tipoPago: 'efectivo',
           total,
           descuentoTotal: descuentosCalc.totalDescuento,
           descuentoGlobalTipo: descuentoGlobalValor ? descuentoGlobalTipo : undefined,
@@ -892,7 +888,7 @@ export function Pdv() {
         cajaId: cajaId || '',
       })
       if (res.success) {
-        setToast(`✅ Enviada a caja: ${res.correlativo ?? ''}`)
+        setToast(`✅ Pedido ${res.correlativo ?? ''} enviado a caja`)
         setCart({})
         setPagos([])
         setPagoCredito(false)

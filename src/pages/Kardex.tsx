@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils'
 const TIPO_LABEL: Record<string, string> = {
   compra: 'Compra',
   venta: 'Venta',
+  venta_pendiente: 'Reserva de pedido (a caja)',
+  reposicion_venta_pendiente: 'Reposición (pedido eliminado)',
   ajuste_entrada: 'Ajuste entrada',
   ajuste_salida: 'Ajuste salida',
   inventario_fisico_entrada: 'Inventario físico (+)',
@@ -23,6 +25,8 @@ const TIPO_LABEL: Record<string, string> = {
 const TIPO_COLOR: Record<string, string> = {
   compra: '#4CAF50',
   venta: '#FF6B35',
+  venta_pendiente: '#FFA726',
+  reposicion_venta_pendiente: '#8BC34A',
   ajuste_entrada: '#2196F3',
   ajuste_salida: '#F44336',
   inventario_fisico_entrada: '#9C27B0',

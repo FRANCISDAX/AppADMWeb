@@ -4,8 +4,10 @@ import { db } from '@/lib/firebase'
 import type { Producto } from '@/hooks/use-productos'
 
 // Port de services/kardex.js de la app RN.
+// `venta_pendiente` (reserva de un pedido enviado a caja) es SALIDA; su marcha atrás al
+// eliminar el pedido, `reposicion_venta_pendiente`, es ENTRADA (son el par que se cancela).
 const esEntrada = (tipo: string) =>
-  ['compra', 'ajuste_entrada', 'inventario_fisico_entrada', 'anulacion_venta', 'nota_credito'].includes(tipo)
+  ['compra', 'ajuste_entrada', 'inventario_fisico_entrada', 'anulacion_venta', 'nota_credito', 'reposicion_venta_pendiente'].includes(tipo)
 
 export async function cargarProductos(): Promise<Producto[]> {
   const snap = await getDocs(query(collection(db, COL.PRODUCTOS), orderBy('nombre', 'asc')))

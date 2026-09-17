@@ -36,3 +36,16 @@ export function espacioContador(tipoDoc: string): EspacioContador {
 export function claveContador(tipoDoc: string, serie: string): string {
   return `${espacioContador(tipoDoc)}_${serie}`
 }
+
+/**
+ * Contador de **pedidos** (ventas enviadas a caja, todavía sin comprobante).
+ *
+ * Va en su propio espacio (`pedido`), así que **nunca** choca con las series fiscales: un
+ * pedido no es un comprobante. El número de comprobante se asigna recién al cobrar.
+ */
+export const CLAVE_PEDIDO = 'pedido'
+
+/** Código legible de un pedido: `PED-000123` (no es un comprobante). */
+export function codigoPedido(numero: number): string {
+  return `PED-${String(Math.max(0, Math.floor(Number(numero) || 0))).padStart(6, '0')}`
+}

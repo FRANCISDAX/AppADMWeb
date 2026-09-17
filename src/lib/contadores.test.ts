@@ -17,7 +17,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { CAMPO_CONTADOR, claveContador, espacioContador } from './contadores.ts'
+import { CAMPO_CONTADOR, CLAVE_PEDIDO, claveContador, codigoPedido, espacioContador } from './contadores.ts'
 
 describe('claveContador — una nota de venta usa OTRO contador', () => {
   it('la NV numera con notaVenta_{serie}', () => {
@@ -56,5 +56,32 @@ describe('CAMPO_CONTADOR', () => {
 
   it('⚠️ regresión: no es el campo que usaba el flujo de ventas pendientes', () => {
     assert.notEqual(CAMPO_CONTADOR, 'contador', 'aquel flujo creaba un contador paralelo que nadie más leía')
+  })
+})
+
+describe('pedidos (venta enviada a caja, sin comprobante)', () => {
+  it('el código es legible y va a 6 dígitos', () => {
+    assert.equal(codigoPedido(1), 'PED-000001')
+    assert.equal(codigoPedido(123), 'PED-000123')
+  })
+
+  it('un valor raro no rompe el código', () => {
+    assert.equal(codigoPedido(0), 'PED-000000')
+    assert.equal(codigoPedido(-5), 'PED-000000')
+    assert.equal(codigoPedido(7.9), 'PED-000007')
+  })
+
+  it('⚠️ un pedido NUNCA se confunde con un comprobante numerado', () => {
+    // Los comprobantes se arman como `{serie}-{correlativo}`; un pedido lleva su propio prefijo,
+    // así que no puede chocar con una serie fiscal aunque se llamen parecido.
+    assert.ok(!codigoPedido(1).includes('NV01-'))
+    assert.notEqual(codigoPedido(123), `NV01-${String(123).padStart(6, '0')}`)
+  })
+
+  it('su contador vive en un espacio propio, fuera de los de comprobantes', () => {
+    assert.equal(CLAVE_PEDIDO, 'pedido')
+    assert.notEqual(CLAVE_PEDIDO, claveContador('NV', 'NV01'))
+    assert.notEqual(CLAVE_PEDIDO, claveContador('BOLETA', 'B001'))
+    assert.notEqual(CLAVE_PEDIDO, claveContador('FACTURA', 'F001'))
   })
 })

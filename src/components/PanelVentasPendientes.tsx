@@ -111,7 +111,7 @@ export function PanelVentasPendientes() {
         config,
       })
       if (res.success) {
-        toast(`✅ Venta ${v.serieNumero} cobrada${tipoDocSel !== v.tipoDoc ? ` (${tipoDocSel})` : ''}`)
+        toast(`✅ Venta ${res.correlativo || v.serieNumero} cobrada (${tipoDocSel})`)
         setVentas((prev) => prev.filter((x) => x.id !== v.id))
         setCobrandoId(null)
       } else {
@@ -126,21 +126,28 @@ export function PanelVentasPendientes() {
 
   function abrirCobro(v: DocumentoVenta) {
     setCobrandoId(v.id)
-    setTipoDocSel(((v.tipoDoc || v.tipo || 'NV') as 'NV' | 'BOLETA' | 'FACTURA'))
+    // El pedido no tiene tipo fiscal (`PENDIENTE`): el cajero lo elige acá y recién ahí se
+    // genera el comprobante. Por defecto, Nota de Venta.
+    const t = (v.tipoDoc || v.tipo) as string
+    setTipoDocSel(t === 'BOLETA' || t === 'FACTURA' ? t : 'NV')
     setMedioSel('efectivo')
     setOperacion('')
     setRecibido('')
   }
 
   async function cancelar(v: DocumentoVenta) {
-    if (!tienePermiso('cancelarVentaPendiente')) return toast('🚫 No tenés permiso para cancelar', 'error')
+    if (!tienePermiso('cancelarVentaPendiente')) return toast('🚫 No tenés permiso para eliminar', 'error')
     setCancelandoId(v.id)
     setMotivoCancel('')
   }
 
   async function confirmarCancelacion(v: DocumentoVenta) {
     if (!motivoCancel.trim()) return toast('⚠️ Ingresá un motivo')
-    const ok = await confirm({ title: '¿Cancelar esta venta?', message: 'Esta acción no se puede deshacer.', okText: 'Cancelar venta' })
+    const ok = await confirm({
+      title: '¿Eliminar esta venta?',
+      message: 'No hay comprobante emitido, así que no se anula nada: los productos vuelven a su stock original y la venta queda registrada como eliminada con su motivo.',
+      okText: 'Eliminar venta',
+    })
     if (!ok) return
 
     try {
@@ -150,12 +157,12 @@ export function PanelVentasPendientes() {
         usuario: nombreUsuario || user?.email || 'sistema',
       })
       if (res.success) {
-        toast('Venta cancelada')
+        toast(res.repuestos ? `Venta eliminada · ${res.repuestos} unidad(es) devueltas al stock` : 'Venta eliminada')
         setVentas((prev) => prev.filter((x) => x.id !== v.id))
         setCancelandoId(null)
         setMotivoCancel('')
       } else {
-        toast(`❌ ${res.error || 'Error al cancelar'}`, 'error')
+        toast(`❌ ${res.error || 'Error al eliminar'}`, 'error')
       }
     } catch (e) {
       toast(`❌ ${(e as Error).message}`, 'error')
@@ -194,6 +201,7 @@ export function PanelVentasPendientes() {
                       <span className="text-xs font-bold">{v.serieNumero}</span>
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Pendiente</span>
                     </div>
+                    <p className="text-[10px] text-muted-foreground">Pedido sin comprobante: se genera al cobrar</p>
                     <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground">
                       <User className="h-3 w-3" />
                       <span>{v.vendedorNombre || '—'}</span>
@@ -222,15 +230,12 @@ export function PanelVentasPendientes() {
                             )}
                           >
                             {t.label}
-                            {t.id === v.tipoDoc ? ' ·' : ''}
                           </button>
                         ))}
                       </div>
-                      {tipoDocSel !== v.tipoDoc && (
-                        <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">
-                          Se emitirá con la serie de {tipoDocSel} y tomará un correlativo nuevo.
-                        </p>
-                      )}
+                      <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">
+                        El comprobante se genera recién al cobrar: se asigna la serie de {tipoDocSel} y su correlativo.
+                      </p>
                     </div>
 
                     <div>
@@ -291,10 +296,13 @@ export function PanelVentasPendientes() {
                     <input
                       value={motivoCancel}
                       onChange={(e) => setMotivoCancel(e.target.value)}
-                      placeholder="Motivo de cancelación…"
+                      placeholder="Motivo de la eliminación…"
                       className="w-full rounded-lg border bg-background px-3 py-1.5 text-xs"
                       autoFocus
                     />
+                    <p className="text-[10px] text-muted-foreground">
+                      Los productos vuelven al stock. No se anula comprobante porque todavía no se generó ninguno.
+                    </p>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" className="flex-1" onClick={() => setCancelandoId(null)}>Volver</Button>
                       <Button size="sm" variant="destructive" className="flex-1" onClick={() => confirmarCancelacion(v)} disabled={!motivoCancel.trim()}>
@@ -311,8 +319,16 @@ export function PanelVentasPendientes() {
                       </Button>
                     )}
                     {tienePermiso('cancelarVentaPendiente') && (
-                      <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => cancelar(v)} disabled={procesando}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => cancelar(v)}
+                        disabled={procesando}
+                        title="Eliminar la venta y devolver los productos al stock"
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
+                        Eliminar
                       </Button>
                     )}
                   </div>
