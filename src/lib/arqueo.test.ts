@@ -303,6 +303,49 @@ describe('mediosDelTurno — conciliación por billetera', () => {
   })
 })
 
+describe('notas con medio y reparto por bolsillo (desde 16/09/2026)', () => {
+  // `services/notas.ts` ahora guarda el **medio** del comprobante original y el reparto
+  // proporcional por bolsillo, así que una devolución no rompe la conciliación por billetera.
+  const ncYape = { tipo: 'nota_credito', total: -5, tipoPago: 'transferencia', medio: 'yape', montoEfectivo: 0, montoTransferencia: -5 }
+  const ventaYape = venta(10, 'yape', { pagos: [{ tipo: 'transferencia', medio: 'yape', monto: 10 }] })
+
+  it('la NC por Yape resta de YAPE (no del grupo genérico)', () => {
+    const medios = mediosDelTurno({ ventasDelTurno: [ventaYape, ncYape] })
+    assert.deepEqual(medios.map((m) => [m.medio, m.monto]), [['yape', 5]])
+  })
+
+  it('la NC por Yape resta del bolsillo transferencia en el desglose', () => {
+    const d = desglosarTurno({ totalEfectivo: 0, totalTransferencia: 5, ventasDelTurno: [ventaYape, ncYape] })
+    assert.equal(d.transferencia.ventas, 10)
+    assert.equal(d.transferencia.notas, -5)
+    assert.equal(d.transferencia.total, 5)
+    assert.equal(d.consistente, true)
+  })
+
+  it('la NC de una venta MIXTA sale de los dos bolsillos, en proporción', () => {
+    const ncMixta = { tipo: 'nota_credito', total: -5, tipoPago: 'mixto', medio: 'mixto', montoEfectivo: -2.5, montoTransferencia: -2.5 }
+    const d = desglosarTurno({
+      totalEfectivo: 7.5,
+      totalTransferencia: 7.5,
+      ventasDelTurno: [
+        venta(20, 'mixto', { pagos: [{ tipo: 'efectivo', monto: 10 }, { tipo: 'transferencia', medio: 'yape', monto: 10 }] }),
+        ncMixta,
+      ],
+    })
+    assert.equal(d.efectivo.notas, -2.5)
+    assert.equal(d.transferencia.notas, -2.5)
+    assert.equal(d.consistente, true, 'las partes suman los totales guardados')
+  })
+
+  it('la NOTA DE DÉBITO no mueve bolsillos ni billeteras (es un cargo, no un cobro)', () => {
+    const nd = { tipo: 'nota_debito', total: 8, tipoPago: 'efectivo', medio: 'yape', montoEfectivo: 0, montoTransferencia: 0 }
+    const d = desglosarTurno({ totalEfectivo: 10, totalTransferencia: 0, ventasDelTurno: [venta(10, 'efectivo'), nd] })
+    assert.equal(d.efectivo.notas, 0)
+    assert.equal(d.consistente, true)
+    assert.deepEqual(mediosDelTurno({ ventasDelTurno: [ventaYape, nd] }).map((m) => [m.medio, m.monto]), [['yape', 10]])
+  })
+})
+
 describe('sumarDesgloses', () => {
   it('suma varios turnos del día y baja la bandera de consistencia', () => {
     const dia = sumarDesgloses([

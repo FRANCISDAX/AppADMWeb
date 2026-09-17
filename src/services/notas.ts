@@ -3,6 +3,8 @@ import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { normalizarSerie } from '@/lib/series'
+import { bolsillosDeVenta, medioDeVenta } from '@/lib/pagos'
+import { redondear2 } from '@/lib/dinero'
 import { db } from '@/lib/firebase'
 
 /**
@@ -204,6 +206,21 @@ export async function crearNotaCreditoDebito({
       if (turnoId && turnoSnap && turnoSnap.exists() && turnoSnap.data().estado === 'abierto') {
         const turnoRef = doc(db, COL.TURNOS, turnoId)
         const t = turnoSnap.data()
+        // ⚠️ El reparto sale de los **pagos** del comprobante original, no de su `tipoPago`:
+        // una venta por Yape tiene `tipoPago: 'transferencia'` (el bolsillo) y su medio vive
+        // en `pagos`. Se devuelve **en la misma proporción** en que se cobró (si el original
+        // fue mixto, la devolución sale de los dos bolsillos), y se guarda el **medio** para
+        // que la conciliación por billetera siga exacta ante una devolución.
+        const repartoOriginal = bolsillosDeVenta({
+          tipoPago: ventaOriginal.tipoPago,
+          pagos: ventaOriginal.pagos,
+          total: ventaOriginal.total,
+        })
+        const totalOriginalVenta = Number(ventaOriginal.total || ventaOriginal.importe_total || 0)
+        const factor = totalOriginalVenta > 0 ? Math.min(1, montoModificacion / totalOriginalVenta) : 1
+        const devueltoEfectivo = redondear2(repartoOriginal.efectivo * factor)
+        const devueltoTransferencia = redondear2(repartoOriginal.transferencia * factor)
+        const medioOriginal = medioDeVenta(ventaOriginal)
         const entry = {
           tipo: esCredito ? 'nota_credito' : 'nota_debito',
           tipoDoc: tipoNota,
@@ -211,6 +228,11 @@ export async function crearNotaCreditoDebito({
           monto: montoModificacion,
           total: esCredito ? -montoModificacion : montoModificacion,
           tipoPago: ventaOriginal.tipoPago || 'efectivo',
+          ...(medioOriginal ? { medio: medioOriginal } : {}),
+          // Movimiento por bolsillo, con signo: la NC saca plata (negativo) y la ND no mueve
+          // la caja (queda por cobrar). Es lo que lee el desglose por origen del arqueo.
+          montoEfectivo: esCredito ? -devueltoEfectivo : 0,
+          montoTransferencia: esCredito ? -devueltoTransferencia : 0,
           fecha: f.toISOString(),
           serie_numero: correlativo,
           motivo,
@@ -218,9 +240,8 @@ export async function crearNotaCreditoDebito({
         let totalEfectivo = t.totalEfectivo || 0
         let totalTransferencia = t.totalTransferencia || 0
         if (esCredito) {
-          const pt = ventaOriginal.tipoPago
-          if (pt === 'efectivo' || pt === 'mixto') totalEfectivo -= montoModificacion
-          else if (pt === 'transferencia') totalTransferencia -= montoModificacion
+          totalEfectivo -= devueltoEfectivo
+          totalTransferencia -= devueltoTransferencia
         }
         tx.update(turnoRef, {
           ventasDelTurno: [...(t.ventasDelTurno || []), entry],

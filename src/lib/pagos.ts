@@ -145,6 +145,23 @@ export function bolsillosDeVenta(entrada: {
 }
 
 /**
+ * **Medio** de una venta guardada (`yape`/`plin`/`transferencia`/`tarjeta`), o `'mixto'`
+ * si se pagó con más de uno. Devuelve `undefined` cuando no hay dato: los documentos viejos
+ * y los de la app móvil solo tienen el bolsillo en `tipoPago`, y **no hay que inventar** un
+ * medio (un `tipoPago: 'transferencia'` puede ser Yape, Plin o el banco).
+ *
+ * ⚠️ Se usa al emitir una **nota** para heredar el medio del comprobante original: sin
+ * esto, una NC de una venta por Yape quedaba como "Transferencia (sin detalle)" y la
+ * conciliación por billetera perdía exactitud.
+ */
+export function medioDeVenta(venta: { pagos?: readonly PagoGuardado[] } | null | undefined): string | undefined {
+  const pagos = Array.isArray(venta?.pagos) ? venta.pagos : []
+  if (pagos.length > 1) return 'mixto'
+  const medio = pagos[0]?.medio
+  return typeof medio === 'string' && medio ? medio : undefined
+}
+
+/**
  * Etiqueta legible de un pago, aguantando documentos viejos que solo tienen
  * `tipo` (efectivo / transferencia / credito / mixto) sin `medio`.
  */

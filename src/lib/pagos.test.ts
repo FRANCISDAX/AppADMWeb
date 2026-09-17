@@ -6,6 +6,7 @@ import {
   etiquetaPago,
   formaPagoLabel,
   infoMedio,
+  medioDeVenta,
   normalizarMonto,
   resumenPagos,
   tipoPagoDe,
@@ -27,6 +28,16 @@ test('el bolsillo manda todo lo electrónico a transferencia y el efectivo a caj
   assert.equal(bolsilloDe('transferencia'), 'transferencia')
   assert.equal(bolsilloDe('tarjeta'), 'transferencia')
   assert.equal(bolsilloDe('cualquier-cosa'), 'credito', 'un medio desconocido NO entra a la caja: si cayera a efectivo, inflaría el cajón')
+})
+
+// `medioDeVenta` es lo que permite que una nota herede el medio del comprobante original
+// (sin esto, una NC de una venta por Yape quedaba como "Transferencia (sin detalle)").
+test('medioDeVenta: el medio real de una venta, o undefined si no hay dato', () => {
+  assert.equal(medioDeVenta({ pagos: [{ tipo: 'transferencia', medio: 'yape', monto: 10 }] }), 'yape')
+  assert.equal(medioDeVenta({ pagos: [{ tipo: 'transferencia', monto: 10 }] }), undefined, 'sin `medio` no se inventa: puede ser Yape, Plin o el banco')
+  assert.equal(medioDeVenta({ pagos: [{ tipo: 'efectivo', monto: 10 }, { tipo: 'transferencia', medio: 'yape', monto: 5 }] }), 'mixto')
+  assert.equal(medioDeVenta({ pagos: [] }), undefined)
+  assert.equal(medioDeVenta(undefined), undefined)
 })
 
 test('solo los medios electrónicos piden N° de operación', () => {

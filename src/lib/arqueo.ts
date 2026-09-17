@@ -43,9 +43,14 @@ export type ItemTurno = {
   tipo?: string
   estado?: string
   tipoPago?: string
+  /** Medio real del cobro/nota (`yape`/`plin`/`transferencia`/`tarjeta`), si se conoce. */
+  medio?: string
   monto?: number
   total?: number
   pagos?: readonly PagoGuardado[]
+  /** Movimiento por bolsillo **con signo** (lo usan las notas: la NC saca plata). */
+  montoEfectivo?: number
+  montoTransferencia?: number
   serie_numero?: string
 }
 
@@ -116,6 +121,23 @@ const esCobro = (i: ItemTurno) => i.tipo === 'cobro_credito'
 const esNota = (i: ItemTurno) => i.tipo === 'nota_credito' || i.tipo === 'nota_debito'
 
 /**
+ * Movimiento por bolsillo de una nota, **con signo** (una NC saca plata: negativo).
+ *
+ * Las notas nuevas guardan el reparto (`montoEfectivo`/`montoTransferencia`, proporcional al
+ * comprobante original). Las viejas solo tienen `tipoPago`, así que se replican la regla que
+ * usaba `services/notas.ts`: efectivo o `mixto` → caja, `transferencia` → banco.
+ */
+function repartoDeNota(item: ItemTurno): { efectivo: number; transferencia: number } {
+  if (item.montoEfectivo != null || item.montoTransferencia != null) {
+    return { efectivo: Number(item.montoEfectivo) || 0, transferencia: Number(item.montoTransferencia) || 0 }
+  }
+  const monto = Number(item.total ?? 0) || 0
+  return bolsilloDeItem(item.tipoPago) === 'transferencia'
+    ? { efectivo: 0, transferencia: monto }
+    : { efectivo: monto, transferencia: 0 }
+}
+
+/**
  * Reparte los items del turno por bolsillo y por origen.
  * Los items anulados se descartan (el arqueo también los descarta).
  */
@@ -136,10 +158,9 @@ export function desglosarTurno(turno: TurnoParaDesglose): DesgloseTurno {
       continue
     }
     if (esNota(item)) {
-      const b = bolsilloDeItem(item.tipoPago)
-      if (b === 'credito') { itemsIgnorados++; continue }
-      // `total` ya viene con signo: en una NC es negativo y resta del bolsillo.
-      crudo[b].notas += Number(item.total ?? 0) || 0
+      const reparto = repartoDeNota(item)
+      crudo.efectivo.notas += reparto.efectivo
+      crudo.transferencia.notas += reparto.transferencia
       continue
     }
     // Venta: el reparto entre bolsillos lo define `lib/pagos.ts` (pago múltiple incluido,
@@ -245,12 +266,15 @@ export function mediosDelTurno(turno: TurnoParaDesglose): MedioDelTurno[] {
 
   for (const item of (turno.ventasDelTurno ?? [])) {
     if (!item || item.estado === 'anulada') continue
-    const esNota = item.tipo === 'nota_credito' || item.tipo === 'nota_debito'
-    if (item.tipo === 'cobro_credito' || esNota) {
-      // El item de un cobro/nota no tiene `pagos`: su `tipoPago` es el medio (o el bolsillo).
-      // En una NC el `total` ya viene negativo, así que resta solo.
-      const monto = esNota ? Number(item.total ?? 0) || 0 : Number(item.monto ?? item.total ?? 0) || 0
-      const clave = claveDeMedio(item.tipoPago)
+    if (item.tipo === 'cobro_credito' || esNota(item)) {
+      // La ND **no** mueve billeteras (es un cargo, no un cobro): solo la NC devuelve plata.
+      if (item.tipo === 'nota_debito') continue
+      // El item de un cobro/nota no tiene `pagos`: su `medio` (nuevo) o `tipoPago` es el medio
+      // (o el bolsillo). En una NC el `total` ya viene negativo, así que resta solo.
+      const monto = item.tipo === 'cobro_credito'
+        ? Number(item.monto ?? item.total ?? 0) || 0
+        : Number(item.total ?? 0) || 0
+      const clave = claveDeMedio(item.medio ?? item.tipoPago)
       if (clave) sumar(clave, monto)
       continue
     }
