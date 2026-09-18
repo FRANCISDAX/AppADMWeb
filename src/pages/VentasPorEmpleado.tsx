@@ -45,7 +45,7 @@ type Doc = {
 
 type EmpleadoVentas = {
   usuarioId: string
-  cajero: string
+  vendedor: string
   cantidadDocs: number
   totalVentas: number
   boletas: number
@@ -136,14 +136,16 @@ export function VentasPorEmpleado() {
 
     for (const d of docsFiltrados) {
       const uid = d.vendedorId || d.usuarioId || 'sin-id'
-      const cajero = d.vendedorNombre || d.venta?.cajero || 'Sin nombre'
+      // ⚠️ Acá se acredita al VENDEDOR (la agrupación es vendedorId || usuarioId): en un pedido cobrado es
+    // quien vendió, no el cajero que cobró. Por eso el rótulo dice Vendedor y no Cajero.
+    const vendedor = d.vendedorNombre || d.venta?.cajero || 'Sin nombre'
       const signo = signoDoc(d)
       const total = Math.abs(d.venta?.total ?? 0) * signo
 
       if (!map.has(uid)) {
         map.set(uid, {
           usuarioId: uid,
-          cajero,
+          vendedor,
           cantidadDocs: 0,
           totalVentas: 0,
           boletas: 0,
@@ -203,10 +205,10 @@ export function VentasPorEmpleado() {
       toast('No hay datos para exportar', 'warning')
       return
     }
-    const header = 'Cajero|Documento ID|Total Ventas|Documentos|Ticket Promedio|Efectivo|Transferencia|Crédito|Boletas|Facturas|NC'
+    const header = 'Vendedor|Documento ID|Total Ventas|Documentos|Ticket Promedio|Efectivo|Transferencia|Crédito|Boletas|Facturas|NC'
     const rows = empleados.map((e) =>
       [
-        e.cajero,
+        e.vendedor,
         e.usuarioId,
         e.totalVentas.toFixed(2),
         e.cantidadDocs,
@@ -313,7 +315,7 @@ export function VentasPorEmpleado() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold truncate">{e.cajero}</span>
+                        <span className="font-semibold truncate">{e.vendedor}</span>
                         <span className="hidden text-xs text-muted-foreground sm:inline">({e.usuarioId.slice(0, 8)}…)</span>
                       </div>
                       {/* Stats en mobile: wrap */}
@@ -360,7 +362,7 @@ export function VentasPorEmpleado() {
               const pct = maxVentas > 0 ? (Math.abs(e.totalVentas) / maxVentas) * 100 : 0
               return (
                 <div key={e.usuarioId} className="flex items-center gap-2 sm:gap-3">
-                  <span className="w-20 sm:w-32 truncate text-xs font-medium">{e.cajero}</span>
+                  <span className="w-20 sm:w-32 truncate text-xs font-medium">{e.vendedor}</span>
                   <div className="flex-1 min-w-0">
                     <div className="h-5 overflow-hidden rounded bg-muted">
                       <div
