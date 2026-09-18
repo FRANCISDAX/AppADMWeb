@@ -1,4 +1,4 @@
-import { collection, doc, increment, getDoc, getDocs, query, runTransaction, updateDoc, where, orderBy, limit } from 'firebase/firestore'
+import { collection, doc, increment, getDoc, getDocs, query, runTransaction, updateDoc, where, limit } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
@@ -660,35 +660,26 @@ export async function crearVentaPendiente({
 /**
  * Pedidos esperando cobro.
  *
- * ⚠️ **Con caja asignada** se traen los de esa caja; **sin caja, se traen TODOS**. Antes la
- * consulta filtraba siempre por la caja del cajero, así que un cajero **sin caja asignada** veía
- * el panel **vacío y escondido** aunque los pedidos existieran (caso real: el vendedor tenía
- * `caja_principal` y los dos cajeros ninguna ⇒ el pedido quedaba invisible para siempre).
- * Un pedido que no se puede cobrar es una venta perdida: la lista nunca debe quedar ciega por
- * una configuración de caja.
+ * **Una sola consulta** (`estado = pendiente`) y el filtro por caja se resuelve acá en JS, a
+ * propósito: la lista **no puede quedar ciega por una configuración de caja**. Antes filtraba en
+ * Firestore por la caja del cajero, así que se perdían pedidos en los dos casos reales que ya
+ * pasaron: cajero **sin caja** (veía todo vacío) y vendedor **sin caja** (el pedido nacía con
+ * `cajaId: ''` y ningún cajero lo veía, aunque tuviera la suya). Son ≤50 pedidos: el costo es nulo
+ * y a cambio la lista siempre muestra el trabajo pendiente.
+ *
+ * @param cajaId Caja del usuario. Con caja: los de su caja **y** los que no tienen caja (van a
+ *   cualquiera). Sin caja: todos.
  */
 export async function obtenerVentasPendientes(cajaId?: string): Promise<DocumentoVenta[]> {
   try {
-    const conEstado = (d: { id: string } & Record<string, unknown>) => d as unknown as DocumentoVenta
-    if (cajaId) {
-      const snap = await getDocs(
-        query(
-          collection(db, COL.DOCUMENTOS),
-          where('cajaId', '==', cajaId),
-          where('estado', '==', 'pendiente'),
-          orderBy('fecha', 'desc'),
-          limit(50),
-        ),
-      )
-      return snap.docs.map((d) => conEstado({ id: d.id, ...d.data() }))
-    }
-    // Sin caja: igualdad sola (sin índice compuesto) y el orden se resuelve en JS.
     const snap = await getDocs(
       query(collection(db, COL.DOCUMENTOS), where('estado', '==', 'pendiente'), limit(50)),
     )
-    return snap.docs
-      .map((d) => conEstado({ id: d.id, ...d.data() }))
+    const lista = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as unknown as DocumentoVenta)
       .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
+    if (!cajaId) return lista
+    return lista.filter((v) => !v.cajaId || v.cajaId === cajaId)
   } catch (e) {
     console.error('❌ Error obteniendo ventas pendientes:', e)
     return []
