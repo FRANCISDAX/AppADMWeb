@@ -35,7 +35,7 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
   let opExoneradas = 0
   let opInafectas = 0
   // El comprobante declara **lo que se cobró**: si la venta tiene descuento
-  // (promoción de volumen, cupón, cliente o global), se reparte entre las líneas
+  // (promoción de volumen, cliente o global), se reparte entre las líneas
   // y se manda el valor unitario efectivo. Si no se hiciera, el XML declararía
   // el importe de lista (media docena con promo: cobrado 3.00, declarado 3.60).
   // Y en las líneas gravadas ese valor va **sin IGV** (el precio de la app incluye

@@ -151,7 +151,7 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
     .join(' · ')
 
   // ⚠️ Los totales se calculan sobre los importes COBRADOS: si la venta tiene
-  // descuento (promo de volumen, cupón, cliente o global), se reparte por línea y
+  // descuento (promo de volumen, cliente o global), se reparte por línea y
   // el comprobante cuadra con lo que pagó el cliente. Sin esto la tabla de
   // totales mostraba el importe de lista y no sumaba con el TOTAL.
   const totalesCalc = calcularTotales(itemsConDescuento(venta.items || [], venta.descuentoTotal || 0))

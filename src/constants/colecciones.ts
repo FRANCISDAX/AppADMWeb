@@ -11,7 +11,6 @@ export const COL = {
   PROVEEDOR: 'tblProveedores',
   EGRESOS: 'tblEgresos',
   HISTORIAL_PRECIOS: 'tblHistorialPrecios',
-  CUPONES: 'tblCupones',
   PROMOCIONES_VOLUMEN: 'tblPromocionesVolumen',
   CONFIGURACION: 'tblConfiguracion',
   CATEGORIAS: 'tblCategorias',

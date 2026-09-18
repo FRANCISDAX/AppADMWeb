@@ -2,7 +2,7 @@
  * Importes que se declaran a SUNAT — **módulo puro** (sin Firebase, sin React).
  *
  * El comprobante que se envía tiene que declarar **lo que realmente se cobró**.
- * En la venta, el descuento (promoción de volumen, cupón, descuento del cliente
+ * En la venta, el descuento (promoción de volumen, descuento del cliente
  * o global) se guarda aparte, en `venta.descuentoTotal`, y los items conservan su
  * precio de lista: si el XML se arma con esos precios, declara más de lo cobrado
  * (por ejemplo una media docena con promo: cobra S/ 3.00 y declara S/ 3.60).

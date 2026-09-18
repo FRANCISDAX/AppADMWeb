@@ -14,13 +14,6 @@ export type DescuentoVolumen = {
   productos: string[]
 }
 
-export type DescuentoCupon = {
-  codigo: string
-  tipo: 'porcentaje' | 'monto'
-  valor: number
-  descuento: number
-}
-
 export type DescuentoCliente = {
   porcentaje: number
   descuento: number
@@ -132,18 +125,6 @@ export function calcDescuentoVolumen(
     }
   }
   return { descuento: total, aplicados }
-}
-
-/** Descuento por cupón. */
-export function calcDescuentoCupon(
-  subtotal: number,
-  cupon: { tipo: 'porcentaje' | 'monto'; valor: number } | null,
-): DescuentoCupon | null {
-  if (!cupon || cupon.valor <= 0) return null
-  const descuento = cupon.tipo === 'porcentaje'
-    ? Math.round(subtotal * cupon.valor / 100 * 100) / 100
-    : Math.min(cupon.valor, subtotal)
-  return { codigo: '', tipo: cupon.tipo, valor: cupon.valor, descuento }
 }
 
 /** Descuento por cliente frecuente. */

@@ -61,7 +61,7 @@ Reglas que ya costaron un bug o que salieron de una decisión explícita del usu
 - 🔑 **Dos cosas distintas: descuento AUTOMÁTICO vs MANUAL.** Las promociones (volumen `tblPromocionesVolumen`, `descuentoPorcentaje` del producto, descuento del cliente, `precioEspecial`) son **configuración del negocio** y se aplican **siempre**, a todos los roles. El **descuento manual** (global S/ o % que carga una persona en el PDV) es una **decisión de mostrador** y es lo único que se controla.
 - **Permiso `aplicarDescuento`** (`constants/permisos.ts`): sin él, el PDV **no muestra** la tarjeta "Descuentos" (avisa por qué). Default **true** en ADMIN/GERENTE/CAJERO/VENDEDOR (así el vendedor no pierde lo que ya hacía); el dueño lo quita o lo da por usuario en `Usuarios → Editar → Funciones`.
 - **Tope `config.descuentoMaximoPorcentaje`** (Configuración → Empresa; **0 = SIN TOPE**, misma convención que `limiteCredito = 0`): la regla vive en **`revisarDescuentoManual()`** (`lib/descuentos.ts`, puro y testeado) y se aplica **dos veces**: en el PDV (avisa y deshabilita Cobrar/Enviar a caja) y en `crearVentaPendiente` (rechaza con el mensaje; segunda capa, porque el permiso solo se evalúa en el cliente). Un descuento **en soles** se mide como porcentaje del subtotal, así el tope es una sola unidad de medida. ⚠️ **No aplica a las promociones automáticas** ni a `registrarVenta` (para no bloquear al cajero en un caso autorizado).
-- ⚠️ **Cupones: el motor existe (`calcDescuentoCupon` + `tblCupones`) pero el PDV NO tiene campo para cargar el código** → hoy nadie puede usar cupones desde el web. Si se habilita, debe pasar por `revisarDescuentoManual` para respetar el tope.
+- ✅ **Los cupones se ELIMINARON** (17/09/2026, a pedido del usuario: *"ya no se usan"*): se borró `services/cupones.ts`, `calcDescuentoCupon` y `COL.CUPONES`. **Eran código muerto**: nadie importaba el servicio, la función **nunca se llamaba** (ni siquiera dentro de `calcularDescuentos`) y no había UI en ningún lado; `tblCupones` quedó **vacía** en producción (0 documentos, verificado). **No reintroducir** sin pedido explícito; si vuelven, tienen que pasar por `revisarDescuentoManual()` para respetar el tope.
 
 ### Firestore
 - **Igualdad + rango/orderBy ⇒ índice compuesto** declarado en `firestore.indexes.json` y desplegado con `npx firebase deploy --only firestore:indexes`. ⚠️ **Nunca `firebase deploy --force`** (borra índices que no estén declarados ahí).
@@ -196,11 +196,10 @@ All code changes and new features MUST follow these practices. No exceptions.
 Central engine that calculates all discount types in order:
 1. **Product discount** — `descuentoPorcentaje` field on `Producto` type (0-100%)
 2. **Volume promotions** — rules in `tblPromocionesVolumen` (3×2, 2da al 50%, "Llevá 4 pagá 3", % por volumen, monto fijo)
-3. **Coupon** — codes in `tblCupones` (percentage or fixed amount, validity dates, usage limits)
-4. **Client discount** — `descuentoPorcentaje` field on `Cliente` type (frequent customer discount)
-5. **Global discount** — manual input in PDV (percentage or fixed amount)
+3. **Client discount** — `descuentoPorcentaje` field on `Cliente` (frequent customer discount)
+4. **Global discount** — manual input in PDV (percentage or fixed amount), sujeto al permiso `aplicarDescuento` y al tope `config.descuentoMaximoPorcentaje` (ver invariante de Descuentos)
 
-Calculation order: product → volume → coupon → client → global. Each layer applies on the subtotal from the previous layer.
+Calculation order: product → volume → client → global. Each layer applies on the subtotal from the previous layer. **Los cupones se eliminaron** (17/09/2026) — ver el invariante de Descuentos.
 
 ### Volume Promotions (`src/services/promociones-volumen.ts`)
 - Types: `3x2`, `2da_50`, `lleva_paga`, `por_volumen`, `monto_fijo`
@@ -301,7 +300,6 @@ Calculation order: product → volume → coupon → client → global. Each lay
 | PROVEEDOR | tblProveedores | Suppliers with contacts, credit |
 | EGRESOS | tblEgresos | Expenses and payments |
 | HISTORIAL_PRECIOS | tblHistorialPrecios | Price history |
-| CUPONES | tblCupones | Discount coupons |
 | PROMOCIONES_VOLUMEN | tblPromocionesVolumen | Volume-based promotions (incl. monto_fijo) |
 | ERRORES | tblErrores | Errores de la app web: `{ mensaje, stack, contexto, ruta, dispositivo, usuario, fecha }` (ver Auditoría → Errores) |
 | CATEGORIAS | tblCategorias | Categorías de producto administradas: `{ nombre, orden, activo, icono }` (id = slug; el producto guarda el nombre en `categoria`) |
