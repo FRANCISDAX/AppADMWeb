@@ -116,6 +116,20 @@ describe('pedidoParaCarrito — el carrito cobra lo COTIZADO, no lo recalculado'
   it('sin serieNumero el código cae al id del documento', () => {
     assert.equal(pedidoParaCarrito({ id: '2026-9_PED-000009' }).codigo, '2026-9_PED-000009')
   })
+
+  // 🔑 El cajero tiene que VER que el pedido trae descuento: el `total` ya viene neto y las
+  // líneas muestran el precio de lista, así que sin este dato el carrito no podía explicar la
+  // diferencia (bug real: 2 huevos a 0.60 con promo a 0.50 → total 2.00 con líneas por 2.20).
+  it('trae el descuento del pedido (camelCase y el nombre viejo snake_case)', () => {
+    assert.equal(pedidoParaCarrito({ venta: { total: 2, descuentoTotal: 0.2 } }).descuento, 0.2)
+    assert.equal(pedidoParaCarrito({ venta: { total: 2, descuento_total: 0.2 } }).descuento, 0.2)
+  })
+
+  it('sin descuento devuelve 0, y un descuento basura no se inventa', () => {
+    assert.equal(pedidoParaCarrito({ venta: { total: 2 } }).descuento, 0)
+    assert.equal(pedidoParaCarrito({ venta: { descuentoTotal: 'x' } }).descuento, 0)
+    assert.equal(pedidoParaCarrito(null).descuento, 0)
+  })
 })
 
 describe('clienteDelPedido', () => {

@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import {
   IGV_RATE,
   afectacionDe,
+  descuentoDeVenta,
   esGravado,
   importeBrutoDe,
   itemsConDescuento,
@@ -178,4 +179,41 @@ test('la afectación propia gana sobre la config: la región exonerada NO es un 
 test('una afectación vacía o en blanco se trata como ausente', () => {
   assert.equal(afectacionDe({ tipoAfectacion: '' }, { regionExonerada: true }), '20')
   assert.equal(afectacionDe({ tipoAfectacion: '   ' }, { regionExonerada: true }), '20')
+})
+
+// ─── Descuento de la venta (el que declara el comprobante) ───────────────────────────────────
+// Bug real (18/09/2026): un pedido guardaba el descuento solo como `descuento_total` (snake),
+// así que al cobrarlo el comprobante no veía descuento: sumaba las líneas a precio de lista
+// (2.20), declaraba un TOTAL de 2.00 y no imprimía ninguna fila de descuento.
+
+test('el descuento se lee en camelCase (venta directa y pedidos nuevos)', () => {
+  assert.equal(descuentoDeVenta({ descuentoTotal: 0.2 }), 0.2)
+})
+
+test('el descuento se lee también en snake_case (pedidos anteriores al 18/09/2026)', () => {
+  assert.equal(descuentoDeVenta({ descuento_total: 0.2 }), 0.2)
+})
+
+test('sin descuento (o con basura) devuelve 0: el camino normal no cambia', () => {
+  assert.equal(descuentoDeVenta({}), 0)
+  assert.equal(descuentoDeVenta(null), 0)
+  assert.equal(descuentoDeVenta(undefined), 0)
+  assert.equal(descuentoDeVenta({ descuentoTotal: 0 }), 0)
+  assert.equal(descuentoDeVenta({ descuentoTotal: -1 }), 0)
+  assert.equal(descuentoDeVenta({ descuentoTotal: 'x' }), 0)
+})
+
+test('camelCase gana sobre snake_case si los dos vienen (nunca se suman)', () => {
+  assert.equal(descuentoDeVenta({ descuentoTotal: 0.2, descuento_total: 0.5 }), 0.2)
+})
+
+test('un descuento de promoción explica la diferencia entre las líneas y el total', () => {
+  // 2 huevos a 0.60 (promo: 2 o más a 0.50) + 2 galletas a 0.50 = 2.20 de lista, se cobra 2.00.
+  const items = [
+    { cantidad: 2, precioVenta: 0.6, subtotal: 1.2, tipoAfectacion: '20' },
+    { cantidad: 2, precioVenta: 0.5, subtotal: 1.0, tipoAfectacion: '20' },
+  ]
+  const descuento = descuentoDeVenta({ descuento_total: 0.2 })
+  assert.equal(itemsConDescuento(items, 0).reduce((s, it) => s + importeBrutoDe(it), 0), 2.2)
+  assert.equal(totalDeclarado(items, descuento), 2)
 })

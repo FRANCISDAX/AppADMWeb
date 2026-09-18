@@ -1,7 +1,7 @@
 import QRCode from 'qrcode'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { etiquetaPago, formaPagoLabel } from '@/lib/pagos'
-import { afectacionDe, cantidadDe, importeBrutoDe, itemsConDescuento } from '@/lib/sunat-importes'
+import { afectacionDe, cantidadDe, descuentoDeVenta, importeBrutoDe, itemsConDescuento } from '@/lib/sunat-importes'
 import { esc } from '@/lib/ui-utils'
 import { desglosarTurno, lineasDeOrigen, type ConciliacionMedios, type DesgloseTurno, type ItemTurno } from '@/lib/arqueo'
 import { lineasPersonal, personalDeVenta } from '@/lib/personal'
@@ -164,8 +164,8 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   // descuento (promo de volumen, cliente o global), se reparte por línea y
   // el comprobante cuadra con lo que pagó el cliente. Sin esto la tabla de
   // totales mostraba el importe de lista y no sumaba con el TOTAL.
-  const totalesCalc = calcularTotales(itemsConDescuento(venta.items || [], venta.descuentoTotal || 0), { regionExonerada: config?.regionExonerada })
-  const descuentoDoc = Number(venta.descuentoTotal || 0)
+  const descuentoDoc = descuentoDeVenta(venta)
+  const totalesCalc = calcularTotales(itemsConDescuento(venta.items || [], descuentoDoc), { regionExonerada: config?.regionExonerada })
   const filasDescuento = descuentoDoc > 0
     ? `<tr><td class="td-r tot-l">Descuento</td><td class="td-r tot-v">- S/ ${descuentoDoc.toFixed(2)}</td></tr>`
     : ''

@@ -1504,6 +1504,11 @@ export function Pdv() {
                     Vendedor: {pedidoActivo.vendedor || '—'}
                     {clienteDelPedido(pedidoActivo) ? ` · ${clienteDelPedido(pedidoActivo)}` : ''}
                   </p>
+                  {pedidoActivo.descuento > 0 && (
+                    <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                      🏷️ Descuento aplicado por el vendedor: -{fmt(pedidoActivo.descuento)} · los precios de las líneas son de lista, el comprobante lo declara como descuento
+                    </p>
+                  )}
                   {pedidoActivo.envio && (pedidoActivo.envio.direccion || pedidoActivo.envio.notas) && (
                     <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-200">
                       🚚 Envío a domicilio: {pedidoActivo.envio.direccion || 'sin dirección'}{pedidoActivo.envio.referencia ? ` · Ref: ${pedidoActivo.envio.referencia}` : ''}{pedidoActivo.envio.notas ? ` · ${pedidoActivo.envio.notas}` : ''}{Number(pedidoActivo.envio.costo) > 0 ? ` · S/ ${Number(pedidoActivo.envio.costo).toFixed(2)}` : ''}

@@ -605,6 +605,13 @@ export async function crearVentaPendiente({
         // (el cobro usa `venta.total`). Igual que `registrarVenta`, el importe es el total.
         importe_total: venta.total,
         descuento_total: venta.descuentoTotal || 0,
+        // 🔑 **El descuento viaja también en camelCase** (`descuentoTotal`), que es como lo leen
+        // el comprobante (`lib/pdf.ts`) y el XML de SUNAT (`lib/sunat.ts`): con solo
+        // `descuento_total` el pedido llegaba a caja **sin descuento declarado**, así que el
+        // comprobante sumaba las líneas a precio de lista (2.20) contra un TOTAL ya descontado
+        // (2.00) y no imprimía ninguna fila de descuento que lo explicara. Un pedido y una venta
+        // directa tienen que declarar el descuento igual.
+        descuentoTotal: venta.descuentoTotal || 0,
         // ⚠️ `undefined` NO es un valor válido para Firestore (tira *"Unsupported field value:
         // undefined"*): los opcionales van en `null` y lo que puede faltar (el envío) se agrega
         // con spread condicional. Esto es lo que hacía fallar **siempre** el envío a caja.

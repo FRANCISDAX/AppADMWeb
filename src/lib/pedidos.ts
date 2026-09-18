@@ -81,6 +81,12 @@ export type PedidoEnCarrito = {
   clienteDni: string
   clienteNombre: string
   items: ItemPedidoEnCarrito[]
+  /**
+   * Descuento que ya trae el pedido (promociones de volumen, de producto, cliente o manual):
+   * `total` ya viene neto, así que el cajero tiene que **ver** que hay un descuento aplicado
+   * (si no, el precio unitario de la línea —precio de lista— no explica el total).
+   */
+  descuento: number
   /** Envío a domicilio cargado por el vendedor (si lo hay): el cajero lo hereda. */
   envio: { tipo?: string; direccion?: string; referencia?: string; zonaId?: string; costo?: number; notas?: string } | null
 }
@@ -94,7 +100,7 @@ export function pedidoParaCarrito(doc: {
   serieNumero?: unknown
   vendedorNombre?: unknown
   cajaId?: unknown
-  venta?: { total?: unknown; cliente_dni?: unknown; cliente_nombre?: unknown; items?: unknown; envio?: unknown } | null
+  venta?: { total?: unknown; descuentoTotal?: unknown; descuento_total?: unknown; cliente_dni?: unknown; cliente_nombre?: unknown; items?: unknown; envio?: unknown } | null
 } | null | undefined): PedidoEnCarrito {
   const venta = doc?.venta ?? {}
   const items = Array.isArray(venta.items) ? venta.items : []
@@ -103,6 +109,8 @@ export function pedidoParaCarrito(doc: {
     codigo: texto(doc?.serieNumero) || texto(doc?.id),
     vendedor: texto(doc?.vendedorNombre),
     total: numero(venta.total),
+    // `descuento_total` (snake) es como lo guardaban los pedidos antes del 18/09/2026.
+    descuento: numero(venta.descuentoTotal) || numero(venta.descuento_total),
     cajaId: texto(doc?.cajaId),
     clienteDni: texto(venta.cliente_dni),
     clienteNombre: texto(venta.cliente_nombre),

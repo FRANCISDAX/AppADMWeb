@@ -116,6 +116,23 @@ export function itemsConDescuento<T extends ItemVenta>(items: readonly T[], desc
   })
 }
 
+/**
+ * Descuento total de una venta, venga como venga el documento.
+ *
+ * 🔑 Lee `descuentoTotal` (camelCase: lo que escriben `registrarVenta` y los pedidos nuevos) y
+ * **cae a `descuento_total`** (snake_case: como lo guardaba un pedido antes del 18/09/2026).
+ * Sin ese respaldo, un pedido con promoción llegaba al comprobante con las líneas a **precio de
+ * lista** y el descuento en 0: el PDF mostraba *Op. Exonerada 2.20* contra un **TOTAL de 2.00**
+ * sin ninguna fila de descuento que lo explicara, y el XML declaraba el importe de lista
+ * (bug real: 2 huevos con promo a S/ 0.50 + 2 galletas, huevos 1.20 + galletas 1.00 = 2.20 con
+ * un total de 2.00).
+ */
+export function descuentoDeVenta(venta: Record<string, unknown> | null | undefined): number {
+  const v = venta ?? {}
+  const n = Number(v.descuentoTotal ?? v.descuento_total ?? 0)
+  return Number.isFinite(n) && n > 0 ? redondear2(n) : 0
+}
+
 /** Total que debe declarar el comprobante: lo cobrado (los items ya sin descuento). */
 export function totalDeclarado(items: readonly ItemVenta[], descuentoTotal: number): number {
   const conDescuento = itemsConDescuento(items, descuentoTotal)
