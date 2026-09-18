@@ -658,21 +658,37 @@ export async function crearVentaPendiente({
 }
 
 /**
- * Obtiene las ventas pendientes de una caja específica.
+ * Pedidos esperando cobro.
+ *
+ * ⚠️ **Con caja asignada** se traen los de esa caja; **sin caja, se traen TODOS**. Antes la
+ * consulta filtraba siempre por la caja del cajero, así que un cajero **sin caja asignada** veía
+ * el panel **vacío y escondido** aunque los pedidos existieran (caso real: el vendedor tenía
+ * `caja_principal` y los dos cajeros ninguna ⇒ el pedido quedaba invisible para siempre).
+ * Un pedido que no se puede cobrar es una venta perdida: la lista nunca debe quedar ciega por
+ * una configuración de caja.
  */
-export async function obtenerVentasPendientes(cajaId: string): Promise<DocumentoVenta[]> {
+export async function obtenerVentasPendientes(cajaId?: string): Promise<DocumentoVenta[]> {
   try {
-    if (!cajaId) return []
+    const conEstado = (d: { id: string } & Record<string, unknown>) => d as unknown as DocumentoVenta
+    if (cajaId) {
+      const snap = await getDocs(
+        query(
+          collection(db, COL.DOCUMENTOS),
+          where('cajaId', '==', cajaId),
+          where('estado', '==', 'pendiente'),
+          orderBy('fecha', 'desc'),
+          limit(50),
+        ),
+      )
+      return snap.docs.map((d) => conEstado({ id: d.id, ...d.data() }))
+    }
+    // Sin caja: igualdad sola (sin índice compuesto) y el orden se resuelve en JS.
     const snap = await getDocs(
-      query(
-        collection(db, COL.DOCUMENTOS),
-        where('cajaId', '==', cajaId),
-        where('estado', '==', 'pendiente'),
-        orderBy('fecha', 'desc'),
-        limit(50),
-      ),
+      query(collection(db, COL.DOCUMENTOS), where('estado', '==', 'pendiente'), limit(50)),
     )
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as DocumentoVenta))
+    return snap.docs
+      .map((d) => conEstado({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
   } catch (e) {
     console.error('❌ Error obteniendo ventas pendientes:', e)
     return []

@@ -30,7 +30,7 @@ function tiempoTranscurrido(fechaIso: string): string {
 
 export function PanelVentasPendientes() {
   const { user } = useAuth()
-  const { cajaId, nombre: nombreUsuario, tienePermiso } = usePermisos()
+  const { cajaId, nombre: nombreUsuario, tienePermiso, serieBoleta, serieFactura, seriePrefijo } = usePermisos()
   const { config } = useConfiguracion()
   const { toast, confirm } = useNotifications()
   const [ventas, setVentas] = React.useState<DocumentoVenta[]>([])
@@ -45,9 +45,10 @@ export function PanelVentasPendientes() {
   const [operacion, setOperacion] = React.useState('')
   const [recibido, setRecibido] = React.useState('')
 
+  // ⚠️ Sin caja asignada se traen TODOS los pedidos: esconder el panel dejaba al cajero sin poder
+  // cobrar (caso real: los cajeros no tenían caja y el vendedor sí).
   const cargar = React.useCallback(async () => {
-    if (!cajaId) { setCargando(false); return }
-    const lista = await obtenerVentasPendientes(cajaId)
+    const lista = await obtenerVentasPendientes(cajaId || undefined)
     setVentas(lista)
     setCargando(false)
   }, [cajaId])
@@ -56,10 +57,9 @@ export function PanelVentasPendientes() {
 
   // Refresco cada 30s
   React.useEffect(() => {
-    if (!cajaId) return
     const timer = setInterval(() => { cargar() }, 30000)
     return () => clearInterval(timer)
-  }, [cajaId, cargar])
+  }, [cargar])
 
   async function cobrar(v: DocumentoVenta) {
     if (!tienePermiso('cobrarVenta')) return toast('🚫 No tenés permiso para cobrar', 'error')
@@ -108,7 +108,14 @@ export function PanelVentasPendientes() {
         cajeroNombre: nombreUsuario || user?.email || 'sistema',
         // El comprobante lo define el cajero: puede mantener el que puso el vendedor o cambiarlo.
         tipoDoc: tipoDocSel,
-        config,
+        // ⚠️ Las series salen de **la caja del cajero** (igual que en el PDV), no solo de la
+        // configuración de la empresa: si no, un cajero de la caja 2 emitiría con la serie de la 1.
+        config: {
+          ...config,
+          serieBoleta: serieBoleta || config.serieBoleta,
+          serieFactura: serieFactura || config.serieFactura,
+          serie_prefijo: seriePrefijo || config.serie_prefijo,
+        },
       })
       if (res.success) {
         toast(`✅ Venta ${res.correlativo || v.serieNumero} cobrada (${tipoDocSel})`)
@@ -169,7 +176,8 @@ export function PanelVentasPendientes() {
     }
   }
 
-  if (!cajaId) return null
+  // ⚠️ Acá NO va un `if (!cajaId) return null`: era justamente lo que dejaba al cajero sin caja
+  // viendo un panel vacío mientras el pedido esperaba. El caso "sin caja" se avisa dentro.
 
   return (
     <div className="space-y-2">
@@ -183,15 +191,24 @@ export function PanelVentasPendientes() {
       {cargando ? (
         <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
       ) : ventas.length === 0 ? (
-        <p className="py-4 text-center text-xs text-muted-foreground">No hay ventas pendientes en esta caja</p>
+        <p className="py-4 text-center text-xs text-muted-foreground">
+          {cajaId ? 'No hay ventas pendientes en esta caja' : 'No hay ventas pendientes'}
+        </p>
       ) : (
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
+          {!cajaId && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              Tu usuario no tiene una caja asignada: se muestran los pedidos de <strong>todas las cajas</strong>. Pedile al administrador que te asigne una en <em>Usuarios → Editar</em> para que las series del comprobante sean las de tu caja.
+            </p>
+          )}
           {ventas.map((v) => {
             const total = (v.venta as Record<string, unknown>)?.total as number ?? 0
             const items = (v.venta as Record<string, unknown>)?.items as { nombre: string; quantity: number }[] | undefined
             const itemCount = items?.length ?? 0
             const procesando = procesandoId === v.id
             const cancelando = cancelandoId === v.id
+            // La caja solo se aclara cuando aporta (usuario sin caja, o caja distinta de la suya).
+            const otraCaja = Boolean(v.cajaId) && v.cajaId !== cajaId
 
             return (
               <div key={v.id} className="rounded-xl border bg-card p-3 space-y-2">
@@ -200,6 +217,11 @@ export function PanelVentasPendientes() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold">{v.serieNumero}</span>
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Pendiente</span>
+                      {otraCaja && (
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          {v.cajaId}
+                        </span>
+                      )}
                     </div>
                     <p className="text-[10px] text-muted-foreground">Pedido sin comprobante · el stock se descuenta al cobrar</p>
                     <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground">
