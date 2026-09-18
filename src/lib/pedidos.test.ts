@@ -12,7 +12,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { avisoOtraCaja, nombreCaja, repartirPedidos } from './pedidos.ts'
+import { avisoOtraCaja, clienteDelPedido, nombreCaja, pedidoParaCarrito, repartirPedidos } from './pedidos.ts'
 
 const p = (id: string, cajaId?: string) => ({ id, cajaId })
 
@@ -65,5 +65,71 @@ describe('nombreCaja / avisoOtraCaja', () => {
     assert.match(aviso, /caja 02/)
     assert.match(aviso, /caja 01/)
     assert.match(aviso, /serie de tu/)
+  })
+})
+
+describe('pedidoParaCarrito — el carrito cobra lo COTIZADO, no lo recalculado', () => {
+  const doc = {
+    id: '2026-9_PED-000001',
+    serieNumero: 'PED-000001',
+    vendedorNombre: 'JOHAN REYNA',
+    cajaId: 'caja_principal',
+    venta: {
+      // ⚠️ El total cotizado NO coincide con la suma de las líneas (el vendedor aplicó una promo):
+      // el carrito tiene que cobrar 58, no 62.
+      total: 58,
+      cliente_dni: '12345678',
+      cliente_nombre: 'Juan Pérez',
+      items: [
+        { nombre: 'Pañales', quantity: 2, precioVenta: 25 },
+        { nombre: 'Toallitas', quantity: 1, precioVenta: 12 },
+      ],
+    },
+  }
+
+  it('usa el total guardado y no la suma de las líneas', () => {
+    const p = pedidoParaCarrito(doc)
+    assert.equal(p.total, 58)
+    assert.equal(p.items.reduce((s, it) => s + it.precio * it.cantidad, 0), 62)
+  })
+
+  it('trae código, vendedor, caja, cliente e items', () => {
+    const p = pedidoParaCarrito(doc)
+    assert.equal(p.codigo, 'PED-000001')
+    assert.equal(p.vendedor, 'JOHAN REYNA')
+    assert.equal(p.cajaId, 'caja_principal')
+    assert.equal(p.items.length, 2)
+    assert.deepEqual(p.items[0], { nombre: 'Pañales', cantidad: 2, precio: 25 })
+  })
+
+  it('aguanta documentos incompletos o raros sin romper', () => {
+    assert.deepEqual(pedidoParaCarrito(null).items, [])
+    assert.equal(pedidoParaCarrito({}).total, 0)
+    const raro = pedidoParaCarrito({ venta: { total: '58', items: [null, { nombre: 5, quantity: 'x' }] } })
+    assert.equal(raro.total, 0, 'un total que no es número no se inventa')
+    assert.deepEqual(raro.items, [
+      { nombre: 'Producto', cantidad: 0, precio: 0 },
+      { nombre: 'Producto', cantidad: 0, precio: 0 },
+    ])
+  })
+
+  it('sin serieNumero el código cae al id del documento', () => {
+    assert.equal(pedidoParaCarrito({ id: '2026-9_PED-000009' }).codigo, '2026-9_PED-000009')
+  })
+})
+
+describe('clienteDelPedido', () => {
+  it('arma nombre + documento con su rótulo', () => {
+    const p = pedidoParaCarrito({ venta: { cliente_nombre: 'Juan Pérez', cliente_dni: '12345678' } })
+    assert.equal(clienteDelPedido(p), 'Juan Pérez · DNI 12345678')
+  })
+
+  it('con 11 dígitos el rótulo es RUC', () => {
+    const p = pedidoParaCarrito({ venta: { cliente_dni: '20123456789' } })
+    assert.equal(clienteDelPedido(p), 'RUC 20123456789')
+  })
+
+  it('sin cliente devuelve cadena vacía (no imprime un renglón vacío)', () => {
+    assert.equal(clienteDelPedido(pedidoParaCarrito({})), '')
   })
 })

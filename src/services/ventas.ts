@@ -657,6 +657,18 @@ export async function crearVentaPendiente({
   }
 }
 
+/** Lee un documento de venta por id (para imprimir el comprobante recién emitido). */
+export async function obtenerDocumento(id: string): Promise<Record<string, unknown> | null> {
+  if (!id) return null
+  try {
+    const snap = await getDoc(doc(db, COL.DOCUMENTOS, id))
+    return snap.exists() ? ({ ...snap.data(), id: snap.id } as Record<string, unknown>) : null
+  } catch (e) {
+    console.error('❌ Error leyendo el documento:', e)
+    return null
+  }
+}
+
 /**
  * Pedidos esperando cobro (**todos**, sin filtrar por caja).
  *

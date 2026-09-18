@@ -58,3 +58,65 @@ export function nombreCaja(cajaId?: string | null): string {
 export function avisoOtraCaja(cajaPedido?: string | null, cajaMia?: string | null): string {
   return `Este pedido es de la ${nombreCaja(cajaPedido)} y se va a emitir con la serie de tu ${nombreCaja(cajaMia)}.`
 }
+
+// ─── Cobrar un pedido desde el carrito ("modo pedido") ───────────────────────────────────────
+
+/** Línea de un pedido tal como se muestra en el carrito (solo lectura). */
+export type ItemPedidoEnCarrito = { nombre: string; cantidad: number; precio: number }
+
+/**
+ * Lo que el carrito necesita para cobrar un pedido sin recalcularlo.
+ *
+ * 🔑 **`total` es el cotizado por el vendedor** (`venta.total`), no la suma de las líneas: el
+ * pedido congela lo que se le prometió al cliente (con sus promos y descuentos del momento) y el
+ * cajero cobra **eso**. Recalcularlo con las promociones vigentes haría que el mostrador cobre
+ * un precio distinto al pactado.
+ */
+export type PedidoEnCarrito = {
+  id: string
+  codigo: string
+  vendedor: string
+  total: number
+  cajaId: string
+  clienteDni: string
+  clienteNombre: string
+  items: ItemPedidoEnCarrito[]
+}
+
+const texto = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
+const numero = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+
+/** Convierte el documento de un pedido en lo que muestra el carrito. **No inventa nada.** */
+export function pedidoParaCarrito(doc: {
+  id?: unknown
+  serieNumero?: unknown
+  vendedorNombre?: unknown
+  cajaId?: unknown
+  venta?: { total?: unknown; cliente_dni?: unknown; cliente_nombre?: unknown; items?: unknown } | null
+} | null | undefined): PedidoEnCarrito {
+  const venta = doc?.venta ?? {}
+  const items = Array.isArray(venta.items) ? venta.items : []
+  return {
+    id: texto(doc?.id),
+    codigo: texto(doc?.serieNumero) || texto(doc?.id),
+    vendedor: texto(doc?.vendedorNombre),
+    total: numero(venta.total),
+    cajaId: texto(doc?.cajaId),
+    clienteDni: texto(venta.cliente_dni),
+    clienteNombre: texto(venta.cliente_nombre),
+    items: items.map((it) => {
+      const linea = (it ?? {}) as { nombre?: unknown; quantity?: unknown; cantidad?: unknown; precioVenta?: unknown }
+      return {
+        nombre: texto(linea.nombre) || 'Producto',
+        cantidad: numero(linea.quantity) || numero(linea.cantidad),
+        precio: numero(linea.precioVenta),
+      }
+    }),
+  }
+}
+
+/** Texto del cliente para el aviso del carrito (`Juan Pérez · DNI 12345678`), o `''`. */
+export function clienteDelPedido(p: PedidoEnCarrito): string {
+  const doc = p.clienteDni ? `${p.clienteDni.length === 11 ? 'RUC' : 'DNI'} ${p.clienteDni}` : ''
+  return [p.clienteNombre, doc].filter(Boolean).join(' · ')
+}

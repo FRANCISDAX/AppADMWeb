@@ -43,7 +43,7 @@ import {
 } from '@/lib/pagos'
 import { CreditoPanel } from '@/components/CreditoPanel'
 import { buscarTurnoAbierto } from '@/services/turnos'
-import { registrarVenta, crearVentaPendiente } from '@/services/ventas'
+import { registrarVenta, crearVentaPendiente, cobrarVentaPendiente, obtenerDocumento } from '@/services/ventas'
 import { abrirPDFComprobante } from '@/lib/pdf'
 import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento } from '@/lib/ui-utils'
@@ -51,6 +51,7 @@ import { listarVentasPausadas, guardarVentaPausada, eliminarVentaPausada, type V
 import { EscanearCodigo } from '@/components/EscanearCodigo'
 import { broadcastCart, closeSession } from '@/lib/customer-display'
 import { calcularDescuentos } from '@/lib/descuentos'
+import { clienteDelPedido, pedidoParaCarrito, type PedidoEnCarrito } from '@/lib/pedidos'
 import { promocionesAplicables, type PromocionVolumen } from '@/services/promociones-volumen'
 import QRCode from 'qrcode'
 import { PanelVentasPendientes } from '@/components/PanelVentasPendientes'
@@ -123,6 +124,15 @@ export function Pdv() {
   const [descuentoGlobalValor, setDescuentoGlobalValor] = React.useState('')
   const [reglasVolumen, setReglasVolumen] = React.useState<PromocionVolumen[]>([])
   const [listaPrecioSel, setListaPrecioSel] = React.useState('')
+  /**
+   * **Modo pedido**: el pedido que el cajero trajo desde "Ventas Pendientes" para cobrarlo acá.
+   * Mientras está activo, el carrito muestra SUS items (solo lectura) y el cobro de abajo cobra
+   * ese pedido con el **total cotizado por el vendedor** (no se recalcula nada). Así el cajero
+   * tiene un solo lugar para elegir comprobante y forma de pago, en vez de dos copias.
+   */
+  const [pedidoActivo, setPedidoActivo] = React.useState<PedidoEnCarrito | null>(null)
+  /** Se incrementa al cobrar un pedido para que el panel de pendientes recargue la lista. */
+  const [refrescoPedidos, setRefrescoPedidos] = React.useState(0)
 
   const handleBarcodeDetectado = React.useCallback((codigo: string) => {
     const codigoLimpio = codigo.replace(/[\s-]/g, '').trim()
@@ -296,13 +306,18 @@ export function Pdv() {
     })
   }, [cart, productos, usarPromo, manualItems, presentacionesSel, reglasVolumen, clienteDescuento, descuentoGlobalTipo, descuentoGlobalValor])
 
-  const total = descuentosCalc.totalFinal
+  const totalCarrito = descuentosCalc.totalFinal
+  // 🔑 En **modo pedido** el monto a cobrar es el que cotizó el vendedor: el carrito está vacío y
+  // recalcular con las promos de hoy daría un precio distinto al que se le prometió al cliente.
+  // Al redefinir `total`, todo lo que ya lo usa (resumen de pagos, validaciones, botones) queda
+  // apuntando al monto correcto sin duplicar reglas.
+  const total = pedidoActivo ? pedidoActivo.total : totalCarrito
 
   // ─── Formas de pago ────────────────────────────────────────────────────────
   // Sin nada en la venta no se elige forma de pago: los botones quedan
   // deshabilitados y no se muestra la lista. Se calcula del carrito en vivo, así
   // que al vaciarlo (botón, o borrando el último producto) se desactivan solos.
-  const hayProductos = Object.keys(cart).length > 0 || Object.keys(manualItems).length > 0
+  const hayProductos = Object.keys(cart).length > 0 || Object.keys(manualItems).length > 0 || Boolean(pedidoActivo)
   const esVendedor = tienePermiso('enviarACaja') && !tienePermiso('cobrarVenta')
 
   /** Al quedarse la venta sin nada, se descarta la forma de pago elegida. */
@@ -477,8 +492,110 @@ export function Pdv() {
     setPausadasAbierto(true)
   }
 
-  function recuperarVenta(v: VentaPausada) {
+  // ─── Modo pedido (el vendedor → caja, cobrado desde el carrito) ─────────────
+
+  /** Trae un pedido al carrito para cobrarlo acá. Con la venta ocupada, avisa y no hace nada. */
+  async function activarPedido(doc: Parameters<typeof pedidoParaCarrito>[0]) {
     if (Object.keys(cart).length > 0 || Object.keys(manualItems).length > 0) {
+      return setToast('⚠️ Terminá o vaciá la venta actual antes de cobrar un pedido')
+    }
+    const p = pedidoParaCarrito(doc)
+    // Cambiar de pedido a mitad del cobro descarta lo que ya se cargó: se pregunta.
+    if (pedidoActivo && pedidoActivo.id !== p.id) {
+      const ok = await confirm({
+        title: 'Cambiar de pedido',
+        message: `Estás cobrando ${pedidoActivo.codigo}. ¿Pasamos a ${p.codigo}? Se descarta la forma de pago que ya cargaste.`,
+        okText: 'Cambiar',
+      })
+      if (!ok) return
+    }
+    setPedidoActivo(p)
+    // El pedido no tiene tipo fiscal: el cajero lo elige acá (arranca en Nota de Venta).
+    setTipoComp('nv')
+    setClienteDni(p.clienteDni)
+    setClienteNombre(p.clienteNombre)
+    setDniConsultado(Boolean(p.clienteDni))
+    setPagos([])
+    setPagoCredito(false)
+    setGrupoTransf(false)
+    setToast(`🧾 Cobrando pedido ${p.codigo} (${fmt(p.total)})`)
+  }
+
+  /** Suelta el pedido sin cobrarlo: vuelve a la lista de pendientes, intacto. */
+  function soltarPedido() {
+    setPedidoActivo(null)
+    setPagos([])
+    setToast('Pedido devuelto a la lista')
+  }
+
+  /** Cobra el pedido activo: usa el mismo camino que ya existía (`cobrarVentaPendiente`). */
+  async function cobrarPedido() {
+    if (!pedidoActivo) return
+    if (!tienePermiso('cobrarVenta')) return setToast('🚫 No tenés permiso para cobrar')
+    const { buscarTurnoAbierto } = await import('@/services/turnos')
+    const turnoActivo = await buscarTurnoAbierto(user?.uid, tienePermiso('verTodo'))
+    if (!turnoActivo) return setToast('🚫 No hay un turno abierto. Abrí un turno antes de cobrar.')
+
+    const tipoDocPedido: 'NV' | 'BOLETA' | 'FACTURA' = tipoComp === 'nv' ? 'NV' : tipoComp === 'boleta' ? 'BOLETA' : 'FACTURA'
+    // Las mismas validaciones del PDV (Factura → RUC; Boleta sobre el tope → DNI).
+    if (tipoDocPedido === 'FACTURA' && !/^\d{11}$/.test(clienteDni.trim())) {
+      return setToast('⚠️ La Factura necesita el RUC (11 dígitos) del cliente')
+    }
+    const topeDoc = Number(cfg.topeBoletaDni) > 0 ? Number(cfg.topeBoletaDni) : 700
+    if (tipoDocPedido === 'BOLETA' && pedidoActivo.total > topeDoc && !/^\d{8}$/.test(clienteDni.trim())) {
+      return setToast(`⚠️ Boletas mayores a ${fmt(topeDoc)} requieren DNI (8 dígitos)`)
+    }
+    if (!resumen.puedeCobrar) return setToast(`⚠️ ${resumen.motivo ?? 'El pago no cubre el total'}`)
+
+    const pagosGuardar = resumen.pagos
+    const tipoPagoPedido = tipoPagoDe(pagosGuardar)
+    if (pedidoActivo.cajaId && cajaId && pedidoActivo.cajaId !== cajaId) {
+      const ok = await confirm({
+        title: 'Pedido de otra caja',
+        message: `Este pedido es de ${pedidoActivo.cajaId} y se va a emitir con la serie de tu ${cajaId}.`,
+        okText: 'Cobrar igual',
+      })
+      if (!ok) return
+    }
+
+    setCobrando(true)
+    try {
+      const res = await cobrarVentaPendiente({
+        documentoId: pedidoActivo.id,
+        turnoId: turnoActivo.id || '',
+        pagos: pagosGuardar,
+        tipoPago: tipoPagoPedido,
+        montoRecibido: resumen.efectivoRecibido,
+        cambio: resumen.vuelto,
+        cajeroId: user?.uid || '',
+        cajeroNombre: nombreUsuario || user?.email || 'sistema',
+        tipoDoc: tipoDocPedido,
+        cajaId: cajaId || undefined,
+        config: {
+          ...cfg,
+          serieBoleta: serieBoleta || cfg.serieBoleta,
+          serieFactura: serieFactura || cfg.serieFactura,
+          serie_prefijo: seriePrefijo || cfg.serie_prefijo,
+        },
+      })
+      if (!res.success) return setToast(`❌ ${res.error || 'No se pudo cobrar el pedido'}`)
+
+      const correlativo = res.correlativo || pedidoActivo.codigo
+      // Se relee el documento cobrado para ofrecer la impresión, igual que una venta normal.
+      const documento = await obtenerDocumento(pedidoActivo.id)
+      setVentaOk({ correlativo, total: pedidoActivo.total, vuelto: resumen.vuelto, documento: (documento ?? {}) as Record<string, unknown> })
+      setPedidoActivo(null)
+      setPagos([])
+      setRefrescoPedidos((n) => n + 1)
+      setToast(`✅ Pedido ${pedidoActivo.codigo} cobrado · ${correlativo}`)
+    } catch (e) {
+      setToast(`❌ ${(e as Error).message}`)
+    } finally {
+      setCobrando(false)
+    }
+  }
+
+  function recuperarVenta(v: VentaPausada) {    if (Object.keys(cart).length > 0 || Object.keys(manualItems).length > 0) {
       return setToast('⚠️ Vacíá el carrito antes de recuperar una venta pausada')
     }
     setCart(v.cart)
@@ -1156,7 +1273,7 @@ export function Pdv() {
 
           {tienePermiso('verVentasPendientes') && (
             <div className="border-b px-5 py-3">
-              <PanelVentasPendientes />
+              <PanelVentasPendientes onCobrarPedido={activarPedido} refreshKey={refrescoPedidos} />
             </div>
           )}
 
@@ -1180,7 +1297,9 @@ export function Pdv() {
             </div>
             )}
 
-            {/* Cliente (colapsable para dar más espacio al carrito) */}
+            {/* Cliente (colapsable para dar más espacio al carrito).
+                En modo pedido el cliente viene del pedido y no se edita acá. */}
+            {!pedidoActivo && <>
             <button
               onClick={() => setClienteAbierto((p) => !p)}
               className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
@@ -1315,10 +1434,46 @@ export function Pdv() {
               )}
             </div>
             )}
+            </>}
           </div>
 
+          {/* ── Modo pedido: aviso fijo con el pedido que se está cobrando ────────── */}
+          {pedidoActivo && (
+            <div className="border-b bg-amber-50 px-5 py-2.5 dark:bg-amber-950/30">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-amber-800 dark:text-amber-200">🧾 Cobrando pedido {pedidoActivo.codigo}</p>
+                  <p className="text-[10px] text-amber-700 dark:text-amber-300">
+                    Vendedor: {pedidoActivo.vendedor || '—'}
+                    {clienteDelPedido(pedidoActivo) ? ` · ${clienteDelPedido(pedidoActivo)}` : ''}
+                  </p>
+                  <p className="text-[10px] text-amber-700 dark:text-amber-300">
+                    El monto es el cotizado por el vendedor: no se recalcula. Elegí comprobante y forma de pago abajo.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={soltarPedido}>Cancelar</Button>
+              </div>
+            </div>
+          )}
+
           <div className="flex-1 min-h-0 overflow-y-auto divide-y px-5 py-2">
-            {allItems.length === 0 ? (
+            {pedidoActivo ? (
+              <>
+                {pedidoActivo.items.map((it, i) => (
+                  <div key={`${it.nombre}-${i}`} className="flex items-center gap-2 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-semibold">{it.nombre}</div>
+                      <div className="num text-[11px] text-muted-foreground">{fmt(it.precio)} c/u × {it.cantidad}</div>
+                    </div>
+                    <span className="num w-20 text-right text-sm font-bold">{fmt(it.precio * it.cantidad)}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between py-2.5">
+                  <span className="text-xs text-muted-foreground">Total cotizado por el vendedor</span>
+                  <span className="num text-sm font-extrabold">{fmt(pedidoActivo.total)}</span>
+                </div>
+              </>
+            ) : allItems.length === 0 ? (
               <div className="py-10 text-center text-muted-foreground">
                 <ShoppingCart className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
                 <p className="text-sm font-medium">Carrito vacío</p>
@@ -1417,8 +1572,8 @@ export function Pdv() {
           </div>
 
           <div className="space-y-3 border-t px-5 pt-3 pb-5">
-            {/* Envío */}
-            {cfg?.envioHabilitado && (
+            {/* Envío (no se toca en modo pedido: el pedido ya trae lo suyo) */}
+            {!pedidoActivo && cfg?.envioHabilitado && (
               <div className="space-y-2 rounded-xl border border-dashed p-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-primary">🚚 ENVÍO</span>
@@ -1499,7 +1654,7 @@ export function Pdv() {
                 exclusivo y va por el total de la venta.
                 El vendedor (enviarACaja && !cobrarVenta) no ve esta sección. */}
             {!esVendedor && <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className={cn('grid gap-1.5', pedidoActivo ? 'grid-cols-2' : 'grid-cols-3')}>
                 <button
                   type="button"
                   onClick={() => agregarPago('efectivo')}
@@ -1522,6 +1677,9 @@ export function Pdv() {
                 >
                   📲 Transferencia <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', grupoTransf && hayProductos && 'rotate-180')} />
                 </button>
+                {/* El crédito no se combina y va por el total de la venta: en modo pedido no se
+                    ofrece (un pedido se cobra en el mostrador). */}
+                {!pedidoActivo && (
                 <button
                   type="button"
                   onClick={elegirCredito}
@@ -1533,6 +1691,7 @@ export function Pdv() {
                 >
                   💳 Crédito
                 </button>
+                )}
               </div>
 
               {!hayProductos && (
@@ -1639,9 +1798,8 @@ export function Pdv() {
             {!esVendedor && pagoCredito && hayProductos && (
               <CreditoPanel dni={clienteDni.trim()} estado={estadoCredito} total={total} cargando={cargandoCredito} />
             )}
-
-            {/* Descuentos */}
-            <div className="space-y-2 rounded-xl border p-3">
+            {/* Descuentos: no aplican en modo pedido (el total ya viene cotizado). */}
+            {!pedidoActivo && <div className="space-y-2 rounded-xl border p-3">
               <p className="text-xs font-bold text-muted-foreground">Descuentos</p>
 
               {/* Global */}
@@ -1670,10 +1828,10 @@ export function Pdv() {
                   )}
                 </div>
               )}
-            </div>
+            </div>}
 
             <div className="flex items-end justify-between">
-              <span className="text-sm text-muted-foreground">Total</span>
+              <span className="text-sm text-muted-foreground">{pedidoActivo ? 'Total del pedido' : 'Total'}</span>
               <div className="text-right">
                 {descuentosCalc.totalDescuento > 0 && (
                   <span className="num text-sm text-muted-foreground line-through">{fmt(totalBruto)}</span>
@@ -1693,17 +1851,28 @@ export function Pdv() {
                 <Pause className="h-4 w-4" />
                 Pausar
               </Button>
-              {tienePermiso('enviarACaja') && !tienePermiso('cobrarVenta') ? (
-                <Button onClick={enviarACaja} disabled={allItems.length === 0 || cobrando}>
-                  {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {cobrando ? 'Enviando…' : 'Enviar a caja'}
+            {pedidoActivo ? (
+              // Modo pedido: las acciones del carrito no aplican (el pedido se cotizó en otro lado).
+              <>
+                <Button variant="outline" onClick={soltarPedido} disabled={cobrando}>
+                  Cancelar
                 </Button>
-              ) : (
-                <Button onClick={cobrar} disabled={allItems.length === 0 || cobrando || (!pagoCredito && !resumen.puedeCobrar)}>
+                <Button className="col-span-2" onClick={cobrarPedido} disabled={cobrando || !resumen.puedeCobrar}>
                   {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {cobrando ? 'Procesando…' : 'Cobrar'}
+                  {cobrando ? 'Cobrando…' : `Cobrar pedido ${fmt(total)}`}
                 </Button>
-              )}
+              </>
+            ) : tienePermiso('enviarACaja') && !tienePermiso('cobrarVenta') ? (
+              <Button onClick={enviarACaja} disabled={allItems.length === 0 || cobrando}>
+                {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {cobrando ? 'Enviando…' : 'Enviar a caja'}
+              </Button>
+            ) : (
+              <Button onClick={cobrar} disabled={allItems.length === 0 || cobrando || (!pagoCredito && !resumen.puedeCobrar)}>
+                {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {cobrando ? 'Procesando…' : 'Cobrar'}
+              </Button>
+            )}
             </div>
           </div>
         </div>

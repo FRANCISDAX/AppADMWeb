@@ -304,19 +304,20 @@
   <p>Cuando un cajero abre el PDV, si tiene permiso <code>verVentasPendientes</code>, ve un panel con los pedidos enviados por los vendedores:</p>
   <ul style="list-style:none; padding:0; margin: 8px 0;">
     <li style="padding:3px 0; font-size:13px; color:#475569;">• Cada pedido muestra: <strong>código (PED-…)</strong>, <strong>vendedor</strong>, <strong>cantidad de items</strong>, <strong>total</strong> y <strong>el tiempo que lleva esperando</strong>.</li>
-    <li style="padding:3px 0; font-size:13px; color:#475569;">• Botón <strong>"Cobrar pedido"</strong>: abre el cobro con <strong>comprobante</strong> (NV / Boleta / Factura), <strong>forma de pago</strong> —con "N° de operación" si es Yape, Plin o Transferencia—, "Recibí" y vuelto cuando es efectivo. Aplica las mismas validaciones del PDV: Factura exige RUC de 11 dígitos y Boleta sobre el tope exige DNI de 8. Se confirma con <strong>"Confirmar cobro"</strong>.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Botón <strong>"Cobrar pedido"</strong>: <strong>trae el pedido al carrito</strong>. El carrito queda ocupado con sus productos (solo lectura) y aparece una franja ámbar arriba: <em>"Cobrando pedido PED-000001"</em>, con el vendedor y el cliente. Ahí elegís <strong>comprobante</strong> (NV / Boleta / Factura) y <strong>forma de pago</strong> abajo, y confirmás con <strong>"Cobrar pedido S/ …"</strong>. Si te arrepentís, <strong>"Cancelar"</strong> devuelve el pedido a la lista sin tocarlo.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>El monto es el cotizado por el vendedor</strong>: no se recalcula con las promociones del día, así el cliente paga lo que se le prometió. Por eso, mientras hay un pedido activo, no se editan precios, descuentos ni el cliente.</li>
     <li style="padding:3px 0; font-size:13px; color:#475569;">• Botón <strong>"Eliminar"</strong>: descarta el pedido con <strong>motivo obligatorio</strong>. No anula ningún comprobante (todavía no existe) y <strong>no toca el stock</strong>.</li>
     <li style="padding:3px 0; font-size:13px; color:#475569;">• Se actualiza cada 30 segundos automáticamente.</li>
   </ul>
 
   <div class="ejemplo">
     <div class="ejemplo-label">📋 Ejemplo real</div>
-    <p><strong>10:30 AM</strong> — Carlos (vendedor) atiende a la señora Rosa. Arma la venta: 2 pañales (S/ 25 c/u) + 1 toallitas (S/ 8). Total S/ 58. Toca "Enviar a caja" → queda el pedido <strong>PED-000001</strong> (el stock todavía <strong>no</strong> baja).<br><strong>10:35 AM</strong> — Luis (cajero) ve "PED-000001 · Carlos · 3 items · S/ 58.00 · hace 5m" en su panel. Toca "Cobrar", elige <strong>Boleta</strong> y <strong>Efectivo</strong>. Rosa paga con S/ 60. El sistema emite <strong>B001-000062</strong>, descuenta el stock y devuelve S/ 2 de vuelto.</p>
+    <p><strong>10:30 AM</strong> — Carlos (vendedor) atiende a la señora Rosa. Arma la venta: 2 pañales (S/ 25 c/u) + 1 toallitas (S/ 8). Total S/ 58. Toca "Enviar a caja" → queda el pedido <strong>PED-000001</strong> (el stock todavía <strong>no</strong> baja).<br><strong>10:35 AM</strong> — Luis (cajero) ve "PED-000001 · Carlos · 3 items · S/ 58.00 · hace 5m" en su panel. Toca <strong>"Cobrar pedido"</strong>: los 3 productos aparecen en su carrito con la franja ámbar. Elige <strong>Boleta</strong> y <strong>Efectivo</strong>, teclea "Recibí 60" y confirma con <strong>"Cobrar pedido S/ 58.00"</strong>. El sistema emite <strong>B001-000062</strong>, descuenta el stock y devuelve S/ 2 de vuelto.</p>
   </div>
 
   <div class="tip">
     <div class="tip-label">💡 Dos botones que dicen cosas distintas</div>
-    <p>En el PDV vas a ver <strong>"Cobrar pedido"</strong> en cada pedido enviado por un vendedor y <strong>"Cobrar"</strong> al pie del carrito: el primero cobra <em>ese pedido</em> (y ahí elegís comprobante y forma de pago); el segundo cobra <em>la venta que tenés armada en el carrito</em>. Si el carrito está vacío y querés cobrar un pedido, usá el botón del pedido.</p>
+    <p>En el PDV vas a ver <strong>"Cobrar pedido"</strong> en cada pedido enviado por un vendedor y <strong>"Cobrar"</strong> al pie del carrito: el primero trae <em>ese pedido</em> al carrito para cobrarlo; el segundo cobra la venta normal. Mientras hay un pedido activo, el botón de abajo dice <strong>"Cobrar pedido S/ …"</strong> y las acciones del carrito (Vaciar, Pausar, Enviar a caja) no se muestran.</p>
   </div>
 
   <h3>3.3 Los nombres en el papel</h3>
