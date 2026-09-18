@@ -5,6 +5,7 @@ import { CATEGORIA_MANUAL } from '@/lib/categorias'
 import { AFECTACION_POR_DEFECTO } from '@/constants/tributario'
 import { bolsillosDeVenta, formaPagoLabel, type PagoGuardado } from '@/lib/pagos'
 import { CAMPO_CONTADOR, CLAVE_PEDIDO, claveContador, codigoPedido } from '@/lib/contadores'
+import { limpiarUndefined } from '@/lib/limpio'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
@@ -309,11 +310,13 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
         vendedorNombre: venta.cajero || '',
         ...(venta.tipoDoc !== 'NV' ? { sunat: { serie, numero: nuevo, puntoEmision: puntoEmisionDe(null, config), estado: 'pendiente' } } : {}),
       }
-      tx.set(docRef, docData)
+      tx.set(docRef, limpiarUndefined(docData))
 
       // Turno (escritura; el dato ya se leyó ANTES de escribir nada)
       if (turnoRef && turnoData) {
-        const nuevasVentas = [...(turnoData.ventasDelTurno || []), ventaDoc]
+        // La venta que se guarda en el turno también va limpia: el item viaja dentro de un array
+        // y Firestore rechaza igual cualquier `undefined` que se cuele.
+        const nuevasVentas = [...(turnoData.ventasDelTurno || []), limpiarUndefined(ventaDoc)]
         tx.update(turnoRef, {
           ventasDelTurno: nuevasVentas,
           totalVentas: (turnoData.totalVentas || 0) + venta.total,
@@ -578,8 +581,11 @@ export async function crearVentaPendiente({
         total: venta.total,
         importe_total: importeTotal,
         descuento_total: venta.descuentoTotal || 0,
-        descuento_global_tipo: venta.descuentoGlobalTipo,
-        descuento_global_valor: venta.descuentoGlobalValor,
+        // ⚠️ `undefined` NO es un valor válido para Firestore (tira *"Unsupported field value:
+        // undefined"*): los opcionales van en `null` y lo que puede faltar (el envío) se agrega
+        // con spread condicional. Esto es lo que hacía fallar **siempre** el envío a caja.
+        descuento_global_tipo: venta.descuentoGlobalTipo ?? null,
+        descuento_global_valor: venta.descuentoGlobalValor ?? null,
         // El pago lo define el cajero al cobrar: el pedido nace sin forma de pago.
         tipoPago: '',
         forma_pago: '',
@@ -600,7 +606,7 @@ export async function crearVentaPendiente({
         mensaje: (config as Record<string, unknown>).mensajeLegal || '',
         son_letras: numeroALetras(importeTotal),
         turnoId: '',
-        envio: venta.envio,
+        ...(venta.envio ? { envio: venta.envio } : {}),
       }
 
       const docData = {
@@ -629,7 +635,10 @@ export async function crearVentaPendiente({
       }
 
       tx.set(pedidoRef, { [CAMPO_CONTADOR]: numeroPedido, updatedAt: f.toISOString() }, { merge: true })
-      tx.set(doc(db, COL.DOCUMENTOS, docId), docData)
+      // `limpiarUndefined` es la red de seguridad: Firestore rechaza `undefined` y TypeScript no
+      // lo detecta (los campos opcionales compilan igual). Sin esto, un campo que se cuele deja
+      // la venta sin poder enviarse.
+      tx.set(doc(db, COL.DOCUMENTOS, docId), limpiarUndefined(docData))
       return { docId, docData: docData as unknown as DocumentoVenta }
     })
     const { docId, docData } = guardada
@@ -855,7 +864,7 @@ export async function cobrarVentaPendiente({
         })
       }
 
-      tx.update(docRef, {
+      tx.update(docRef, limpiarUndefined({
         estado: 'pagado',
         cajeroId,
         cajero: cajeroNombre,
@@ -900,7 +909,7 @@ export async function cobrarVentaPendiente({
           totalTransferenciaPago: bolsillos.transferencia,
           serie_numero: serieNumeroFinal,
         },
-      })
+      }))
 
       return { success: true, correlativo: serieNumeroFinal }
     })
@@ -949,7 +958,7 @@ export async function cancelarVentaPendiente({
       if (docData.estado !== 'pendiente') return { success: false, error: 'La venta ya no está pendiente' }
 
       const f = new Date()
-      tx.update(docRef, {
+      tx.update(docRef, limpiarUndefined({
         estado: 'cancelado',
         motivoCancelacion: motivo.trim(),
         anulacion: {
@@ -962,7 +971,7 @@ export async function cancelarVentaPendiente({
           tocoStock: false,
         },
         updatedAt: f.toISOString(),
-      })
+      }))
 
       return { success: true }
     })

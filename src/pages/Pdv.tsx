@@ -869,13 +869,26 @@ export function Pdv() {
         venta: {
           total,
           descuentoTotal: descuentosCalc.totalDescuento,
-          descuentoGlobalTipo: descuentoGlobalValor ? descuentoGlobalTipo : undefined,
-          descuentoGlobalValor: parseFloat(descuentoGlobalValor) || undefined,
+          // ⚠️ Nada de `undefined`: Firestore lo rechaza al escribir y TypeScript no avisa (era el
+          // motivo por el que "Enviar a caja" fallaba siempre). Los opcionales van con spread.
+          ...(descuentoGlobalValor ? { descuentoGlobalTipo, descuentoGlobalValor: parseFloat(descuentoGlobalValor) || 0 } : {}),
           cliente_dni: clienteDni || '',
           cliente_nombre: clienteNombre || '',
           cliente_direccion: clienteDireccion || '',
           cajero: nombreUsuario || user?.email || 'sistema',
           usuarioId: user?.uid || '',
+          // Envío a domicilio: mismo formato que la venta directa, para no perder la dirección
+          // ni el costo en un pedido que se cobra después.
+          ...(envio.tipo === 'domicilio' ? {
+            envio: {
+              tipo: 'domicilio' as const,
+              direccion: envio.direccion,
+              referencia: envio.referencia,
+              zonaId: envio.zonaId,
+              costo: envio.costo,
+              notas: envio.notas,
+            },
+          } : {}),
         },
         config: {
           ...cfg,

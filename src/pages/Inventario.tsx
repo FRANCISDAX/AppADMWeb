@@ -24,6 +24,7 @@ import { exportarExcel } from '@/lib/excel'
 import { logActividad } from '@/lib/audit'
 import { registrarCambioPrecio, obtenerHistorialPrecios } from '@/services/historial-precios'
 import { cargarProveedores, type Proveedor } from '@/services/proveedores'
+import { limpiarUndefined } from '@/lib/limpio'
 
 type PresForm = { nombre: string; factor: string; esVenta: boolean; esCompra: boolean }
 type KitItemForm = { productoId: string; cantidad: string }
@@ -610,8 +611,11 @@ export function Inventario() {
       raw.kitItems = validKitItems.length > 0 ? validKitItems : undefined
       if (!raw.kitItems) raw.isKit = undefined
     }
-    const data = raw
-    const dataUpdate: Record<string, unknown> = { ...raw }
+    // ⚠️ Firestore rechaza `undefined` (*"Unsupported field value: undefined"*): los campos
+    // opcionales que quedan vacíos (imagen, kitItems, isKit…) tienen que salir del payload, no
+    // viajar como undefined. `limpiarUndefined` no toca `deleteField()` (es una instancia).
+    const data = limpiarUndefined(raw)
+    const dataUpdate: Record<string, unknown> = { ...data }
     if (editando) {
       if (!form.fechaVencimiento) dataUpdate.fechaVencimiento = deleteField()
       if (!form.isKit) {
