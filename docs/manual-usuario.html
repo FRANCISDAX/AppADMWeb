@@ -106,7 +106,7 @@
   <h1>JorFel</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.0 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.1 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -205,6 +205,7 @@
       <tr><td><span class="badge badge-purple">Factura</span></td><td>Venta a empresas o contribuyentes</td><td>RUC (11 dígitos) obligatorio</td></tr>
     </tbody>
   </table>
+  <p style="font-size:13px; color:#475569;">⚠️ Con el rol <code>VENDEDOR</code> esta sección <strong>no aparece</strong>: la venta se envía a caja como <strong>pedido sin comprobante</strong> y el cajero elige NV, Boleta o Factura al cobrarla (ver sección 3).</p>
 
   <h3>2.6 Datos del cliente</h3>
   <p>Si el comprobante es Boleta o Factura, expande la sección <strong>"Cliente"</strong>:</p>
@@ -270,6 +271,11 @@
     <div class="step"><strong>Imprime el ticket</strong> (si hay impresora conectada).</div>
   </div>
 
+  <div class="tip">
+    <div class="tip-label">💡 Si vendes con el rol VENDEDOR</div>
+    <p>Los pasos cambian: <strong>no eliges comprobante ni forma de pago</strong>. Tocas <strong>"Enviar a caja"</strong> y la venta queda como pedido (<code>PED-000001</code>) esperando que el cajero la cobre, que es cuando se genera el comprobante y se descuenta el stock. Detalle completo en la <strong>sección 3</strong>.</p>
+  </div>
+
   <div class="ejemplo">
     <div class="ejemplo-label">📋 Ejemplo completo</div>
     <p><strong>Cliente:</strong> Juan Pérez compra 3 latas de cerveza (S/ 5.00 c/u = S/ 15.00) y 1 botella de pisco (S/ 35.00). Subtotal: S/ 50.00. Descuento por volumen 3×2 en cervezas: S/ 5.00. Total: S/ 45.00. Paga con S/ 50 en efectivo. Comprobante: Boleta. DNI: 12345678.<br><strong>Resultado:</strong> Vuelto S/ 5.00. Ticket impreso: "B001-000123".</p>
@@ -279,30 +285,44 @@
 <!-- ============ 3. VENDEDOR → CAJERO ============ -->
 <div class="section page-break">
   <div class="section-title"><span class="icon">🤝</span> 3. Flujo Vendedor → Cajero</div>
-  <p>JorFel separa quién vende de quién cobra. Un vendedor de piso puede armar la venta y enviarla a caja, donde un cajero la cobra.</p>
+  <p>JorFel separa quién vende de quién cobra. Un vendedor de piso arma la venta y la envía a caja como <strong>pedido</strong>; el cajero la cobra, y <strong>el comprobante se genera recién en ese momento</strong>.</p>
 
   <h3>3.1 ¿Cómo funciona?</h3>
   <div class="steps">
-    <div class="step"><strong>El vendedor</strong> tiene el rol <code>VENDEDOR</code> y el permiso <code>enviarACaja</code>. En el PDV, en vez del botón "Cobrar", ve <strong>"Enviar a caja"</strong>.</div>
-    <div class="step"><strong>El cajero</strong> tiene el rol <code>CAJERO</code> y ve las ventas pendientes en un panel dentro del PDV. Puede cobrarlas o cancelarlas.</div>
-    <div class="step"><strong>Al cobrar</strong>, el cajero selecciona la forma de pago y el sistema descuenta stock, registra la venta en el turno y emite el comprobante.</div>
+    <div class="step"><strong>El vendedor</strong> tiene el rol <code>VENDEDOR</code> y el permiso <code>enviarACaja</code>. En el PDV, en vez del botón "Cobrar", ve <strong>"Enviar a caja"</strong> y <strong>no elige comprobante</strong> (no sabe si el cliente querrá boleta o factura).</div>
+    <div class="step"><strong>Se crea un pedido</strong> con un código propio: <code>PED-000001</code>. Todavía no es Nota de Venta, Boleta ni Factura: <strong>no tiene serie ni número</strong> y tampoco descuenta stock.</div>
+    <div class="step"><strong>El cajero</strong> (rol <code>CAJERO</code>, permiso <code>verVentasPendientes</code>) ve el pedido en el panel de ventas pendientes, dentro del PDV.</div>
+    <div class="step"><strong>Al cobrar</strong>, el cajero elige el <strong>comprobante</strong> (Nota de Venta, Boleta o Factura) y la <strong>forma de pago</strong>. Recién ahí el sistema asigna la serie y el correlativo, <strong>descuenta el stock</strong>, registra la venta en el turno y emite el comprobante.</div>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">💡 El stock no se aparta</div>
+    <p>Un pedido en espera <strong>no descuenta stock</strong>: el inventario baja cuando el cajero cobra. Por eso, si el pedido se elimina, <strong>no hay nada que devolver</strong> y el inventario queda intacto. ⚠️ La contra es que la unidad sigue disponible para otro vendedor: si alguien más la vende antes de que se cobre, al cobrar el sistema avisa <em>"El stock de X se agotó mientras el pedido esperaba en caja"</em> y no permite cobrar con el inventario mal.</p>
   </div>
 
   <h3>3.2 Panel de ventas pendientes (cajero)</h3>
-  <p>Cuando un cajero abre el PDV, si tiene permiso <code>verVentasPendientes</code>, ve un panel con las ventas enviadas por los vendedores:</p>
+  <p>Cuando un cajero abre el PDV, si tiene permiso <code>verVentasPendientes</code>, ve un panel con los pedidos enviados por los vendedores:</p>
   <ul style="list-style:none; padding:0; margin: 8px 0;">
-    <li style="padding:3px 0; font-size:13px; color:#475569;">• Cada venta muestra: <strong>serie/número</strong>, <strong>vendedor</strong>, <strong>cantidad de items</strong>, <strong>total</strong> y <strong>tiempo transcurrido</strong>.</li>
-    <li style="padding:3px 0; font-size:13px; color:#475569;">• Botón <strong>"Cobrar"</strong>: abre el flujo de cobro con turno y forma de pago.</li>
-    <li style="padding:3px 0; font-size:13px; color:#475569;">• Botón <strong>🗑</strong>: cancela la venta con motivo obligatorio.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Cada pedido muestra: <strong>código (PED-…)</strong>, <strong>vendedor</strong>, <strong>cantidad de items</strong>, <strong>total</strong> y <strong>el tiempo que lleva esperando</strong>.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Botón <strong>"Cobrar"</strong>: abre el cobro con <strong>comprobante</strong> (NV / Boleta / Factura), <strong>forma de pago</strong> —con "N° de operación" si es Yape, Plin o Transferencia—, "Recibí" y vuelto cuando es efectivo. Aplica las mismas validaciones del PDV: Factura exige RUC de 11 dígitos y Boleta sobre el tope exige DNI de 8.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Botón <strong>"Eliminar"</strong>: descarta el pedido con <strong>motivo obligatorio</strong>. No anula ningún comprobante (todavía no existe) y <strong>no toca el stock</strong>.</li>
     <li style="padding:3px 0; font-size:13px; color:#475569;">• Se actualiza cada 30 segundos automáticamente.</li>
   </ul>
 
   <div class="ejemplo">
     <div class="ejemplo-label">📋 Ejemplo real</div>
-    <p><strong>10:30 AM</strong> — Carlos (vendedor) atiende a la señora Rosa. Arma la venta: 2 pañales (S/ 25 c/u) + 1 toallitas (S/ 8). Total S/ 58. Toca "Enviar a caja".<br><strong>10:35 AM</strong> — Luis (cajero) ve "NV-B001-000045 · Carlos · 3 items · S/ 58.00 · hace 5m" en su panel. Toca "Cobrar". Rosa paga con S/ 60 en efectivo. Luis cobra, imprime ticket y da S/ 2 de vuelto.</p>
+    <p><strong>10:30 AM</strong> — Carlos (vendedor) atiende a la señora Rosa. Arma la venta: 2 pañales (S/ 25 c/u) + 1 toallitas (S/ 8). Total S/ 58. Toca "Enviar a caja" → queda el pedido <strong>PED-000001</strong> (el stock todavía <strong>no</strong> baja).<br><strong>10:35 AM</strong> — Luis (cajero) ve "PED-000001 · Carlos · 3 items · S/ 58.00 · hace 5m" en su panel. Toca "Cobrar", elige <strong>Boleta</strong> y <strong>Efectivo</strong>. Rosa paga con S/ 60. El sistema emite <strong>B001-000062</strong>, descuenta el stock y devuelve S/ 2 de vuelto.</p>
   </div>
 
-  <h3>3.3 Cajas</h3>
+  <h3>3.3 Los nombres en el papel</h3>
+  <p>El comprobante y el arqueo dejan claro <strong>quién vendió y quién cobró</strong>:</p>
+  <ul style="list-style:none; padding:0; margin: 8px 0;">
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Vendedor y cajero distintos: <code>Vendedor: Carlos · Cajero: Luis</code>.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Una sola persona (vende y cobra): <code>Cajero: Luis</code> — el nombre <strong>no se repite</strong>.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• En el arqueo, cada comprobante agrega <code>· Vend: Carlos</code> cuando el vendedor no es el cajero del turno.</li>
+  </ul>
+
+  <h3>3.4 Cajas</h3>
   <p>Cada caja define sus propias series de comprobante. En <code>Configuración → Cajas</code> el admin puede crear cajas con series distintas:</p>
   <table>
     <thead><tr><th>Caja</th><th>Serie Boleta</th><th>Serie Factura</th><th>Serie NV</th></tr></thead>
@@ -429,12 +449,15 @@
   </ul>
 
   <h3>6.3 Comprobantes del turno</h3>
-  <p>Debajo del resumen ves todos los comprobantes emitidos: serie/número, cliente, total, tipo de pago. Los comprobantes anulados aparecen tachados.</p>
+  <p>Debajo del resumen ves todos los comprobantes emitidos: serie/número, cliente, total, tipo de pago. Los comprobantes anulados aparecen tachados. Si un comprobante lo armó un <strong>vendedor</strong> y lo cobró otra persona, la línea indica <code>· Vend: nombre</code>.</p>
 
-  <h3>6.4 Envíos pendientes</h3>
+  <h3>6.4 Pedidos en espera</h3>
+  <p>Las ventas que los vendedores enviaron a caja y todavía no se cobraron <strong>no forman parte del turno</strong>: aparecen en el panel de <strong>Ventas Pendientes</strong> del PDV (sección 3). Solo cuando el cajero las cobra entran al turno con su comprobante.</p>
+
+  <h3>6.5 Envíos pendientes</h3>
   <p>Si hay envíos a domicilio, aparecen en esta sección con estados: <span class="badge badge-yellow">Pendiente</span> → <span class="badge badge-blue">En camino</span> → <span class="badge badge-green">Entregado</span>. Puedes cambiar el estado desde aquí.</p>
 
-  <h3>6.5 Cerrar turno</h3>
+  <h3>6.6 Cerrar turno</h3>
   <div class="steps">
     <div class="step"><strong>Toca "Cerrar Turno"</strong>.</div>
     <div class="step"><strong>Si conteo ciego está activado</strong>: escribes el conteo sin ver el esperado. El sistema calcula la diferencia después.</div>
@@ -472,7 +495,7 @@
     <li style="padding:3px 0; font-size:13px; color:#475569;">• Efectivo (cajón) con desglose de origen: ventas del día, cobranza de crédito, notas.</li>
     <li style="padding:3px 0; font-size:13px; color:#475569;">• Transferencia y conciliación por billetera (sistema vs. declarado).</li>
     <li style="padding:3px 0; font-size:13px; color:#475569;">• Gastos en efectivo con detalle.</li>
-    <li style="padding:3px 0; font-size:13px; color:#475569;">• Comprobantes emitidos con vendedor visible.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Comprobantes emitidos, con el vendedor visible cuando no es el cajero del turno.</li>
   </ul>
 
   <h3>7.4 Arqueo inteligente</h3>
@@ -715,9 +738,10 @@
 
   <h3>15.5 Anulación de ventas</h3>
   <p>Desde <strong>Reportes</strong>, selecciona un documento y toca "Anular". Requiere motivo. Solo se pueden anular ventas del mismo día. El stock se restaura automáticamente.</p>
+  <p style="font-size:13px; color:#475569;">⚠️ No confundir con <strong>eliminar un pedido en espera</strong> (sección 3.2): ahí todavía no hay comprobante que anular y el stock nunca se descontó, así que no se restaura nada.</p>
 
   <h3>15.6 Impresión de tickets</h3>
-  <p>Si hay una impresora térmica configurada (<code>Configuración → Impresora</code>), después de cada venta aparece el botón "Imprimir". Soporta tickets de 80mm con logo, datos de empresa, items, totales y QR.</p>
+  <p>Si hay una impresora térmica configurada (<code>Configuración → Impresora</code>), después de cada venta aparece el botón "Imprimir". Soporta tickets de 80mm con logo, datos de empresa, items, totales y QR. Al pie el ticket indica <strong>quién vendió y quién cobró</strong> (<code>Vendedor: … · Cajero: …</code>), o solo el cajero cuando es la misma persona.</p>
 
   <h3>15.7 Compartir comprobante</h3>
   <p>Al completar una venta, puedes compartir el comprobante por WhatsApp o copiar el resumen al portapapeles.</p>
@@ -733,6 +757,7 @@
     <thead><tr><th>Término</th><th>Significado</th></tr></thead>
     <tbody>
       <tr><td><strong>NV</strong></td><td>Nota de Venta — comprobante interno sin envío a SUNAT</td></tr>
+      <tr><td><strong>Pedido (PED-…)</strong></td><td>Venta armada por un vendedor y enviada a caja, todavía sin comprobante: el cajero decide NV, Boleta o Factura al cobrarla</td></tr>
       <tr><td><strong>NC</strong></td><td>Nota de Crédito — devuelve dinero al cliente (devolución)</td></tr>
       <tr><td><strong>ND</strong></td><td>Nota de Débito — cobra dinero adicional al cliente</td></tr>
       <tr><td><strong>PWA</strong></td><td>Progressive Web App — app web instalable sin Play Store</td></tr>
@@ -765,7 +790,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.0</p>
+  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.1</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>
