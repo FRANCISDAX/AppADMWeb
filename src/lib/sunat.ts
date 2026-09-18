@@ -1,6 +1,6 @@
 // Configuración de conexión a la API SUNAT (SOLO helpers, nunca se llama a la API).
 // El envío real lo hace el administrador desde la app móvil.
-import { itemsConDescuento, valorUnitarioSunat } from './sunat-importes.ts'
+import { afectacionDe, itemsConDescuento, valorUnitarioSunat } from './sunat-importes.ts'
 
 export function construirUrlApiSunat(base: string, tipo: 'invoices' | 'notes'): string {
   const limpia = String(base || '').trim().replace(/\/+$/, '')
@@ -41,7 +41,7 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
   // Y en las líneas gravadas ese valor va **sin IGV** (el precio de la app incluye
   // IGV): ver `valorUnitarioSunat`.
   const items = itemsConDescuento(venta.items || [], venta.descuentoTotal || 0).map((it: any) => {
-    const af = it.tipoAfectacion || '10'
+    const af = afectacionDe(it, { regionExonerada: config.regionExonerada })
     const valor = valorUnitarioSunat(it.precioVenta, af)
     const importe = Math.round(valor * (it.cantidad ?? 1) * 100) / 100
     if (af.startsWith('10') || af.startsWith('11')) opGravadas += importe
@@ -104,7 +104,7 @@ export function construirPayloadNota(doc: any, config: Record<string, any>) {
   // Igual que en el comprobante: la nota declara los importes efectivamente
   // cobrados (descuento ya repartido) y el valor sin IGV en las líneas gravadas.
   const items = itemsConDescuento(venta.items || [], venta.descuentoTotal || 0).map((it: any) => {
-    const af = it.tipoAfectacion || '10'
+    const af = afectacionDe(it, { regionExonerada: config.regionExonerada })
     const valor = Math.abs(valorUnitarioSunat(it.precio_unitario ?? it.precioVenta ?? 0, af))
     const importe = Math.abs(Math.round(valor * (it.cantidad ?? 1) * 100) / 100)
     if (af.startsWith('10') || af.startsWith('11')) opGravadas += importe

@@ -1,7 +1,7 @@
 import QRCode from 'qrcode'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { etiquetaPago, formaPagoLabel } from '@/lib/pagos'
-import { itemsConDescuento } from '@/lib/sunat-importes'
+import { afectacionDe, itemsConDescuento } from '@/lib/sunat-importes'
 import { esc } from '@/lib/ui-utils'
 import { desglosarTurno, lineasDeOrigen, type ConciliacionMedios, type DesgloseTurno, type ItemTurno } from '@/lib/arqueo'
 import { lineasPersonal, personalDeVenta } from '@/lib/personal'
@@ -22,13 +22,13 @@ function obtenerInfoAfectacion(codigo: string) {
   return { tasa: 0, tipo: 'inafecto' }
 }
 
-export function calcularTotales(items: any[]) {
+export function calcularTotales(items: any[], opts?: { regionExonerada?: boolean }) {
   let opGravadas = 0
   let opExoneradas = 0
   let opInafectas = 0
   let igvTotal = 0
   for (const it of items || []) {
-    const cod = it.tipoAfectacionEfectivo || it.tipoAfectacion || '10'
+    const cod = afectacionDe(it, opts)
     const info = obtenerInfoAfectacion(cod)
     const subtotal = (it.precioVenta || it.precio_unitario || 0) * (it.cantidad || it.quantity || 1)
     if (info.tasa > 0) {
@@ -63,7 +63,7 @@ function construirQRData(venta: any, correlativo: any, config: Record<string, an
   const tipoComprobante = tipoDoc === 'FACTURA' ? '01' : tipoDoc === 'NC' ? '07' : tipoDoc === 'ND' ? '08' : '03'
   const serie = sunat?.serie || (tipoDoc === 'FACTURA' ? 'F001' : tipoDoc === 'BOLETA' ? 'B001' : serieNota(config, venta, tipoDoc))
   const numero = sunat?.numero || correlativo
-  const totales = calcularTotales(venta.items || [])
+  const totales = calcularTotales(venta.items || [], { regionExonerada: config?.regionExonerada })
   const fecha = new Date(venta.fecha || venta.createdAt)
   const fechaStr = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
   return [config.ruc || '', tipoComprobante, serie, String(numero), Math.abs(totales.igv).toFixed(2), Math.abs(totales.total).toFixed(2), fechaStr, tipoDocCliente, cliDni || '00000000', sunat?.hash || ''].join('|')
@@ -154,7 +154,7 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   // descuento (promo de volumen, cliente o global), se reparte por línea y
   // el comprobante cuadra con lo que pagó el cliente. Sin esto la tabla de
   // totales mostraba el importe de lista y no sumaba con el TOTAL.
-  const totalesCalc = calcularTotales(itemsConDescuento(venta.items || [], venta.descuentoTotal || 0))
+  const totalesCalc = calcularTotales(itemsConDescuento(venta.items || [], venta.descuentoTotal || 0), { regionExonerada: config?.regionExonerada })
   const descuentoDoc = Number(venta.descuentoTotal || 0)
   const filasDescuento = descuentoDoc > 0
     ? `<tr><td class="td-r tot-l">Descuento</td><td class="td-r tot-v">- S/ ${descuentoDoc.toFixed(2)}</td></tr>`

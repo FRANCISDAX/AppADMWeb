@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import {
   IGV_RATE,
+  afectacionDe,
   esGravado,
   importeBrutoDe,
   itemsConDescuento,
@@ -147,4 +148,34 @@ test('con descuento: primero se reparte el descuento y después se despeja el IG
   const total = Math.round(valor * 1 * (1 + IGV_RATE) * 100) / 100
   assert.equal(base, 67.8)
   assert.equal(total, 80, 'lo cobrado, al céntimo')
+})
+
+// ─── Afectación declarada (el bug de los pedidos) ─────────────────────────────
+
+test('manda la afectación del propio item', () => {
+  assert.equal(afectacionDe({ tipoAfectacion: '20' }), '20')
+  assert.equal(afectacionDe({ tipoAfectacion: '10' }), '10')
+  assert.equal(afectacionDe({ tipoAfectacionEfectivo: '30', tipoAfectacion: '10' }), '30')
+})
+
+test('un item SIN afectación cae en el default del negocio (región exonerada)', () => {
+  // ⚠️ Era el bug: los items del pedido viajaban sin `tipoAfectacion`, así que un producto
+  // exonerado se declaraba GRAVADO y el comprobante sumaba 18% de IGV que nadie cobró.
+  assert.equal(afectacionDe({}, { regionExonerada: true }), '20')
+  assert.equal(afectacionDe(null, { regionExonerada: true }), '20')
+  assert.equal(afectacionDe(undefined, { regionExonerada: true }), '20')
+})
+
+test('sin región exonerada, lo que no trae afectación es gravado (comportamiento histórico)', () => {
+  assert.equal(afectacionDe({}), '10')
+  assert.equal(afectacionDe({}, { regionExonerada: false }), '10')
+})
+
+test('la afectación propia gana sobre la config: la región exonerada NO es un override', () => {
+  assert.equal(afectacionDe({ tipoAfectacion: '10' }, { regionExonerada: true }), '10')
+})
+
+test('una afectación vacía o en blanco se trata como ausente', () => {
+  assert.equal(afectacionDe({ tipoAfectacion: '' }, { regionExonerada: true }), '20')
+  assert.equal(afectacionDe({ tipoAfectacion: '   ' }, { regionExonerada: true }), '20')
 })

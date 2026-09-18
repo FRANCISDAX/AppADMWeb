@@ -15,6 +15,7 @@ import { useAuth } from '@/context/auth'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos, type Producto } from '@/hooks/use-productos'
 import { AFECTACION_POR_DEFECTO, TIPO_AFECTACION } from '@/constants/tributario'
+import { AFECTACION_EXONERADO } from '@/lib/sunat-importes'
 import { db } from '@/lib/firebase'
 import { useCategorias } from '@/hooks/use-categorias'
 import { categoriasParaFiltros } from '@/services/categorias'
@@ -250,7 +251,9 @@ export function Inventario() {
   function abrirNuevo() {
     if (!puedeCrear) return setToast('🚫 No tienes permiso para crear productos')
     setEditando(null)
-    setForm(VACIO)
+    // La afectación es **de cada producto**: el default del formulario sigue al negocio (en una
+    // región exonerada un producto nuevo no puede nacer gravado y declarar 18% de IGV).
+    setForm({ ...VACIO, tipoAfectacion: cfg.regionExonerada ? AFECTACION_EXONERADO : AFECTACION_POR_DEFECTO })
     setModal(true)
   }
   function abrirEditar(p: Producto) {

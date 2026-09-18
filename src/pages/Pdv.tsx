@@ -43,10 +43,14 @@ import {
 } from '@/lib/pagos'
 import { CreditoPanel } from '@/components/CreditoPanel'
 import { buscarTurnoAbierto } from '@/services/turnos'
-import { registrarVenta, crearVentaPendiente, cobrarVentaPendiente, obtenerDocumento } from '@/services/ventas'
+import { registrarVenta, crearVentaPendiente, cobrarVentaPendiente, obtenerDocumento, type VentaItem } from '@/services/ventas'
 import { abrirPDFComprobante } from '@/lib/pdf'
 import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento } from '@/lib/ui-utils'
+import { AFECTACION_EXONERADO } from '@/lib/sunat-importes'
+import { redondear2 } from '@/lib/dinero'
+import { CATEGORIA_MANUAL } from '@/lib/categorias'
+import { AFECTACION_POR_DEFECTO } from '@/constants/tributario'
 import { listarVentasPausadas, guardarVentaPausada, eliminarVentaPausada, type VentaPausada } from '@/lib/ventas-pausadas'
 import { EscanearCodigo } from '@/components/EscanearCodigo'
 import { broadcastCart, closeSession } from '@/lib/customer-display'
@@ -976,6 +980,12 @@ export function Pdv() {
 
     setCobrando(true)
     try {
+      // ⚠️ Los items se guardan con el **formato de documento** (el mismo que arma `registrarVenta`),
+      // no con el del carrito: `cantidad` en unidades base, `precioVenta` por unidad base,
+      // `subtotal`, `categoria` y —sobre todo— **`tipoAfectacion`**. Sin esto, el pedido se declaraba
+      // GRAVADO ('10') aunque el producto fuera exonerado ('20') y el comprobante sumaba 18% de IGV
+      // que nadie cobró (y los reportes por categoría lo mandaban a "Sin categoría").
+      const afectacionPorDefecto = cfg.regionExonerada ? AFECTACION_EXONERADO : AFECTACION_POR_DEFECTO
       const invItems = Object.entries(cart).map(([id, qty]) => {
         const p = productos.find((x) => x.id === id)
         if (!p) return null
@@ -983,18 +993,43 @@ export function Pdv() {
         const pres = presId ? p.presentaciones?.find((pr) => pr.id === presId) : null
         const factor = pres?.factor ?? 1
         const presNombre = pres?.nombre ?? 'Unidad'
-        const base = { id, nombre: p.nombre || '', quantity: qty * factor, precioVenta: precioFinal(p) * factor, presentacionNombre: presNombre, presentacionId: pres?.id ?? 'unidad', factorConversion: factor, usarPrecioEspecial: (usarPromo[id] ?? true) && tienePromo(p) }
+        const precioBase = precioFinal(p)
+        const unidadesBase = qty * factor
+        const base = {
+          id,
+          nombre: p.nombre || '',
+          // El carrito usa `quantity`; el documento, `cantidad`. Se mandan los dos iguales.
+          quantity: unidadesBase,
+          cantidad: unidadesBase,
+          cantidadEnUnidadBase: unidadesBase,
+          precioVenta: precioBase,
+          subtotal: redondear2(precioBase * unidadesBase),
+          unidad: presNombre,
+          presentacionNombre: presNombre,
+          presentacionId: pres?.id ?? 'unidad',
+          factorConversion: factor,
+          categoria: p.categoria || '',
+          tipoAfectacion: p.tipoAfectacion || afectacionPorDefecto,
+          usarPrecioEspecial: (usarPromo[id] ?? true) && tienePromo(p),
+        }
         if (p.isKit && p.kitItems?.length) return { ...base, kitItems: p.kitItems }
         return base
-      }).filter(Boolean) as { id: string; nombre: string; quantity: number; precioVenta: number; presentacionNombre: string; presentacionId: string; factorConversion: number; usarPrecioEspecial: boolean; kitItems?: { productoId: string; cantidad: number }[] }[]
+      }).filter(Boolean) as VentaItem[]
       const manItems = Object.entries(manualItems).map(([id, it]) => ({
         id,
         nombre: it.nombre,
         quantity: it.qty,
+        cantidad: it.qty,
+        cantidadEnUnidadBase: it.qty,
         precioVenta: it.precio,
+        subtotal: redondear2(it.precio * it.qty),
+        unidad: 'Unidad',
         presentacionNombre: 'Unidad',
         presentacionId: 'unidad',
         factorConversion: 1,
+        // Los items manuales se declaran con la afectación configurada (Configuración → SUNAT).
+        categoria: CATEGORIA_MANUAL,
+        tipoAfectacion: String(cfg.tipoAfectacionManual || afectacionPorDefecto),
         usarPrecioEspecial: false,
         manual: true,
       }))

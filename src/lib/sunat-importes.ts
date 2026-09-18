@@ -34,6 +34,31 @@ export type ItemVenta = {
 /** Cuántos decimales se le mandan al backend en el precio unitario. */
 const DECIMALES_PRECIO = 6
 
+export const AFECTACION_GRAVADO = '10'
+export const AFECTACION_EXONERADO = '20'
+
+/**
+ * Afectación con la que se declara un item.
+ *
+ * 🔑 **Manda la afectación del propio item** (la del producto, o `config.tipoAfectacionManual` en
+ * los items manuales). La config **Región exonerada de IGV** (`config.regionExonerada`) es el
+ * **default para lo que no trae afectación**, no un override: en una región exonerada un item sin
+ * dato tiene que declararse exonerado (`'20'`), no gravado.
+ *
+ * ⚠️ **Este default es donde se rompió el flujo de pedidos** (17/09/2026): los items del pedido se
+ * guardaban **sin `tipoAfectacion`**, así que un producto exonerado (`'20'`) se declaraba
+ * **gravado** (`'10'`) y el comprobante agregaba 18% de IGV que nadie cobró. El arreglo de fondo es
+ * que el pedido guarde la afectación (ver `enviarACaja`); esto es la red de seguridad.
+ */
+export function afectacionDe(
+  item: { tipoAfectacion?: unknown; tipoAfectacionEfectivo?: unknown } | null | undefined,
+  opts?: { regionExonerada?: boolean },
+): string {
+  const propia = String(item?.tipoAfectacionEfectivo || item?.tipoAfectacion || '').trim()
+  if (propia) return propia
+  return opts?.regionExonerada ? AFECTACION_EXONERADO : AFECTACION_GRAVADO
+}
+
 /** Cantidad de unidades de la línea (el web la guarda en `cantidad`). */
 export function cantidadDe(item: ItemVenta): number {
   const n = Number(item?.cantidad ?? item?.quantity ?? 0)
