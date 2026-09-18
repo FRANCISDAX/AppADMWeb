@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { obtenerSeriesOcupadas } from '@/services/usuarios'
 import { guardarPromocionVolumen, eliminarPromocionVolumen, listarPromocionesVolumen, type PromocionVolumen } from '@/services/promociones-volumen'
 import { cargarCajas, guardarCaja, eliminarCaja, CAJA_POR_DEFECTO, type Caja } from '@/services/cajas'
+import { moverPedidosDeCaja } from '@/services/ventas'
 
 const TABS = [
   { id: 'empresa', label: 'Empresa', icon: Building2 },
@@ -959,10 +960,13 @@ function PromocionesTab() {
 }
 
 function CajasTab() {
+  const { toast, confirm } = useNotifications()
   const [cajas, setCajas] = React.useState<Caja[]>([])
   const [cargando, setCargando] = React.useState(true)
   const [editando, setEditando] = React.useState<Caja | null>(null)
   const [form, setForm] = React.useState<Caja>(CAJA_POR_DEFECTO)
+  const [moviendo, setMoviendo] = React.useState<string | null>(null)
+  const [destino, setDestino] = React.useState('')
 
   React.useEffect(() => {
     cargarCajas().then(setCajas).finally(() => setCargando(false))
@@ -988,9 +992,37 @@ function CajasTab() {
   }
 
   async function eliminarC(id: string) {
-    if (!confirm('¿Eliminar esta caja?')) return
-    const ok = await eliminarCaja(id)
-    if (ok) setCajas((prev) => prev.filter((c) => c.id !== id))
+    // ⚠️ `confirm` acá es el del sistema de notificaciones (async): el `confirm` nativo del
+    // navegador quedó tapado por el destructuring y devolvía una promesa siempre "verdadera"
+    // (borraba sin preguntar).
+    const ok = await confirm({ title: '¿Eliminar esta caja?', message: 'No se puede deshacer.', okText: 'Eliminar' })
+    if (!ok) return
+    const borrado = await eliminarCaja(id)
+    if (borrado) setCajas((prev) => prev.filter((c) => c.id !== id))
+  }
+
+  /**
+   * Transfiere los pedidos abiertos de una caja a otra. Caso típico: una caja deja de operar y sus
+   * vendedores y su cajero pasan a la otra — los pedidos que ya estaban esperando tienen que
+   * seguirlos, o quedan varados sin poder cobrarse.
+   */
+  async function moverPedidos(c: Caja) {
+    if (!c.id || !destino) return
+    const destinoNombre = cajas.find((x) => x.id === destino)?.nombre || destino
+    const ok = await confirm({
+      title: 'Transferir pedidos abiertos',
+      message: `Los pedidos que están esperando cobro en "${c.nombre}" pasan a "${destinoNombre}". Las series del comprobante las define la caja que cobra, así que no se toca ningún correlativo.`,
+      okText: 'Transferir',
+    })
+    if (!ok) return
+    const r = await moverPedidosDeCaja({ origen: c.id, destino, usuario: 'configuración' })
+    if (r.success) {
+      toast(r.movidos > 0 ? `✅ ${r.movidos} pedido(s) transferidos a ${destinoNombre}` : 'No había pedidos abiertos en esa caja')
+      setMoviendo(null)
+      setDestino('')
+    } else {
+      toast(`❌ ${r.error || 'No se pudieron transferir'}`, 'error')
+    }
   }
 
   if (cargando) {
@@ -1043,22 +1075,46 @@ function CajasTab() {
       ) : (
         <div className="space-y-2">
           {cajas.map((c) => (
-            <div key={c.id} className={cn('flex items-center gap-3 rounded-xl border bg-card p-3', !c.activo && 'opacity-50')}>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold">{c.nombre}</span>
-                  {!c.activo && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">Inactiva</span>}
+            <div key={c.id} className={cn('rounded-xl border bg-card p-3', !c.activo && 'opacity-50')}>
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold">{c.nombre}</span>
+                    {!c.activo && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">Inactiva</span>}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {c.serieBoleta && `B: ${c.serieBoleta}`}
+                    {c.serieFactura && ` · F: ${c.serieFactura}`}
+                    {c.seriePrefijo && ` · NV: ${c.seriePrefijo}`}
+                  </p>
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  {c.serieBoleta && `B: ${c.serieBoleta}`}
-                  {c.serieFactura && ` · F: ${c.serieFactura}`}
-                  {c.seriePrefijo && ` · NV: ${c.seriePrefijo}`}
-                </p>
+                {cajas.length > 1 && (
+                  <button onClick={() => { setMoviendo(moviendo === c.id ? null : (c.id || null)); setDestino('') }} className="text-xs font-semibold text-primary hover:underline cursor-pointer">
+                    Transferir pedidos
+                  </button>
+                )}
+                <button onClick={() => editar(c)} className="text-xs font-semibold text-primary hover:underline cursor-pointer">Editar</button>
+                <button onClick={() => c.id && eliminarC(c.id)} className="text-destructive hover:text-destructive/80 cursor-pointer" aria-label="Eliminar">
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <button onClick={() => editar(c)} className="text-xs font-semibold text-primary hover:underline cursor-pointer">Editar</button>
-              <button onClick={() => c.id && eliminarC(c.id)} className="text-destructive hover:text-destructive/80 cursor-pointer" aria-label="Eliminar">
-                <X className="h-4 w-4" />
-              </button>
+
+              {moviendo === c.id && (
+                <div className="mt-2 space-y-2 rounded-lg border bg-muted/30 p-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    Los pedidos <strong>abiertos</strong> de esta caja pasan a otra. No toca series ni correlativos: el comprobante se numera con la caja que cobra.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select value={destino} onChange={(e) => setDestino(e.target.value)} className="h-8 min-h-[32px] flex-1 rounded-lg border border-input bg-background px-2 text-xs">
+                      <option value="">Mover a…</option>
+                      {cajas.filter((x) => x.id !== c.id).map((x) => (
+                        <option key={x.id} value={x.id}>{x.nombre}</option>
+                      ))}
+                    </select>
+                    <Button size="sm" onClick={() => moverPedidos(c)} disabled={!destino}>Transferir</Button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

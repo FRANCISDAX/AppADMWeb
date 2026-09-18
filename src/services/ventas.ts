@@ -1,4 +1,4 @@
-import { collection, doc, increment, getDoc, getDocs, query, runTransaction, updateDoc, where, limit } from 'firebase/firestore'
+import { collection, doc, increment, getDoc, getDocs, query, runTransaction, updateDoc, where, limit, writeBatch } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
@@ -658,31 +658,72 @@ export async function crearVentaPendiente({
 }
 
 /**
- * Pedidos esperando cobro.
+ * Pedidos esperando cobro (**todos**, sin filtrar por caja).
  *
- * **Una sola consulta** (`estado = pendiente`) y el filtro por caja se resuelve acá en JS, a
- * propósito: la lista **no puede quedar ciega por una configuración de caja**. Antes filtraba en
- * Firestore por la caja del cajero, así que se perdían pedidos en los dos casos reales que ya
- * pasaron: cajero **sin caja** (veía todo vacío) y vendedor **sin caja** (el pedido nacía con
- * `cajaId: ''` y ningún cajero lo veía, aunque tuviera la suya). Son ≤50 pedidos: el costo es nulo
- * y a cambio la lista siempre muestra el trabajo pendiente.
- *
- * @param cajaId Caja del usuario. Con caja: los de su caja **y** los que no tienen caja (van a
- *   cualquiera). Sin caja: todos.
+ * El reparto por caja lo decide **`repartirPedidos()`** (`lib/pedidos.ts`, puro y testeado), no la
+ * consulta: filtrar en Firestore dejó la lista ciega dos veces (un cajero **sin caja** veía todo
+ * vacío, y un pedido de un vendedor **sin** caja no lo veía nadie aunque el cajero tuviera la
+ * suya). Acá se traen los ≤50 pendientes y quien consulta decide qué atiende y qué rescata.
  */
-export async function obtenerVentasPendientes(cajaId?: string): Promise<DocumentoVenta[]> {
+export async function obtenerVentasPendientes(): Promise<DocumentoVenta[]> {
   try {
     const snap = await getDocs(
       query(collection(db, COL.DOCUMENTOS), where('estado', '==', 'pendiente'), limit(50)),
     )
-    const lista = snap.docs
+    return snap.docs
       .map((d) => ({ id: d.id, ...d.data() }) as unknown as DocumentoVenta)
       .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
-    if (!cajaId) return lista
-    return lista.filter((v) => !v.cajaId || v.cajaId === cajaId)
   } catch (e) {
     console.error('❌ Error obteniendo ventas pendientes:', e)
     return []
+  }
+}
+
+/**
+ * **Transfiere los pedidos abiertos** de una caja a otra (caso: la caja 2 se cae y sus vendedores y
+ * su cajero pasan a la caja 1). Se usa desde `Configuración → Cajas`.
+ *
+ * ⚠️ **Es seguro**: el `cajaId` de un pedido es solo la etiqueta de **ruteo** — las series fiscales
+ * las pone la caja que cobra (`cobrarVentaPendiente`), así que mover el pedido no toca series,
+ * correlativos ni plata. Devuelve **cuántos movió de verdad** (nunca 0 por un fallo parcial).
+ */
+export async function moverPedidosDeCaja({
+  origen,
+  destino,
+  usuario,
+}: {
+  origen: string
+  destino: string
+  usuario?: string
+}): Promise<{ success: boolean; movidos: number; error?: string }> {
+  try {
+    if (!origen || !destino) return { success: false, movidos: 0, error: 'Elegí las dos cajas' }
+    if (origen === destino) return { success: false, movidos: 0, error: 'Las cajas son la misma' }
+
+    const snap = await getDocs(
+      query(collection(db, COL.DOCUMENTOS), where('estado', '==', 'pendiente'), limit(500)),
+    )
+    const mover = snap.docs.filter((d) => (d.data().cajaId || '') === origen)
+    if (mover.length === 0) return { success: true, movidos: 0 }
+
+    for (let i = 0; i < mover.length; i += 500) {
+      const lote = writeBatch(db)
+      for (const d of mover.slice(i, i + 500)) {
+        lote.update(d.ref, { cajaId: destino, updatedAt: new Date().toISOString() })
+      }
+      await lote.commit()
+    }
+
+    logActividad({
+      accion: 'mover_pedidos_caja',
+      entidad: COL.DOCUMENTOS,
+      entidadId: origen,
+      detalle: { origen, destino, movidos: mover.length, usuario },
+    })
+    return { success: true, movidos: mover.length }
+  } catch (e) {
+    console.error('❌ Error moviendo pedidos de caja:', e)
+    return { success: false, movidos: 0, error: (e as Error).message }
   }
 }
 
@@ -704,6 +745,7 @@ export async function cobrarVentaPendiente({
   cajeroNombre,
   tipoDoc,
   config,
+  cajaId,
 }: {
   documentoId: string
   turnoId: string
@@ -715,6 +757,8 @@ export async function cobrarVentaPendiente({
   cajeroNombre: string
   tipoDoc?: 'NV' | 'BOLETA' | 'FACTURA'
   config?: Config
+  /** Caja **que emite** (la del cajero). Queda registrada en el documento cobrado. */
+  cajaId?: string
 }): Promise<{ success: boolean; error?: string; correlativo?: string }> {
   try {
     // 🔑 **El comprobante se numera ACÁ, recién al cobrar**: el pedido nace sin serie ni
@@ -875,6 +919,9 @@ export async function cobrarVentaPendiente({
         estado: 'pagado',
         cajeroId,
         cajero: cajeroNombre,
+        // La caja que **emitió** el comprobante es la del cajero, no la del pedido: si el pedido
+        // se rescató desde otra caja (la suya estaba caída), el dato tiene que decir la verdad.
+        ...(cajaId ? { cajaId } : {}),
         fechaCobro: f.toISOString(),
         turnoId: turnoId || '',
         tipo: tipoDocFinal,
