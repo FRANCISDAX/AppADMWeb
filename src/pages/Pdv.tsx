@@ -50,7 +50,7 @@ import { fmt, useToast, estadoVencimiento } from '@/lib/ui-utils'
 import { AFECTACION_EXONERADO } from '@/lib/sunat-importes'
 import { redondear2 } from '@/lib/dinero'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
-import { AFECTACION_POR_DEFECTO } from '@/constants/tributario'
+import { AFECTACION_POR_DEFECTO, TIPO_AFECTACION } from '@/constants/tributario'
 import { listarVentasPausadas, guardarVentaPausada, eliminarVentaPausada, type VentaPausada } from '@/lib/ventas-pausadas'
 import { EscanearCodigo } from '@/components/EscanearCodigo'
 import { broadcastCart, closeSession } from '@/lib/customer-display'
@@ -115,7 +115,7 @@ export function Pdv() {
   const [ventaOk, setVentaOk] = React.useState<{ correlativo: string; total: number; vuelto: number; documento: Record<string, unknown> } | null>(null)
   const [imprimiendo, setImprimiendo] = React.useState(false)
   const [manualOpen, setManualOpen] = React.useState(false)
-  const [manualItems, setManualItems] = React.useState<Record<string, { nombre: string; precio: number; qty: number }>>({})
+  const [manualItems, setManualItems] = React.useState<Record<string, { nombre: string; precio: number; qty: number; afectacion?: string }>>({})
   const [pausadasAbierto, setPausadasAbierto] = React.useState(false)
   const [pausadasLista, setPausadasLista] = React.useState<VentaPausada[]>([])
   const [scannerOpen, setScannerOpen] = React.useState(false)
@@ -892,6 +892,8 @@ export function Pdv() {
         presentacionNombre: 'Unidad',
         presentacionId: 'unidad',
         factorConversion: 1,
+        // El embalaje se declara con SU afectación (por defecto, la del negocio).
+        tipoAfectacion: it.afectacion || cfg.tipoAfectacionManual || AFECTACION_POR_DEFECTO,
         usarPrecioEspecial: false,
         manual: true,
       }))
@@ -1027,9 +1029,9 @@ export function Pdv() {
         presentacionNombre: 'Unidad',
         presentacionId: 'unidad',
         factorConversion: 1,
-        // Los items manuales se declaran con la afectación configurada (Configuración → SUNAT).
+        // El embalaje se declara con SU afectación; si no la eligieron, la del negocio.
         categoria: CATEGORIA_MANUAL,
-        tipoAfectacion: String(cfg.tipoAfectacionManual || afectacionPorDefecto),
+        tipoAfectacion: String(it.afectacion || cfg.tipoAfectacionManual || afectacionPorDefecto),
         usarPrecioEspecial: false,
         manual: true,
       }))
@@ -1612,6 +1614,18 @@ export function Pdv() {
                       <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
                         Embalaje y Otros
                       </span>
+                      {/* Afectación del embalaje: es un item sin producto en el catálogo, así que se
+                          elige acá. Arranca con la del negocio (Configuración → SUNAT). */}
+                      <select
+                        value={it.afectacion ?? (cfg.tipoAfectacionManual || AFECTACION_POR_DEFECTO)}
+                        onChange={(e) => setManualItems((prev) => ({ ...prev, [id]: { ...prev[id], afectacion: e.target.value } }))}
+                        title="Afectación con la que se declara este item"
+                        className="mt-1 block h-6 w-full max-w-[190px] rounded border bg-background px-1 text-[10px] font-semibold"
+                      >
+                        {TIPO_AFECTACION.map((a) => (
+                          <option key={a.codigo} value={a.codigo}>{a.codigo} · {a.label}</option>
+                        ))}
+                      </select>
                     </div>
                     <span className="num w-9 text-center text-sm font-bold">{it.qty}</span>
                     <span className="num w-16 text-right text-sm font-bold">{fmt(it.precio * it.qty)}</span>
@@ -2004,7 +2018,7 @@ export function Pdv() {
                         const id = `tmpl-${tmpl.id}`
                         setManualItems((prev) => ({
                           ...prev,
-                          [id]: { nombre: tmpl.nombre, precio: tmpl.precio, qty: (prev[id]?.qty ?? 0) + 1 },
+                          [id]: { nombre: tmpl.nombre, precio: tmpl.precio, qty: (prev[id]?.qty ?? 0) + 1, afectacion: prev[id]?.afectacion ?? cfg?.tipoAfectacionManual ?? AFECTACION_POR_DEFECTO },
                         }))
                         setManualOpen(false)
                         setToast(`✅ ${tmpl.nombre} agregado`)

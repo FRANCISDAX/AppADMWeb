@@ -4,7 +4,7 @@ export type VentaPausada = {
   id: string
   fecha: string
   cart: Record<string, number>
-  manualItems: Record<string, { nombre: string; precio: number; qty: number }>
+  manualItems: Record<string, { nombre: string; precio: number; qty: number; afectacion?: string }>
   usarPromo: Record<string, boolean>
   tipoComp: 'nv' | 'boleta' | 'factura'
   /**

@@ -222,7 +222,8 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
           // boleta declaraba MÁS de lo cobrado (pasó en la boleta B001-000057:
           // cobrado S/ 9.20, declarado S/ 9.56). Ahora la afectación de los items
           // manuales se configura en Configuración → SUNAT.
-          tipoAfectacion: String(config.tipoAfectacionManual || AFECTACION_POR_DEFECTO),
+          // El item manual puede traer su propia afectación (embalaje); si no, la del negocio.
+          tipoAfectacion: String(item.tipoAfectacion || config.tipoAfectacionManual || AFECTACION_POR_DEFECTO),
         })),
       ]
       const ventaBase = {
