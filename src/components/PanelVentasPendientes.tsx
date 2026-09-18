@@ -6,7 +6,7 @@ import { usePermisos } from '@/context/permisos'
 import { useAuth } from '@/context/auth'
 import { fmt } from '@/lib/ui-utils'
 import { nombreCaja, repartirPedidos } from '@/lib/pedidos'
-import { obtenerVentasPendientes, cancelarVentaPendiente, type DocumentoVenta } from '@/services/ventas'
+import { obtenerVentasPendientes, obtenerPedidosEliminados, cancelarVentaPendiente, restaurarVentaPendiente, type DocumentoVenta } from '@/services/ventas'
 
 function tiempoTranscurrido(fechaIso: string): string {
   const diff = Date.now() - new Date(fechaIso).getTime()
@@ -45,12 +45,17 @@ export function PanelVentasPendientes({
   const [cargando, setCargando] = React.useState(true)
   const [cancelandoId, setCancelandoId] = React.useState<string | null>(null)
   const [motivoCancel, setMotivoCancel] = React.useState('')
+  // Pedidos eliminados: se listan para poder restaurarlos si fue un error.
+  const [eliminados, setEliminados] = React.useState<DocumentoVenta[]>([])
+  const [verEliminados, setVerEliminados] = React.useState(false)
 
   // Se traen TODOS los pedidos y el reparto lo hace `repartirPedidos` (regla pura y testeada):
   // filtrar en la consulta dejaba la lista ciega por configuración de caja.
   const cargar = React.useCallback(async () => {
     const lista = await obtenerVentasPendientes()
+    const borrados = await obtenerPedidosEliminados()
     setVentas(lista)
+    setEliminados(borrados)
     setCargando(false)
   }, [])
 
@@ -74,7 +79,7 @@ export function PanelVentasPendientes({
     if (!motivoCancel.trim()) return toast('⚠️ Ingresá un motivo')
     const ok = await confirm({
       title: '¿Eliminar esta venta?',
-      message: 'No hay comprobante emitido, así que no se anula nada. El stock nunca se tocó (se descuenta al cobrar), así que los productos quedan como estaban y la venta se registra como eliminada con su motivo.',
+      message: '⚠️ El pedido NO se borra: queda como eliminado (con tu motivo) y podés RESTAURARLO después desde esta misma pantalla. No hay comprobante que anular y el stock nunca se tocó (se descuenta al cobrar).',
       okText: 'Eliminar venta',
     })
     if (!ok) return
@@ -98,6 +103,23 @@ export function PanelVentasPendientes({
     }
   }
 
+  /** Devuelve un pedido eliminado a la lista de pendientes (por si se eliminó por error). */
+  async function restaurar(v: DocumentoVenta) {
+    const ok = await confirm({
+      title: '¿Restaurar este pedido?',
+      message: `El pedido ${v.serieNumero} vuelve a la lista de pendientes de cobro. No toca stock ni comprobantes.`,
+      okText: 'Restaurar',
+    })
+    if (!ok) return
+    const res = await restaurarVentaPendiente({ documentoId: v.id, usuario: nombreUsuario || user?.email || 'sistema' })
+    if (res.success) {
+      toast(`✅ Pedido ${v.serieNumero} restaurado`)
+      setEliminados((prev) => prev.filter((x) => x.id !== v.id))
+      await cargar()
+    } else {
+      toast(`❌ ${res.error || 'No se pudo restaurar'}`, 'error')
+    }
+  }
   /** Tarjeta de un pedido: una sola implementación para los dos grupos (míos y de otra caja). */
   function tarjeta(v: DocumentoVenta) {
     const total = (v.venta as Record<string, unknown>)?.total as number ?? 0
@@ -187,9 +209,20 @@ export function PanelVentasPendientes({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold">Ventas Pendientes</h3>
-        {ventas.length > 0 && (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">{ventas.length}</span>
-        )}
+        <span className="flex items-center gap-2">
+          {eliminados.length > 0 && (
+            <button
+              onClick={() => setVerEliminados((x) => !x)}
+              className="rounded-full border px-2 py-0.5 text-[10px] font-bold text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Pedidos eliminados: se pueden restaurar"
+            >
+              {verEliminados ? 'Ocultar eliminados' : `Eliminados (${eliminados.length})`}
+            </button>
+          )}
+          {ventas.length > 0 && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">{ventas.length}</span>
+          )}
+        </span>
       </div>
 
       {cargando ? (
@@ -218,6 +251,29 @@ export function PanelVentasPendientes({
           )}
         </div>
       )}
-    </div>
+
+      {verEliminados && (
+        <div className="space-y-2 rounded-xl border border-dashed p-2">
+          <p className="text-[10px] text-muted-foreground">
+            <strong>Pedidos eliminados</strong>: no hay comprobante ni stock comprometido. Restaurá el que se haya eliminado por error.
+          </p>
+          {eliminados.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">No hay pedidos eliminados.</p>
+          ) : (
+            eliminados.map((v) => (
+              <div key={v.id} className="flex items-center gap-2 rounded-lg border bg-card p-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold">{v.serieNumero}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {v.vendedorNombre || '—'} · {fmt((v.venta as Record<string, unknown>)?.total as number ?? 0)}
+                    {v.motivoCancelacion ? ` · Motivo: ${v.motivoCancelacion}` : ''}
+                  </div>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => restaurar(v)}>Restaurar</Button>
+              </div>
+            ))
+          )}
+        </div>
+      )}    </div>
   )
 }
