@@ -1,6 +1,7 @@
 import { doc, setDoc, updateDoc } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { obtenerProximoCorrelativoSunat } from '@/services/notas'
+import { consolidarItems, descuentoConsolidado, totalConsolidado as totalDe } from '@/lib/consolidado'
 import { db } from '@/lib/firebase'
 
 // Port de helper/ConsolidadoHelper.js → generarConsolidado (RN): crea una BOLETA
@@ -17,20 +18,15 @@ export async function generarConsolidado(nvs: any[], config: Record<string, any>
   if (!numSunat) return { success: false, error: 'No se pudo obtener el correlativo SUNAT.' }
 
   const correlativoStr = `${serie}-${String(numSunat).padStart(6, '0')}`
-  const totalConsolidado = nvs.reduce((s, nv) => s + (nv.venta?.total || 0), 0)
-  const itemsConsolidado = nvs.reduce((acc: any[], nv) => {
-    const its = nv.venta?.items || []
-    its.forEach((it: any) => {
-      const existente = acc.find((a) => a.id === it.id)
-      if (existente) {
-        existente.cantidad += it.cantidad || 1
-        existente.subtotal += it.subtotal || 0
-      } else {
-        acc.push({ ...it })
-      }
-    })
-    return acc
-  }, [])
+  // 🔑 El total es la suma de los totales (ya netos) de cada NV y el **descuento se declara**: la
+  // boleta consolidada se imprime y va a SUNAT como cualquier otra, así que tiene que cuadrar
+  // líneas (precio de lista) − descuento = total. Antes sumaba los totales pero **tiraba el
+  // descuento** y unía los items por `id` sin mirar el precio: una NV con promoción consolidada
+  // salía con las líneas a precio de lista, el total menor y sin fila de descuento (y el XML
+  // declaraba de más). Las reglas viven en `lib/consolidado.ts` (puras y testeadas).
+  const total = totalDe(nvs)
+  const descuento = descuentoConsolidado(nvs)
+  const itemsConsolidado = consolidarItems(nvs)
   const nvIds = nvs.map((nv) => nv.id)
   const docId = `BOLETA-${correlativoStr}`
   const docRef = doc(db, COL.DOCUMENTOS, `${anioMes}_${docId}`)
@@ -39,11 +35,15 @@ export async function generarConsolidado(nvs: any[], config: Record<string, any>
     id: 'consolidado_' + Date.now().toString(),
     fecha: hoy.toISOString(),
     items: itemsConsolidado,
-    total: totalConsolidado,
-    importe_total: totalConsolidado,
+    total,
+    importe_total: total,
+    // El descuento viaja igual que en una venta normal (camelCase, que es lo que leen el
+    // comprobante y el XML) y con el nombre viejo para cualquier lector que ya lo usara.
+    descuentoTotal: descuento,
+    descuento_total: descuento,
     tipoPago: 'efectivo',
-    efectivo: totalConsolidado,
-    montoRecibido: totalConsolidado,
+    efectivo: total,
+    montoRecibido: total,
     cambio: 0,
     cliente_nombre: config.clienteDefaultNombre || 'CONSUMIDOR FINAL',
     cliente_dni: config.clienteDefaultDni || '00000000',
@@ -74,5 +74,5 @@ export async function generarConsolidado(nvs: any[], config: Record<string, any>
 
   await Promise.all(nvs.map((nv) => updateDoc(doc(db, COL.DOCUMENTOS, nv.id), { sunat: { consolidado: true, consolidadoAt: hoy.toISOString(), documentoConsolidadoId: docId } })))
 
-  return { success: true, correlativo: correlativoStr, total: totalConsolidado, nvsProcesadas: nvIds.length, docId }
+  return { success: true, correlativo: correlativoStr, total, nvsProcesadas: nvIds.length, docId }
 }
