@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>TAP — Plan de pruebas y validación</title>
+  <link rel="stylesheet" href="tap.css">
+</head>
+<body>
+  <div class="page">
+    <div class="portada">
+      <div class="institucion">Trabajo de Aplicación Profesional</div>
+      <h1>Plan de pruebas y validación del sistema</h1>
+      <div class="filete"></div>
+      <p class="subtitulo">Anexo 4 — Estrategia de pruebas, incidencias corregidas y matriz de trazabilidad</p>
+      <p class="meta">Sistema de punto de venta, inventario y facturación electrónica<br/>Anexo técnico · Documento generado a partir del código fuente</p>
+    </div>
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s1">1. Estrategia de pruebas</h2>
+
+    <p>La estrategia de validación del sistema se organiza en cuatro niveles complementarios. Cada nivel
+    responde a una pregunta distinta: los dos primeros verifican el código antes de ejecutarlo, el tercero
+    verifica el comportamiento del sistema en operación real y el cuarto verifica la integración con el
+    servicio de facturación electrónica. La separación no es arbitraria: responde a la arquitectura por
+    capas del sistema, en la que la lógica de negocio pura se mantiene deliberadamente separada del acceso
+    a datos y de la interfaz, de modo que pueda verificarse sin base de datos y sin navegador.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th>Nivel</th>
+          <th>Dónde vive</th>
+          <th>Herramienta o mecanismo</th>
+          <th>Evidencia que produce</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Unitario sobre la capa pura</td>
+          <td><code>src/lib/*.test.ts</code> (12 archivos)</td>
+          <td>Runner nativo de Node: <code>node --test</code>, sin frameworks externos (script <code>test</code> de <code>package.json</code>)</td>
+          <td>195 casos declarados y ejecutados</td>
+        </tr>
+        <tr>
+          <td>Verificación estática de tipos</td>
+          <td>Todo <code>src/</code> (proyecto <code>tsconfig.app.json</code>)</td>
+          <td><code>npx tsc -b</code> con comprobación estricta</td>
+          <td>Compilación sin errores</td>
+        </tr>
+        <tr>
+          <td>Verificación estática de estilo y defectos</td>
+          <td>152 archivos del proyecto</td>
+          <td>Oxlint (<code>npm run lint</code>), configuración <code>.oxlintrc.json</code>, sobre una línea base acordada</td>
+          <td>0 errores y 80 advertencias (línea base que no debe crecer)</td>
+        </tr>
+        <tr>
+          <td>Funcional y de aceptación</td>
+          <td>Aplicación desplegada, en operación real</td>
+          <td>Ejecución manual por parte del usuario del sistema</td>
+          <td>24 casos de aceptación y las incidencias de la sección 4</td>
+        </tr>
+        <tr>
+          <td>Integración fiscal</td>
+          <td>Servicio de facturación electrónica y ambiente real de SUNAT</td>
+          <td>Envío real y verificación del CDR (código de respuesta)</td>
+          <td>Estado del envío guardado en el documento y código del CDR</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>1.1 Pruebas unitarias sobre la capa pura</h3>
+
+    <p>El sistema separa tres capas: <code>src/lib/</code> (lógica pura, sin Firebase ni React),
+    <code>src/services/</code> (acceso a datos en Firestore) y <code>src/components/</code> junto con
+    <code>src/pages/</code> (interfaz). Las pruebas unitarias se concentran en la primera capa, que es la
+    que concentra las reglas de negocio: dinero y redondeo, bolsillos de pago, arqueo, descuentos,
+    afectación tributaria e importes, correlativos, pedidos, personal, consolidación de notas de venta,
+    crédito y registro de errores.</p>
+
+    <p>La ejecución se realiza con el <strong>runner nativo de Node</strong> (<code>node --test</code>),
+    sin frameworks de prueba externos. El script <code>test</code> de <code>package.json</code> declara
+    explícitamente los <strong>12 archivos</strong> de prueba que se ejecutan, todos bajo
+    <code>src/lib/</code>; al incorporar un archivo nuevo es necesario sumarlo a esa lista. Los módulos que
+    se prueban importan con extensión <code>.ts</code> explícita, porque el runner nativo no resuelve la
+    extensión omitida, a diferencia del empaquetador y del compilador de tipos.</p>
+
+    <p>Esta elección tiene una consecuencia metodológica que se documenta explícitamente: la prueba vive
+    junto al módulo que verifica y no depende de la infraestructura, por lo que cualquier regla de negocio
+    puede comprobarse de forma aislada y reproducible.</p>
+
+    <h3>1.2 Verificación estática</h3>
+
+    <p>La verificación estática comprende dos controles que se ejecutan antes de cada despliegue.</p>
+
+    <p>El primero es el <strong>chequeo de tipos</strong> con TypeScript en modo estricto, mediante
+    <code>npx tsc -b</code> sobre las referencias de proyecto declaradas en <code>tsconfig.json</code>. El
+    proyecto utiliza TypeScript 6.0, versión en la que la opción <code>strict</code> se encuentra activada
+    por defecto, y agrega de forma explícita en <code>tsconfig.app.json</code> las opciones
+    <code>noUnusedLocals</code> (variables locales sin uso), <code>noUnusedParameters</code> (parámetros sin
+    uso), <code>erasableSyntaxOnly</code> y <code>noFallthroughCasesInSwitch</code>. El resultado de este
+    control es una compilación sin errores.</p>
+
+    <p>El segundo es el <strong>análisis estático</strong> con Oxlint (<code>npm run lint</code>), cuya
+    configuración <code>.oxlintrc.json</code> habilita los complementos de React, TypeScript y Oxc y eleva
+    a error la regla <code>react/rules-of-hooks</code>. La ejecución sobre los 152 archivos del proyecto
+    reporta <strong>0 errores y 80 advertencias</strong>. Esas 80 advertencias constituyen una
+    <strong>línea base acordada que no debe incrementarse</strong>: una modificación que agregue
+    advertencias nuevas se considera una regresión, del mismo modo que un caso de prueba que falla.</p>
+
+    <h3>1.3 Pruebas funcionales y de aceptación</h3>
+
+    <p>Las pruebas funcionales y de aceptación son ejecutadas por el <strong>usuario del sistema</strong>
+    sobre la aplicación desplegada. El sistema se encuentra en <strong>operación real</strong>: la
+    documentación técnica del repositorio registra del orden de 93 turnos de caja y 234 documentos
+    emitidos, con 40 productos cargados en el catálogo. Esto significa que las pruebas de aceptación no se
+    ejecutan sobre datos ficticios, sino sobre la operación comercial del negocio, y que cada defecto
+    detectado en este nivel tiene una consecuencia concreta y medible.</p>
+
+    <p>El registro de incidencias que se presenta en la sección 4 proviene precisamente de estas pruebas.
+    Su forma de detección es característica: el usuario informa un síntoma observado durante la operación
+    (un mensaje de error, un importe que no cuadra, un pedido que no aparece), y la causa se establece leyendo
+    el código y, cuando corresponde, verificando el estado de los datos en producción <strong>en modo solo
+    lectura</strong>. Ese procedimiento quedó establecido como norma del proyecto tras comprobarse, en dos
+    oportunidades, que una alarma inicial resultó ser falsa.</p>
+
+    <p>La sección 3 documenta los 24 casos de aceptación por módulo, con precondición, pasos y resultado
+    esperado, de modo que puedan repetirse de manera uniforme.</p>
+
+    <h3>1.4 Pruebas de integración fiscal</h3>
+
+    <p>La emisión de comprobantes electrónicos se valida mediante <strong>envío real a SUNAT</strong> a
+    través del servicio de facturación electrónica, y la verificación de la respuesta se realiza sobre el
+    <strong>CDR</strong> (Constancia de Recepción), que es el documento con el código y la descripción de
+    la respuesta del organismo fiscal.</p>
+
+    <p>El servicio de facturación es un <strong>proyecto independiente</strong> del cliente web
+    (<code>appadm-sunat</code>), desarrollado con FastAPI y la biblioteca <code>sunat_py</code>, que corre
+    como servicio interno en la red local del negocio y se despliega de forma separada: un cambio en ese
+    proyecto no surte efecto hasta que el servicio se reinicia. La responsabilidad de la validación está
+    repartida: el servicio <strong>valida la estructura del comprobante</strong> antes de firmarlo (el
+    esquema del envío se verifica con Pydantic en <code>app/schemas/invoice.py</code>, que exige, entre
+    otras condiciones, importes con dos decimales) y luego firma el XML, que se ajusta previamente antes de
+    la firma. El cliente web, por su parte, es responsable de enviar un payload que cumpla ese contrato y de
+    registrar el resultado en el documento correspondiente.</p>
+
+    <p>Los resultados posibles que se verifican en este nivel son la aceptación del comprobante, la
+    aceptación con observaciones y el código <strong>1033</strong> («el comprobante ya fue registrado»), que
+    el servicio interpreta como aceptación y marca como duplicado, evitando que un reenvío genere una
+    segunda emisión.</p>
+
+    <h3>1.5 Aclaración metodológica</h3>
+
+    <div class="aviso">
+      <p>El repositorio establece como regla que <strong>una prueba que pasa no valida la intención del
+      programador: solo la repite</strong>. La afirmación no es teórica: la clasificación defectuosa de una
+      venta a crédito quedó «documentada» por una prueba que aprobaba precisamente la regla equivocada
+      (considerar que un medio de pago desconocido caía en efectivo), de modo que la prueba sostenía el
+      defecto en lugar de detectarlo.</p>
+    </div>
+
+    <p>Por ese motivo, cada aserción se lee con el <strong>motivo declarado</strong> junto al valor
+    esperado, y los casos que fijan un defecto concreto llevan en su propio nombre la marca de advertencia
+    correspondiente y el comentario con el caso real que los originó. En los 12 archivos de prueba hay
+    <strong>9 casos rotulados como regresión o defecto</strong> y 77 líneas de comentario que explican,
+    dentro del código, por qué el valor esperado es ese y no otro.</p>
+
+    <p>De la misma regla se desprende una segunda conclusión, registrada en la sección de limitaciones: la
+    verificación de tipos y el análisis estático <strong>no dicen nada sobre los valores que se escriben en
+    la base de datos</strong>. Los campos opcionales que llegan con valor indefinido compilan sin error, y
+    solo se manifiestan al intentar la escritura. Ese fue el origen de la primera incidencia de la sección 4.</p>
+
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s2">2. Inventario de pruebas automatizadas</h2>
+
+    <p>El inventario siguiente relaciona cada archivo de prueba con el módulo que verifica, las reglas que
+    cubre y la cantidad de casos declarados. La cantidad corresponde al número de declaraciones
+    <code>test(</code> o <code>it(</code> presentes en cada archivo. Todos los módulos verificados
+    pertenecen a la capa pura y se encuentran bajo <code>src/lib/</code>.</p>
+
+    <table class="compacta" style="page-break-inside:auto">
+      <thead>
+        <tr>
+          <th>Archivo de prueba</th>
+          <th>Módulo verificado</th>
+          <th>Reglas que cubre</th>
+          <th class="num">Casos</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>src/lib/arqueo.test.ts</code></td>
+          <td><code>src/lib/arqueo.ts</code></td>
+          <td><strong>Arqueo y bolsillos.</strong> Efectivo esperado del turno (fondo inicial más efectivo, menos gastos de efectivo, menos vuelto por transferencia); carácter informativo de las transferencias; desglose por origen (ventas del día, cobranzas de crédito y notas) con el total como valor que manda; reparto de una venta por bolsillo según sus pagos, con retrocompatibilidad para los documentos sin detalle de medios; nota de crédito que resta del bolsillo del pago original (incluida la venta mixta, en proporción); nota de débito que no mueve bolsillos; desglose por billetera (Yape, Plin, tarjeta) y consolidado del día sobre turnos cerrados</td>
+          <td class="num">32</td>
+        </tr>
+        <tr>
+          <td><code>src/lib/sunat-importes.test.ts</code></td>
+          <td><code>src/lib/sunat-importes.ts</code></td>
+          <td><strong>Afectación tributaria e importes.</strong> Reparto del descuento por línea con suma exacta y residuo del redondeo en una sola línea; despeje del IGV según afectación (solo la gravada lleva IGV; exonerada, inafecta y gratuitas se declaran al precio cobrado); orden correcto de las operaciones (primero el descuento, después el IGV); afectación del propio ítem por encima del valor por defecto del negocio; lectura única del descuento de una venta, en nombre actual y con respaldo en el nombre anterior; preparación de los ítems para la interfaz de SUNAT con precio unitario y cantidad en dos decimales, conservando el total cobrado</td>
+          <td class="num">29</td>
+        </tr>
+        <tr>
+          <td><code>src/lib/pagos.test.ts</code></td>
+          <td><code>src/lib/pagos.ts</code></td>
+          <td><strong>Pagos y bolsillos.</strong> Distinción entre bolsillo (efectivo o transferencia) y medio de pago; reparto de una venta por sus pagos, con el crédito fuera de todo bolsillo; pago múltiple (los medios electrónicos no pueden superar el total, el excedente del efectivo es vuelto, los montos guardados suman exactamente el total); montos inválidos tratados como cero; decimales sin sobrantes falsos; tope sugerido de los medios electrónicos; etiquetas de pago tolerantes a documentos antiguos</td>
+          <td class="num">21</td>
+        </tr>
+        <tr>
+          <td><code>src/lib/descuentos.test.ts</code></td>
+          <td><code>src/lib/descuentos.ts</code></td>
+          <td><strong>Descuentos.</strong> Motor de descuentos en orden (descuento del producto, promoción de volumen, descuento del cliente y descuento manual global); promoción del tipo «dos o más a un precio menor» y su umbral; contrato de unidades base del cálculo; conservación del subtotal bruto como referencia; acumulación de capas; revisión del tope del descuento manual, con el valor cero interpretado como ausencia de tope y el descuento en soles medido como porcentaje del subtotal</td>
+          <td class="num">18</td>
+        </tr>
+        <tr>
+          <td><code>src/lib/pedidos.test.ts</code></td>
+          <td><code>src/lib/pedidos.ts</code></td>
+          <td><strong>Pedidos.</strong> Reparto de los pedidos según la caja del cajero (sin caja se ven todos, con caja se ven los propios y los que no tienen caja, y los de otra caja se separan sin ocultarse, para poder rescatarlos); caso de regresión del pedido invisible; aviso de la caja de origen y de la serie con la que se emitirá; preparación del pedido para el carrito de cobro, con el total cotizado y su descuento; datos del cliente con el rótulo correspondiente al tipo de documento</td>
+          <td class="num">17</td>
+        </tr>
+        <tr>
+          <td><code>src/lib/personal.test.ts</code></td>
+          <td><code>src/lib/personal.ts</code></td>
+          <td><strong>Personal en el papel.</strong> Resolución del vendedor y del cajero de una venta; colapso del nombre repetido cuando una sola persona intervino; lectura del cajero desde el campo correspondiente y no desde el campo del vendedor, que en un pedido identifica a quien armó la venta; comparación de nombres tolerante a espacios y a diferencias de caja; líneas rotuladas y texto compuesto para el comprobante</td>
+          <td class="num">16</td>
+        </tr>
+        <tr>
+          <td><code>src/lib/limpio.test.ts</code></td>
+          <td><code>src/lib/limpio.ts</code></td>
+          <td><strong>Limpieza de valores indefinidos.</strong> Eliminación de propiedades sin valor, en profundidad; conservación de los valores que sí tienen significado (nulo, falso, cero y cadena vacía); respeto de las instancias de clase (fechas y centinelas del proveedor de base de datos); descarte de los valores indefinidos sueltos dentro de arreglos; ausencia de mutación del objeto original; diagnóstico de la ruta exacta del valor culpable</td>
+          <td class="num">12</td>
+        </tr>
+        <tr>
+          <td><code>src/lib/credito.test.ts</code></td>
+          <td><code>src/lib/credito.ts</code></td>
+          <td><strong>Crédito.</strong> Límite de crédito con el valor cero interpretado como ausencia de límite; cliente no registrado y cliente con crédito desactivado; venta dentro del límite, justo en el límite y por encima del límite, con cálculo y explicación del excedente; tolerancia a céntimos de redondeo; disponible que nunca resulta negativo; total inválido o negativo tratado como cero; redondeo a dos decimales</td>
+          <td class="num">11</td>
+        </tr>
+        <tr>
+          <td><code>src/lib/contadores.test.ts</code></td>
+          <td><code>src/lib/contadores.ts</code></td>
+          <td><strong>Correlativos.</strong> Los dos espacios de numeración (notas de venta y comprobantes electrónicos, que comparten espacio con las notas de crédito y débito); campo único del contador; caso de regresión que impide que una nota de venta caiga en el contador de comprobantes electrónicos; caso de regresión del flujo que creó un contador paralelo; formato del código de pedido a seis dígitos; tolerancia a valores anómalos; imposibilidad de confundir un pedido con un comprobante numerado</td>
+          <td class="num">11</td>
+        </tr>
+        <tr>
+          <td><code>src/lib/consolidado.test.ts</code></td>
+          <td><code>src/lib/consolidado.ts</code></td>
+          <td><strong>Consolidación.</strong> Descuento declarado por la boleta consolidada como suma de los descuentos de las notas que agrupa, con respaldo en el nombre anterior del campo; total del consolidado como suma de los totales ya netos; agrupación de líneas por producto, precio y unidad, de modo que dos notas con el mismo producto a precios distintos no se unan; cuadre entre líneas de lista, descuento y total; tolerancia a notas sin ítems o con cantidades inválidas; ausencia de mutación de los documentos de origen</td>
+          <td class="num">10</td>
+        </tr>
+        <tr>
+          <td><code>src/lib/errores.test.ts</code></td>
+          <td><code>src/lib/errores.ts</code></td>
+          <td><strong>Registro de errores.</strong> Normalización de errores, cadenas y objetos anómalos, incluidos los circulares; filtro del ruido que no aporta información; limitación por ventana de tiempo y descarte del error repetido; troceo de las operaciones masivas en lotes de 500, que es el máximo admitido por la base de datos; resumen del error para su lectura por parte del usuario</td>
+          <td class="num">9</td>
+        </tr>
+        <tr>
+          <td><code>src/lib/sunat.test.ts</code></td>
+          <td><code>src/lib/sunat.ts</code></td>
+          <td><strong>Comprobante para SUNAT.</strong> Precio unitario y cantidad con dos decimales en un comprobante con promoción; conservación del total cobrado en la suma de las líneas; líneas gravadas con el valor sin IGV redondeado de forma coherente con el impuesto; venta por peso declarada con dos decimales; nota de crédito o débito con el mismo tratamiento; totales del comprobante siempre con dos decimales, incluida la suma de números decimales que de otro modo produciría un residuo de coma flotante</td>
+          <td class="num">9</td>
+        </tr>
+        <tr>
+          <td colspan="3"><strong>Total de casos automatizados</strong></td>
+          <td class="num"><strong>195</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="nota">
+      <p>El redondeo a dos decimales se encuentra en <code>src/lib/dinero.ts</code>, que es compartido por
+      los módulos de crédito y de pagos; no cuenta con un archivo de prueba propio, pero se ejerce desde
+      los casos de <code>credito.test.ts</code> (basura de punto flotante) y de
+      <code>pagos.test.ts</code> (decimales sin sobrantes falsos), además de los casos de totales de
+      <code>sunat.test.ts</code>.</p>
+    </div>
+
+    <h3>Resultados de la ejecución</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Tipo de prueba</th>
+          <th>Comando o mecanismo</th>
+          <th>Alcance</th>
+          <th>Resultado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Unitaria de la capa pura</td>
+          <td><code>npm test</code> (<code>node --test</code>)</td>
+          <td>12 archivos, 195 casos</td>
+          <td><strong>195 aprobadas, 0 fallidas</strong></td>
+        </tr>
+        <tr>
+          <td>Verificación estática de tipos</td>
+          <td><code>npx tsc -b</code></td>
+          <td>Todo el código fuente del cliente</td>
+          <td>Sin errores</td>
+        </tr>
+        <tr>
+          <td>Análisis estático</td>
+          <td><code>npm run lint</code></td>
+          <td>152 archivos</td>
+          <td>0 errores, 80 advertencias (línea base)</td>
+        </tr>
+        <tr>
+          <td>Funcional y de aceptación</td>
+          <td>Ejecución manual sobre la aplicación desplegada</td>
+          <td>24 casos por módulo</td>
+          <td>Casos documentados en la sección 3; incidencias en la sección 4</td>
+        </tr>
+        <tr>
+          <td>Integración fiscal</td>
+          <td>Envío real y lectura del CDR</td>
+          <td>Comprobantes y notas</td>
+          <td>Aceptación registrada en el documento; reenvío con código 1033 tratado como duplicado</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="ok">
+      <p><strong>Interpretación para el informe.</strong> La ejecución de las pruebas automatizadas arroja
+      195 casos aprobados y ninguno fallido, sin errores de comprobación de tipos y sin errores de análisis
+      estático. El recuento de casos se verificó por lectura del código, contando las declaraciones de
+      prueba de cada archivo; el resultado de la ejecución completa se toma del estado documentado del
+      proyecto. En conjunto, estos resultados constituyen <strong>evidencia objetiva de la calidad del
+      sistema</strong>: no se basan en una apreciación sobre el funcionamiento, sino en la ejecución
+      reproducible de reglas verificables, y las reglas que sostienen el comportamiento fiscal y de caja del
+      sistema (importes, afectación tributaria, bolsillos de pago, correlativos y personal que interviene en
+      cada venta) se encuentran entre las cubiertas.</p>
+    </div>
+
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s3">3. Pruebas de aceptación por módulo</h2>
+
+    <p>Los casos siguientes describen las pruebas funcionales y de aceptación ejecutadas sobre la
+    aplicación desplegada. Cada caso indica el módulo, la precondición necesaria, los pasos que debe seguir
+    el usuario y el resultado esperado que permite considerarlo aprobado. La columna final identifica el
+    requerimiento cubierto por nombre de módulo y funcionalidad, dado que el Anexo 3 de requerimientos no
+    forma parte todavía del paquete documental; cuando ese anexo se incorpore, bastará con sustituir el
+    nombre por el código correspondiente.</p>
+
+    <table class="compacta" style="page-break-inside:auto">
+      <thead>
+        <tr>
+          <th>Caso</th>
+          <th>Módulo</th>
+          <th>Precondición</th>
+          <th>Pasos</th>
+          <th>Resultado esperado</th>
+          <th>Requerimiento cubierto</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CP-01</td>
+          <td>Inventario — alta de producto</td>
+          <td>Usuario con permiso de creación de productos; al menos una categoría administrada activa</td>
+          <td>1) Abrir Inventario y elegir Nuevo producto. 2) Completar nombre, categoría elegida de la lista, unidad base, afectación tributaria, precio de venta y precio mínimo. 3) Guardar y buscarlo en el catálogo.</td>
+          <td>El producto queda activo, con categoría, unidad base, afectación y precios guardados; aparece en el PDV y en los filtros de categoría.</td>
+          <td>Gestión del catálogo de productos</td>
+        </tr>
+        <tr>
+          <td>CP-02</td>
+          <td>Inventario y PDV — presentaciones</td>
+          <td>Producto con una presentación cargada cuyo factor de conversión sea mayor que uno</td>
+          <td>1) Editar el producto y agregar la presentación con su factor. 2) Vender una unidad de esa presentación en el PDV. 3) Revisar el comprobante, el kardex y el stock.</td>
+          <td>El documento registra la cantidad en unidades base y el precio por unidad base; el stock disminuye por el total de unidades base y el importe cobrado corresponde al precio de la presentación.</td>
+          <td>Venta por presentación y control de inventario</td>
+        </tr>
+        <tr>
+          <td>CP-03</td>
+          <td>Inventario — ajuste de stock</td>
+          <td>Producto existente con stock cargado; usuario con permiso de ajuste</td>
+          <td>1) Abrir el ajuste de stock del producto. 2) Indicar la cantidad final y el motivo. 3) Consultar el kardex y la auditoría.</td>
+          <td>Se registra un movimiento de ajuste con el stock anterior y el nuevo, con la nomenclatura del kardex, y queda el registro correspondiente en la auditoría.</td>
+          <td>Ajuste de inventario y trazabilidad</td>
+        </tr>
+        <tr>
+          <td>CP-04</td>
+          <td>Compras — registro de compra</td>
+          <td>Proveedor registrado y usuario con permiso de compras</td>
+          <td>1) Registrar una compra con productos, cantidades, costo y presentación. 2) Confirmar la operación. 3) Verificar el kardex, el stock y el historial de precios.</td>
+          <td>El stock aumenta en las unidades base correspondientes, se registra el movimiento de entrada, y se actualizan el costo y el historial de precios del producto.</td>
+          <td>Compras, kardex y costos</td>
+        </tr>
+        <tr>
+          <td>CP-05</td>
+          <td>Configuración — promoción de volumen</td>
+          <td>Usuario con permiso de configuración; producto con precio de lista conocido</td>
+          <td>1) Abrir Configuración, sección de promociones. 2) Crear una promoción «dos o más a un precio menor» para el producto. 3) Guardar y verificar el listado.</td>
+          <td>La promoción queda activa, disponible para el PDV y visible en el listado de promociones de volumen.</td>
+          <td>Promociones por volumen</td>
+        </tr>
+        <tr>
+          <td>CP-06</td>
+          <td>PDV — venta con promoción de volumen</td>
+          <td>Promoción del caso CP-05 activa; turno de caja abierto</td>
+          <td>1) Agregar dos unidades del producto promocionado y una línea de otro producto. 2) Verificar el descuento mostrado en el carrito. 3) Cobrar en efectivo y revisar el comprobante emitido.</td>
+          <td>Las líneas se imprimen a precio de lista, aparece una fila de descuento que explica la diferencia y el total cobrado coincide con el importe descontado; el comprobante declara ese total.</td>
+          <td>Descuentos automáticos y declaración en el comprobante</td>
+        </tr>
+        <tr>
+          <td>CP-07</td>
+          <td>PDV — descuento manual dentro del tope</td>
+          <td>Tope de descuento manual configurado en los parámetros de la empresa</td>
+          <td>1) Agregar productos al carrito. 2) Aplicar un descuento manual inferior al tope. 3) Cobrar y revisar el comprobante.</td>
+          <td>El descuento se aplica, la acción de cobro permanece habilitada y el comprobante declara el descuento junto con el total cobrado.</td>
+          <td>Descuento manual autorizado</td>
+        </tr>
+        <tr>
+          <td>CP-08</td>
+          <td>PDV — descuento manual por encima del tope</td>
+          <td>Tope de descuento manual configurado</td>
+          <td>1) Intentar aplicar un descuento manual superior al tope. 2) Observar el aviso en pantalla y el estado de la acción de cobro. 3) Enviar la venta a caja para comprobar la segunda validación.</td>
+          <td>El sistema advierte que el descuento excede el tope, deshabilita la acción de cobro y, al intentar enviar la venta a caja, el servicio rechaza la operación con el mismo motivo.</td>
+          <td>Control del descuento manual</td>
+        </tr>
+        <tr>
+          <td>CP-09</td>
+          <td>PDV — pago múltiple y vuelto</td>
+          <td>Turno de caja abierto</td>
+          <td>1) Agregar productos por un total conocido. 2) Registrar parte en efectivo y parte por un medio electrónico, con su número de operación. 3) Repetir la venta ingresando en efectivo un monto superior al total. 4) Cobrar y revisar el turno.</td>
+          <td>Los montos aplicados suman exactamente el total, el excedente del efectivo se registra como vuelto, el medio electrónico no puede superar el total y el turno acumula cada importe en el bolsillo que corresponde.</td>
+          <td>Pago múltiple y arqueo</td>
+        </tr>
+        <tr>
+          <td>CP-10</td>
+          <td>PDV — venta a crédito dentro del límite</td>
+          <td>Cliente registrado, con crédito activo y límite superior al total de la venta</td>
+          <td>1) Seleccionar el cliente en el PDV. 2) Elegir la forma de pago Crédito. 3) Cobrar y revisar el saldo del cliente.</td>
+          <td>La venta se autoriza, el sistema informa el saldo resultante del cliente y no se suma importe alguno a los bolsillos del turno.</td>
+          <td>Venta a crédito y límite de crédito</td>
+        </tr>
+        <tr>
+          <td>CP-11</td>
+          <td>PDV — venta a crédito que excede el límite</td>
+          <td>Cliente con límite de crédito inferior al total de la venta</td>
+          <td>1) Seleccionar el cliente. 2) Intentar cobrar a crédito. 3) Observar el mensaje y el estado de la acción de cobro.</td>
+          <td>El sistema bloquea la operación, muestra el excedente calculado respecto del límite y mantiene deshabilitada la acción de cobro.</td>
+          <td>Control del límite de crédito</td>
+        </tr>
+        <tr>
+          <td>CP-12</td>
+          <td>PDV — ítem manual</td>
+          <td>Turno de caja abierto</td>
+          <td>1) Agregar un ítem manual con descripción y precio. 2) Verificar la afectación tributaria asignada. 3) Cobrar y revisar el comprobante, la categoría del ítem y el inventario.</td>
+          <td>El ítem se registra en la categoría prevista para ítems manuales, conserva la afectación configurada, no descuenta stock y el comprobante no agrega impuesto cuando la afectación es exonerada.</td>
+          <td>Ítems manuales y afectación tributaria</td>
+        </tr>
+        <tr>
+          <td>CP-13</td>
+          <td>PDV — comprobante de producto exonerado</td>
+          <td>Producto con afectación tributaria de exonerado y turno abierto</td>
+          <td>1) Vender el producto y emitir una boleta. 2) Revisar el comprobante impreso y el bloque del impuesto.</td>
+          <td>El comprobante no muestra filas de operación gravada ni de impuesto, y el total declarado coincide con el importe cobrado.</td>
+          <td>Afectación tributaria e importes declarados</td>
+        </tr>
+        <tr>
+          <td>CP-14</td>
+          <td>PDV — envío de una venta a caja</td>
+          <td>Usuario con permiso de ventas pendientes; producto con stock suficiente</td>
+          <td>1) Armar la venta y usar la acción de enviar a caja. 2) Consultar el documento generado. 3) Revisar el stock del producto antes y después del envío.</td>
+          <td>El documento queda en estado pendiente, sin serie ni correlativo, con su código de pedido, sin forma de pago y sin bloque de facturación, y el stock no se modifica.</td>
+          <td>Pedidos y control de inventario</td>
+        </tr>
+        <tr>
+          <td>CP-15</td>
+          <td>PDV — cobro del pedido por el cajero</td>
+          <td>Pedido pendiente visible en el panel; cajero con turno abierto y caja asignada con sus series</td>
+          <td>1) Iniciar el cobro del pedido para llevarlo al carrito. 2) Elegir el comprobante y la forma de pago. 3) Confirmar el cobro. 4) Revisar el comprobante, el kardex y el reporte del cajero.</td>
+          <td>El carrito muestra los ítems del pedido y el total cotizado; al cobrar se asigna la serie y el correlativo de la caja del cajero, el stock disminuye una sola vez, el documento queda registrado a nombre de quien cobró y aparece en sus reportes.</td>
+          <td>Pedidos, correlativos, inventario y reportes</td>
+        </tr>
+        <tr>
+          <td>CP-16</td>
+          <td>PDV — eliminación de un pedido</td>
+          <td>Pedido pendiente en el panel</td>
+          <td>1) Eliminar el pedido indicando el motivo, que es obligatorio. 2) Verificar el estado del documento y el stock del producto. 3) Consultar la auditoría.</td>
+          <td>El pedido queda marcado como cancelado con el motivo y el usuario que lo eliminó; no se anula ningún comprobante, el stock no se modifica y la operación queda registrada en la auditoría.</td>
+          <td>Pedidos y trazabilidad</td>
+        </tr>
+        <tr>
+          <td>CP-17</td>
+          <td>PDV — pedido de otra caja</td>
+          <td>Pedido pendiente asignado a una caja distinta de la del cajero</td>
+          <td>1) Abrir el panel de ventas pendientes. 2) Identificar el pedido de la otra caja. 3) Intentar cobrarlo.</td>
+          <td>El pedido no se oculta: se muestra en un bloque separado con el aviso de la caja de origen y de que la emisión se realizará con la serie de la caja del cajero, y el cobro solicita confirmación.</td>
+          <td>Pedidos, cajas y puntos de emisión</td>
+        </tr>
+        <tr>
+          <td>CP-18</td>
+          <td>Clientes — cobro de crédito</td>
+          <td>Cliente con saldo pendiente; turno de caja abierto</td>
+          <td>1) Registrar el cobro desde la ficha del cliente. 2) Elegir un medio electrónico e ingresar el número de operación. 3) Verificar el saldo y el turno del día.</td>
+          <td>El saldo del cliente disminuye, el importe se acumula en el bolsillo de transferencia del turno con su número de operación y el reporte deja de contabilizarlo como venta del día.</td>
+          <td>Cobranza de crédito y arqueo</td>
+        </tr>
+        <tr>
+          <td>CP-19</td>
+          <td>Reportes — consolidación a boleta</td>
+          <td>Notas de venta del día sin consolidar, al menos una con descuento aplicado</td>
+          <td>1) Ejecutar la consolidación a boleta de las notas del día. 2) Revisar el comprobante consolidado y el registro de facturación.</td>
+          <td>La boleta agrupa las líneas por producto, precio y unidad; declara como descuento la suma de los descuentos de las notas que agrupa; y su total coincide con la suma de los totales de esas notas.</td>
+          <td>Consolidación de notas de venta</td>
+        </tr>
+        <tr>
+          <td>CP-20</td>
+          <td>Reportes — anulación</td>
+          <td>Nota de venta del día, no consolidada</td>
+          <td>1) Anular la nota indicando el motivo. 2) Revisar el stock, los totales del turno y la auditoría. 3) Intentar anular una nota ya consolidada.</td>
+          <td>Se repone el stock, los bolsillos del turno se ajustan según los pagos reales del documento y la anulación queda registrada; una nota consolidada o un comprobante aceptado por la administración tributaria no admiten este procedimiento.</td>
+          <td>Anulación de documentos</td>
+        </tr>
+        <tr>
+          <td>CP-21</td>
+          <td>Turnos — apertura y cierre con conteo ciego</td>
+          <td>Conteo ciego activado en la configuración de la empresa</td>
+          <td>1) Abrir el turno con su monto inicial. 2) Registrar ventas y gastos. 3) Iniciar el cierre y escribir el conteo sin ver el importe esperado. 4) Confirmar y revisar el arqueo.</td>
+          <td>Durante el conteo no se muestra el importe que debería haber; al confirmar, el sistema presenta el esperado, el contado y la diferencia, y el turno queda cerrado con esos valores.</td>
+          <td>Apertura y cierre de turno, conteo ciego</td>
+        </tr>
+        <tr>
+          <td>CP-22</td>
+          <td>Arqueo — turno cerrado con diferencia</td>
+          <td>Turno cerrado cuyo conteo difiere del importe esperado</td>
+          <td>1) Abrir el arqueo del día. 2) Revisar el desglose por bolsillo y por origen. 3) Descargar el documento del cierre.</td>
+          <td>El efectivo esperado resulta del fondo inicial más el efectivo, menos los gastos de efectivo y menos el vuelto por transferencia; las transferencias no alteran el esperado ni la diferencia; el documento impreso incluye el nombre y el número de documento del negocio, quién cerró el turno y las dos líneas de firma.</td>
+          <td>Arqueo de caja y documentación del cierre</td>
+        </tr>
+        <tr>
+          <td>CP-23</td>
+          <td>Egresos — gasto de caja</td>
+          <td>Turno de caja abierto</td>
+          <td>1) Registrar un egreso en efectivo con su motivo. 2) Revisar el arqueo del turno y el reporte de egresos.</td>
+          <td>El gasto reduce el efectivo esperado del turno, no modifica los totales de transferencia y queda registrado en el reporte de egresos con su motivo.</td>
+          <td>Gastos de caja y arqueo</td>
+        </tr>
+        <tr>
+          <td>CP-24</td>
+          <td>Facturación electrónica — envío y respuesta</td>
+          <td>Comprobante emitido, servicio de facturación disponible y configuración fiscal cargada</td>
+          <td>1) Enviar el comprobante desde el registro de facturación. 2) Revisar el resultado y el estado guardado en el documento. 3) Reenviar el mismo comprobante.</td>
+          <td>El envío devuelve constancia de recepción y el documento guarda el código, la descripción, el resumen digital y el contenido del comprobante; el reenvío devuelve el código de comprobante ya registrado, que el sistema interpreta como aceptación sin duplicar la emisión.</td>
+          <td>Integración con el servicio de facturación electrónica</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s4">4. Incidencias detectadas y corregidas</h2>
+
+    <p>El cuadro siguiente constituye el informe de validación propiamente dicho. Cada incidencia relaciona
+    el síntoma tal como fue observado durante la prueba, la causa raíz que lo explica, la corrección
+    aplicada, la prueba que impide su reaparición y la lección que quedó incorporada al proceso. La columna
+    de causa raíz es la que interesa al análisis: en todos los casos el síntoma visible es una manifestación
+    y no el defecto, y varios de ellos provienen de decisiones de diseño correctas en su origen que dejaron
+    de serlo cuando el sistema incorporó un flujo nuevo.</p>
+
+    <table class="compacta" style="page-break-inside:auto">
+      <thead>
+        <tr>
+          <th>Incidencia</th>
+          <th>Síntoma observado</th>
+          <th>Causa raíz</th>
+          <th>Corrección aplicada</th>
+          <th>Prueba que lo fija</th>
+          <th>Lección</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>INC-01</td>
+          <td>El envío de una venta a caja fallaba siempre, con el mensaje del proveedor de base de datos: «Function transaction.set() called with invalid data. Unsupported field value: undefined». No había ningún pedido registrado.</td>
+          <td>Algunos campos opcionales sin valor viajaban con valor indefinido (el tipo y el valor del descuento global y los datos de envío). La base de datos rechaza el valor indefinido como contenido de un campo, y el comprobador de tipos no lo advierte, porque un campo opcional declarado como cadena o indefinido compila sin error. El defecto provenía de un flujo que nunca había funcionado en producción.</td>
+          <td>Se corrigieron las dos capas: el punto de origen dejó de enviar valores indefinidos (composición condicional del objeto y uso de valor nulo donde corresponde) y, en el borde de escritura, los payloads del servicio de ventas se envuelven en la función de limpieza, que elimina los valores indefinidos en profundidad.</td>
+          <td><code>src/lib/limpio.test.ts</code> (12 casos, entre ellos el descarte de valores indefinidos dentro de arreglos y el respeto de las instancias de clase)</td>
+          <td>La comprobación de tipos y las pruebas unitarias no dicen nada sobre los valores que se escriben. Toda escritura cuyo contenido provenga de un formulario, una importación o una respuesta externa debe pasar por la red de seguridad antes de llegar a la base de datos.</td>
+        </tr>
+        <tr>
+          <td>INC-02</td>
+          <td>El cajero no encontraba el pedido que el vendedor había enviado a caja: la lista aparecía vacía y el panel permanecía oculto, aunque el pedido existía en la base de datos.</td>
+          <td>La consulta filtraba siempre por la caja del cajero y el panel se ocultaba por completo cuando el usuario no tenía caja asignada. En los hechos, el pedido llevaba la caja del vendedor y los cajeros no tenían caja configurada, de modo que la consulta no devolvía nada. El defecto convertía una decisión de configuración en una venta imposible de cobrar.</td>
+          <td>La consulta dejó de depender de la caja y la decisión se trasladó a la capa pura, en la función de reparto de pedidos: sin caja asignada se ven todos los pedidos; con caja, los propios y los que no tienen caja; y los de otra caja se muestran en un bloque separado, con la posibilidad de rescatarlos. Ningún pedido se oculta en silencio.</td>
+          <td><code>src/lib/pedidos.test.ts</code> (17 casos, incluido el caso de regresión del pedido de un vendedor sin caja visto por un cajero que sí tiene caja)</td>
+          <td>Una regla de visibilidad no puede depender de un dato de configuración opcional. Un pedido que no se ve es una venta perdida, y ante la duda el sistema debe mostrar antes que esconder.</td>
+        </tr>
+        <tr>
+          <td>INC-03</td>
+          <td>El envío a la administración tributaria se rechazaba con el mensaje «decimal input should have no more that 2 decimal places», que no provenía del organismo fiscal sino del servicio de facturación.</td>
+          <td>El precio unitario efectivo viajaba con hasta seis decimales. Una línea con descuento producía, por ejemplo, 0,545 al repartir 1,09 entre dos unidades, y una línea gravada producía el precio dividido entre 1,18. El esquema de validación del servicio exige dos decimales en la cantidad, el precio unitario y los totales, de modo que el rechazo alcanzaba a todo comprobante con descuento o con línea gravada.</td>
+          <td>Se creó una función pura que prepara los ítems para el envío: reparte el descuento, deja el precio unitario y la cantidad en dos decimales reponiendo el residuo del redondeo sin perder el total cobrado, redondea el valor sin impuesto de las líneas gravadas y aplica el redondeo a todos los totales, incluida la suma de decimales que de otro modo produce residuos de coma flotante.</td>
+          <td><code>src/lib/sunat-importes.test.ts</code> y <code>src/lib/sunat.test.ts</code></td>
+          <td>El contrato del servicio externo forma parte de los requisitos del sistema. Una regla de redondeo del integrador puede impedir la emisión de todos los comprobantes con descuento, y el mensaje de error del integrador no debe confundirse con la respuesta del organismo fiscal.</td>
+        </tr>
+        <tr>
+          <td>INC-04</td>
+          <td>El comprobante del pedido declaraba las líneas a precio de lista contra un total ya descontado y sin ninguna fila de descuento que explicara la diferencia. En el caso real registrado, dos unidades con promoción y dos unidades de otro producto sumaban 2,20 en las líneas frente a un total de 2,00.</td>
+          <td>El pedido guardaba el descuento únicamente con el nombre anterior del campo, mientras el comprobante y el archivo de declaración leen el nombre actual. Para el documento impreso el descuento era cero. La misma venta cargada directamente en el punto de venta salía correcta, lo que confirma que el defecto era propio del camino del pedido y no del cálculo del descuento.</td>
+          <td>El pedido escribe ambas denominaciones del campo y la lectura quedó concentrada en una sola función de la capa pura, que prioriza el nombre actual y admite el anterior como respaldo, de modo que también se leen correctamente los pedidos ya creados. El carrito de cobro muestra además el descuento aplicado por el vendedor, para que el precio de lista de las líneas no parezca un error.</td>
+          <td><code>src/lib/sunat-importes.test.ts</code> (casos de lectura del descuento y del descuento de promoción que explica la diferencia entre líneas y total) y <code>src/lib/pedidos.test.ts</code></td>
+          <td>Cuando el mismo dato se escribe en dos flujos distintos, el nombre del campo es parte del contrato. Una discrepancia de nomenclatura se traduce en un comprobante que declara más de lo cobrado, y ese es un defecto con consecuencia tributaria.</td>
+        </tr>
+        <tr>
+          <td>INC-05</td>
+          <td>La boleta consolidada perdía el descuento de las notas de venta que agrupaba y unía en una sola línea el mismo producto vendido a precios distintos, con lo que el importe declarado dejaba de corresponder al importe cobrado.</td>
+          <td>El proceso de consolidación sumaba los totales de las notas, que ya venían netos, pero construía las líneas a precio de lista y agrupaba los ítems solo por su identificador, sin considerar el precio ni la unidad. Como el descuento no quedaba registrado en ninguna parte del documento consolidado, el comprobante no podía declararlo, y como el comprobante y el archivo de declaración se construyen multiplicando precio unitario por cantidad, unir líneas con precios distintos alteraba el importe.</td>
+          <td>Se incorporaron tres reglas puras al módulo de consolidación: la agrupación de líneas por producto, precio y unidad; el total del consolidado como suma de los totales de las notas; y el descuento del consolidado como suma de los descuentos de las notas que agrupa, según la regla única de lectura del descuento. El servicio escribe el descuento en la venta consolidada con ambas denominaciones del campo.</td>
+          <td><code>src/lib/consolidado.test.ts</code> (10 casos, entre ellos el caso real de una nota con promoción junto a otra sin promoción)</td>
+          <td>La consolidación produce un documento fiscal nuevo y no puede perder información de los documentos que agrupa. Se deja constancia de que las boletas consolidadas emitidas con anterioridad a la corrección conservan la inconsistencia en el documento original.</td>
+        </tr>
+        <tr>
+          <td>INC-06</td>
+          <td>Los pedidos se cobraban declarando las líneas como gravadas, con operación gravada e impuesto del 18 %, aunque los productos del catálogo estuvieran exonerados. Con venta por presentación, el importe de línea habría quedado además multiplicado por el factor de conversión.</td>
+          <td>El flujo de envío a caja enviaba los ítems con la forma de los datos del carrito (cantidad y precio por presentación) en lugar de la forma que usan los documentos (cantidad y cantidad en unidades base, precio por unidad base, subtotal, unidad, categoría y afectación tributaria). Al no viajar la afectación, el cobro aplicaba el valor por defecto, que es el de operación gravada.</td>
+          <td>El alta del pedido arma los ítems con el mismo formato que la venta directa, de modo que la afectación del producto viaja en el documento, y la determinación de la afectación quedó en una regla única que da prioridad a la del propio ítem sobre el valor por defecto del negocio.</td>
+          <td><code>src/lib/sunat-importes.test.ts</code> (casos de afectación tomada del propio ítem y de ítem sin afectación resuelto por el valor por defecto del negocio)</td>
+          <td>Un flujo nuevo de venta debe copiar el formato del documento y no el del carrito. La forma de los datos decide si el comprobante declara correctamente o no, y el comprobador de tipos no detecta que un campo obligatorio para el cálculo sencillamente no esté presente.</td>
+        </tr>
+        <tr>
+          <td>INC-07</td>
+          <td>El importe total del pedido quedaba por debajo del total real, de manera que el comprobante imprimía un total y un importe en letras distintos del importe que efectivamente se cobraba.</td>
+          <td>El alta del pedido volvía a restar el descuento al total, cuando ese total ya llegaba neto desde el punto de venta, que es donde se calculan los descuentos. El descuento se aplicaba, por lo tanto, dos veces, y el importe del documento dejaba de coincidir con el del cobro.</td>
+          <td>El importe del pedido se escribe con el total calculado en el carrito, igual que en la venta directa, y el descuento se conserva en su propio campo para que el comprobante lo declare como una fila independiente en lugar de aparecer incorporado al precio unitario.</td>
+          <td><code>src/lib/pedidos.test.ts</code> (caso del total cotizado que prevalece sobre la suma de las líneas) y <code>src/lib/sunat-importes.test.ts</code> (caso del descuento de promoción que explica la diferencia)</td>
+          <td>Un valor derivado no debe volver a transformarse aguas abajo. Cada magnitud tiene un único lugar donde se calcula, y el resto del sistema la consume tal como está.</td>
+        </tr>
+        <tr>
+          <td>INC-08</td>
+          <td>El comprobante imprimía el nombre del vendedor como si hubiera sido él quien cobró la venta.</td>
+          <td>El alta del pedido escribía el nombre del vendedor en el campo reservado para el cajero, y el comprobante interpretaba ese campo como el usuario que había realizado el cobro. El arqueo, en cambio, disponía del dato correcto, de modo que la misma venta mostraba dos responsables distintos según el documento que se consultara.</td>
+          <td>El pedido nace con el vendedor en su propio campo y sin cajero asignado, y el cobro escribe los dos nombres: el del vendedor que armó la venta y el de quien la cobró. La regla única de composición de personal colapsa el nombre cuando se trata de la misma persona, evitando que se imprima dos veces.</td>
+          <td><code>src/lib/personal.test.ts</code> (16 casos, entre ellos el que verifica que el cajero se lee del campo correspondiente y no del campo del vendedor)</td>
+          <td>Mostrar los dos campos no equivale a mostrar a las dos personas. Los campos tienen una semántica que debe respetarse, y cuando existe una única regla de composición el defecto no puede reaparecer por un camino nuevo.</td>
+        </tr>
+        <tr>
+          <td>INC-09</td>
+          <td>El documento cobrado conservaba el usuario del vendedor, por lo que el cajero no veía en sus propios reportes el comprobante que acababa de emitir.</td>
+          <td>El cobro del pedido actualizaba el estado del documento, la serie y el correlativo, pero no el usuario responsable. Los reportes filtran por ese campo cuando el usuario no cuenta con alcance total sobre la operación, de manera que el comprobante quedaba fuera del alcance de quien lo había emitido.</td>
+          <td>El cobro deja el documento a nombre de quien lo cobró y conserva al vendedor en sus campos propios, de modo que el reporte por empleado sigue pudiendo atribuir la venta al vendedor mientras el comprobante aparece en los reportes del cajero.</td>
+          <td>Sin prueba automatizada: se verifica por revisión del servicio de ventas y por el caso de aceptación CP-15.</td>
+          <td>Todo flujo que cambia de responsable debe reasignar los campos de propiedad del documento. El nombre visible y el identificador con el que se filtra son dos datos distintos y ambos deben quedar coherentes.</td>
+        </tr>
+        <tr>
+          <td>INC-10</td>
+          <td>Un contador paralelo de notas de venta habría repetido un número de comprobante ya emitido.</td>
+          <td>El flujo de ventas pendientes utilizaba la clave de contador correspondiente a los comprobantes electrónicos para todos los tipos de documento, y escribía el correlativo en un campo con otro nombre. Como consecuencia se creó un contador que arrancaba en uno mientras las notas de venta continuaban por el número 173, de modo que la siguiente nota de venta pendiente habría repetido un número ya emitido y la administración tributaria habría rechazado la nota. El mismo canal generaba otros dos efectos: cada intento de emisión consumía un correlativo y el cambio de tipo de comprobante dejaba huecos en la serie.</td>
+          <td>La clave del contador se arma siempre con la regla única que corresponde al tipo de documento y el campo es el declarado por el módulo de contadores; el contador se siembra desde el máximo correlativo ya emitido cuando no existe; y el pedido nace sin número de comprobante, que se asigna una sola vez al cobrar, de modo que eliminar un pedido no deja huecos. El contador huérfano se eliminó después de verificar que no existían comprobantes repetidos.</td>
+          <td><code>src/lib/contadores.test.ts</code> (11 casos, entre ellos el caso de regresión que impide que una nota de venta caiga en el contador de comprobantes electrónicos y el que verifica que el código de pedido no se confunda con un comprobante)</td>
+          <td>Un identificador fiscal no se escribe a mano en ningún punto del sistema: la clave y el campo del contador tienen una sola implementación, y la numeración del comprobante se asigna en el momento de la emisión y no antes.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Conclusiones de la validación</h3>
+
+    <p>El proceso de validación permitió establecer que la mayor parte de las incidencias registradas no
+    tuvieron su origen en errores de cálculo, sino en <strong>discrepancias entre el flujo probado y el flujo
+    nuevo</strong>: el mismo dato escrito con dos nombres distintos, el mismo cálculo hecho en dos lugares, el
+    mismo formulario reconstruido en otra pantalla. Las pruebas unitarias sobre la capa pura aprobaban las
+    reglas de cálculo, pero no advertían que un flujo nuevo no las estuviera invocando, o que enviara los
+    datos con otra forma. Esa observación es la que más modificó el proceso de validación: dejó de
+    verificarse únicamente que la regla estuviera bien escrita, para verificarse además que el flujo que la
+    necesita efectivamente la utilice.</p>
+
+    <p>En consecuencia, quedaron incorporados controles concretos. Se incorporó la limpieza de valores
+    indefinidos en el borde de escritura, aplicada a todas las escrituras cuyos payloads provienen de
+    formularios o de respuestas externas, y una función de diagnóstico que informa la ruta exacta del valor
+    que impide la escritura. Se concentraron en reglas únicas los cálculos que estaban repetidos o que se
+    habían reescrito a mano: el efectivo esperado del turno, el reparto de una venta por bolsillos, la
+    lectura del descuento de una venta, el descuento del consolidado, la preparación de los importes que se
+    declaran ante la administración tributaria, la agrupación de líneas consolidadas, el reparto de pedidos
+    por caja, la determinación de la afectación tributaria de cada ítem, la revisión del tope del descuento
+    manual, la composición de los nombres del vendedor y del cajero, y la clave y el campo de los
+    correlativos. Finalmente, cada corrección se acompañó de la prueba que fija el defecto, de manera que la
+    regla corregida no pueda revertirse sin que la ejecución de las pruebas lo advierta.</p>
+
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s5">5. Matriz de trazabilidad</h2>
+
+    <p>La matriz relaciona cada requerimiento, expresado por módulo y funcionalidad, con el módulo del
+    sistema que lo implementa, con la prueba automatizada o el caso de aceptación que lo verifica y con la
+    evidencia disponible. Cuando una funcionalidad no dispone de prueba automatizada, se indica de forma
+    explícita que su verificación es manual: la ausencia de cobertura automatizada se declara en lugar de
+    omitirse, y constituye el insumo de la sección de limitaciones.</p>
+
+    <table class="compacta" style="page-break-inside:auto">
+      <thead>
+        <tr>
+          <th>Requerimiento (módulo y funcionalidad)</th>
+          <th>Módulo del sistema</th>
+          <th>Prueba automatizada o caso manual</th>
+          <th>Evidencia</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Gestión del catálogo de productos</td>
+          <td>Inventario</td>
+          <td>Manual — CP-01</td>
+          <td>Captura de la pantalla y registro en la colección de productos</td>
+        </tr>
+        <tr>
+          <td>Venta por presentación y unidades base</td>
+          <td>PDV e Inventario</td>
+          <td>Manual — CP-02</td>
+          <td>Comprobante emitido y movimiento de kardex</td>
+        </tr>
+        <tr>
+          <td>Ajuste de inventario</td>
+          <td>Inventario y Kardex</td>
+          <td>Manual — CP-03</td>
+          <td>Movimiento con stock anterior y nuevo; registro de auditoría</td>
+        </tr>
+        <tr>
+          <td>Compras, costos e historial de precios</td>
+          <td>Compras</td>
+          <td>Manual — CP-04</td>
+          <td>Movimiento de entrada en el kardex e historial de precios actualizado</td>
+        </tr>
+        <tr>
+          <td>Promociones de volumen</td>
+          <td><code>src/lib/descuentos.ts</code></td>
+          <td>Automatizada — <code>descuentos.test.ts</code> (18 casos) y manual — CP-05</td>
+          <td>Casos de la promoción por umbral y del subtotal bruto</td>
+        </tr>
+        <tr>
+          <td>Descuento manual y su tope</td>
+          <td><code>src/lib/descuentos.ts</code></td>
+          <td>Automatizada — <code>descuentos.test.ts</code> y manual — CP-07 y CP-08</td>
+          <td>Casos del descuento en soles medido como porcentaje y del tope recortado</td>
+        </tr>
+        <tr>
+          <td>Pago simple y pago múltiple</td>
+          <td><code>src/lib/pagos.ts</code></td>
+          <td>Automatizada — <code>pagos.test.ts</code> (21 casos) y manual — CP-09</td>
+          <td>Casos del pago repartido entre dos medios y del tope de los medios electrónicos</td>
+        </tr>
+        <tr>
+          <td>Venta a crédito y límite de crédito</td>
+          <td><code>src/lib/credito.ts</code></td>
+          <td>Automatizada — <code>credito.test.ts</code> (11 casos) y manual — CP-10 y CP-11</td>
+          <td>Casos del valor cero sin límite, del borde del límite y del excedente explicado</td>
+        </tr>
+        <tr>
+          <td>Cobranza de crédito</td>
+          <td>Servicio de clientes y <code>src/lib/arqueo.ts</code></td>
+          <td>Automatizada — <code>arqueo.test.ts</code> y manual — CP-18</td>
+          <td>Caso de la cobranza registrada por transferencia que no debe contarse como venta del día</td>
+        </tr>
+        <tr>
+          <td>Afectación tributaria por producto</td>
+          <td><code>src/lib/sunat-importes.ts</code></td>
+          <td>Automatizada — <code>sunat-importes.test.ts</code> (29 casos) y manual — CP-12 y CP-13</td>
+          <td>Casos de la afectación tomada del ítem y del ítem sin afectación resuelto por el valor por defecto</td>
+        </tr>
+        <tr>
+          <td>Importes y descuento declarados en el comprobante</td>
+          <td><code>src/lib/sunat-importes.ts</code></td>
+          <td>Automatizada — <code>sunat-importes.test.ts</code> y manual — CP-06</td>
+          <td>Casos del reparto exacto del descuento y de la reconstrucción del importe de línea</td>
+        </tr>
+        <tr>
+          <td>Comprobante enviado al servicio de facturación</td>
+          <td><code>src/lib/sunat.ts</code></td>
+          <td>Automatizada — <code>sunat.test.ts</code> (9 casos) y manual — CP-24</td>
+          <td>Casos del precio unitario y la cantidad con dos decimales y del residuo de coma flotante en los totales</td>
+        </tr>
+        <tr>
+          <td>Envío a la administración tributaria y lectura de la respuesta</td>
+          <td>Servicio de facturación del cliente web</td>
+          <td>Manual — CP-24 (prueba de integración fiscal)</td>
+          <td>Estado del documento con código, descripción, resumen digital y contenido; código 1033 en el reenvío</td>
+        </tr>
+        <tr>
+          <td>Correlativos y series de comprobante</td>
+          <td><code>src/lib/contadores.ts</code></td>
+          <td>Automatizada — <code>contadores.test.ts</code> (11 casos) y manual — CP-15</td>
+          <td>Casos de los dos espacios de numeración y del caso de regresión del contador paralelo</td>
+        </tr>
+        <tr>
+          <td>Validación de series por caja</td>
+          <td><code>src/lib/series.ts</code></td>
+          <td>Prueba manual — CP-15 (la verificación original se realizó con un procedimiento temporal que no quedó incorporado al repositorio)</td>
+          <td>Configuración de cajas y de usuarios; series en el comprobante emitido</td>
+        </tr>
+        <tr>
+          <td>Envío de una venta a caja (pedido)</td>
+          <td>Servicio de ventas — alta del pedido</td>
+          <td>Manual — CP-14, con cobertura automatizada colateral de <code>limpio.test.ts</code> (12 casos)</td>
+          <td>Documento en estado pendiente, sin comprobante y sin movimiento de stock</td>
+        </tr>
+        <tr>
+          <td>Visibilidad y reparto de pedidos por caja</td>
+          <td><code>src/lib/pedidos.ts</code></td>
+          <td>Automatizada — <code>pedidos.test.ts</code> (17 casos) y manual — CP-17</td>
+          <td>Caso de regresión del pedido visible para el cajero sin caja asignada</td>
+        </tr>
+        <tr>
+          <td>Cobro del pedido en el carrito</td>
+          <td><code>src/lib/pedidos.ts</code> y servicio de ventas</td>
+          <td>Automatizada — <code>pedidos.test.ts</code> y manual — CP-15</td>
+          <td>Casos del total cotizado que prevalece y del descuento del pedido en el carrito</td>
+        </tr>
+        <tr>
+          <td>Eliminación de pedidos</td>
+          <td>Servicio de ventas — cancelación del pedido</td>
+          <td>Manual — CP-16</td>
+          <td>Documento marcado como cancelado, con motivo y usuario, y registro en auditoría</td>
+        </tr>
+        <tr>
+          <td>Nombres del vendedor y del cajero en los documentos</td>
+          <td><code>src/lib/personal.ts</code></td>
+          <td>Automatizada — <code>personal.test.ts</code> (16 casos) y manual — CP-15</td>
+          <td>Casos del nombre repetido colapsado y del cajero leído del campo correcto</td>
+        </tr>
+        <tr>
+          <td>Escritura de documentos sin valores indefinidos</td>
+          <td><code>src/lib/limpio.ts</code></td>
+          <td>Automatizada — <code>limpio.test.ts</code> (12 casos)</td>
+          <td>Casos de limpieza en profundidad y de respeto de instancias de clase</td>
+        </tr>
+        <tr>
+          <td>Arqueo, cierre de turno y conteo ciego</td>
+          <td><code>src/lib/arqueo.ts</code> y módulo de turnos</td>
+          <td>Automatizada — <code>arqueo.test.ts</code> (32 casos) y manual — CP-21 y CP-22</td>
+          <td>Casos del esperado con gastos y vuelto, del desglose por origen y del consolidado del día</td>
+        </tr>
+        <tr>
+          <td>Gastos de caja</td>
+          <td>Egresos y <code>src/lib/arqueo.ts</code></td>
+          <td>Manual — CP-23, con cobertura automatizada parcial de <code>arqueo.test.ts</code></td>
+          <td>Caso del descuento de los gastos de efectivo en el esperado; egreso en el reporte</td>
+        </tr>
+        <tr>
+          <td>Consolidación de notas de venta</td>
+          <td><code>src/lib/consolidado.ts</code></td>
+          <td>Automatizada — <code>consolidado.test.ts</code> (10 casos) y manual — CP-19</td>
+          <td>Caso del mismo producto a precios distintos que no debe unirse y del descuento declarado</td>
+        </tr>
+        <tr>
+          <td>Anulación de documentos</td>
+          <td>Servicio de ventas — anulación de notas de venta</td>
+          <td>Manual — CP-20</td>
+          <td>Reposición de stock, ajuste de los bolsillos del turno y registro de auditoría</td>
+        </tr>
+        <tr>
+          <td>Registro de errores de la aplicación</td>
+          <td><code>src/lib/errores.ts</code></td>
+          <td>Automatizada — <code>errores.test.ts</code> (9 casos) y manual (panel de auditoría)</td>
+          <td>Casos del descarte del error repetido y del troceo en lotes de 500 operaciones</td>
+        </tr>
+        <tr>
+          <td>Reportes de ventas por rango de fechas y por empleado</td>
+          <td>Servicio de reportes</td>
+          <td>Prueba manual — revisión funcional (CP-15 y CP-20)</td>
+          <td>Reportes con datos del rango; requiere los índices compuestos declarados y desplegados</td>
+        </tr>
+        <tr>
+          <td>Pantalla de cliente y ventas en espera</td>
+          <td><code>src/lib/customer-display.ts</code> y <code>src/lib/ventas-pausadas.ts</code></td>
+          <td>Prueba manual</td>
+          <td>Pantalla de cliente abierta por su parámetro de sesión; recuperación de una venta pausada</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>Ninguna funcionalidad principal del sistema queda sin una prueba asociada. Cinco de ellas —la
+    validación de series por caja, la anulación de documentos, los gastos de caja, los reportes de ventas y
+    la pantalla de cliente— cuentan únicamente con verificación manual, lo que se declara de manera expresa
+    y se retoma en la sección siguiente.</p>
+
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s6">6. Limitaciones de la validación</h2>
+
+    <p>Se declaran a continuación las limitaciones del proceso de validación aplicado, junto con la
+    recomendación correspondiente para cada una. Su explicitación no debilita el informe: delimita con
+    precisión el alcance de lo que las pruebas permiten afirmar.</p>
+
+    <table style="page-break-inside:auto">
+      <thead>
+        <tr>
+          <th>Limitación</th>
+          <th>Recomendación</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>(a) Alcance de la cobertura automatizada.</strong> Las pruebas automatizadas cubren la
+          capa de reglas puras, es decir los módulos que no dependen de la base de datos ni de la interfaz.
+          No cubren los componentes de interfaz ni los servicios de acceso a datos, de modo que una regla
+          correctamente probada puede no estar siendo invocada por la pantalla que debería usarla: ese fue,
+          precisamente, el patrón común de varias incidencias de la sección 4.</td>
+          <td>Incorporar pruebas de componentes sobre los flujos críticos (punto de venta y cierre de turno)
+          y pruebas de integración de los servicios contra un emulador de la base de datos, manteniendo la
+          capa pura como base de la pirámide de pruebas.</td>
+        </tr>
+        <tr>
+          <td><strong>(b) Entorno de las pruebas de aceptación.</strong> Las pruebas de aceptación se
+          ejecutan sobre la aplicación en operación real y son realizadas por el usuario del sistema, sin un
+          entorno formal de aseguramiento de la calidad: no hay un conjunto de datos de prueba aislado ni un
+          registro previo de los criterios de salida. Los defectos se detectan, por lo tanto, en el momento
+          en que afectan la operación.</td>
+          <td>Definir un proyecto de base de datos no productivo con un conjunto de datos de prueba estable,
+          y registrar cada caso de aceptación con fecha, responsable y evidencia antes de cada liberación, de
+          modo que la prueba sea repetible y no dependa de la operación del día.</td>
+        </tr>
+        <tr>
+          <td><strong>(c) Validación de la integración fiscal.</strong> La facturación electrónica se valida
+          contra el ambiente real de la administración tributaria, sin ambiente de pruebas ni simulación de
+          las respuestas. Esto da máxima fidelidad a la verificación, pero impide reproducir de manera
+          controlada las respuestas de observación y de rechazo.</td>
+          <td>Evaluar el ambiente de pruebas del organismo fiscal y, en paralelo, verificar de forma
+          automatizada la interpretación de las respuestas conocidas (aceptación, aceptación con
+          observaciones y código de comprobante ya registrado) a partir de respuestas registradas.</td>
+        </tr>
+        <tr>
+          <td><strong>(d) Ausencia de integración continua.</strong> Las verificaciones se ejecutan de forma
+          manual antes de cada despliegue. No existe un flujo automatizado que las ejecute ante cada cambio,
+          de modo que su cumplimiento depende de la disciplina del proceso de trabajo.</td>
+          <td>Incorporar un flujo de integración continua que ejecute la comprobación de tipos, el análisis
+          estático, las pruebas automatizadas y la construcción del paquete en cada cambio, y que considere
+          condición de aceptación no superar la línea base de advertencias ni registrar casos fallidos.</td>
+        </tr>
+        <tr>
+          <td><strong>(e) Desalineación con la aplicación móvil.</strong> La aplicación móvil tiene su propio
+          ciclo de verificación y su propio repositorio, por lo que puede quedar desalineada respecto del
+          cliente web. El propio historial técnico documenta defectos equivalentes en la aplicación móvil
+          que fueron corregidos en el cliente web y quedaron pendientes de traslado, entre ellos el reparto
+          de pedidos, el redondeo del precio unitario antes del envío fiscal y el cálculo del descuento en
+          la consolidación.</td>
+          <td>Mantener un listado explícito de invariantes compartidos entre ambos clientes y verificar la
+          equivalencia de comportamiento con los mismos casos de prueba antes de cada liberación conjunta,
+          adoptando como norma que un defecto corregido en un cliente se verifica también en el otro.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="nota">
+      <p>Las limitaciones anteriores no afectan los resultados obtenidos: 195 casos automatizados aprobados,
+      sin errores de tipos ni de análisis estático, y las reglas de mayor consecuencia económica y tributaria
+      del sistema se encuentran entre las verificadas de forma automatizada. Delimitan, en cambio, hasta
+      dónde puede afirmarse que el sistema está verificado, y señalan las líneas de trabajo que permitirían
+      ampliar esa afirmación.</p>
+    </div>
+
+    <div class="pie">Anexo 4 — Plan de pruebas y validación · documento técnico de apoyo al TAP</div>
+  </div>
+</body>
+</html>

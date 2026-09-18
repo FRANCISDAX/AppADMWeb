@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anexo 6 — Diapositivas de sustentación del TAP</title>
+<!--
+  Anexo 6 del paquete documental del TAP — DIAPOSITIVAS DE SUSTENTACIÓN.
+  Formato apaisado (16:9) pensado para imprimirse a PDF con Chrome en modo sin interfaz:
+    chrome --headless=new --disable-gpu --no-pdf-header-footer ^
+      --print-to-pdf="docs\tap\06-sustentacion.pdf" ^
+      "file:///C:/Users/aaval/OneDrive/Escritorio/appadm-web/docs/tap/06-sustentacion.html"
+
+  Este archivo NO usa docs/tap/tap.css (esa hoja es para documentos verticales): lleva su propio
+  <style> autocontenido, con @page A4 horizontal y una página por diapositiva.
+  Todo el contenido sale del repositorio (código, package.json, AGENTS.md, HISTORIAL-SESIONES.md,
+  docs/manual-usuario.html, docs/resumen-app.html). No hay métricas de operación ni citas inventadas.
+  El guion de la defensa está en guion-sustentacion.md.
+-->
+<style>
+  /* ── Página: A4 horizontal, sin márgenes (el marco lo pone cada diapositiva) ───── */
+  @page { size: A4 landscape; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #fff; }
+  body {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: #1f2937; font-size: 16px; line-height: 1.45;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+
+  /* ── Diapositiva 16:9 = 297 mm × 167 mm (A4 horizontal) ───────────────────────── */
+  .slide {
+    width: 297mm; height: 167mm; padding: 11mm 14mm 8mm;
+    background: #fff; position: relative; overflow: hidden;
+    display: flex; flex-direction: column;
+    page-break-after: always; break-after: page; page-break-inside: avoid;
+  }
+  .slide:last-of-type { page-break-after: auto; break-after: auto; }
+
+  /* ── Encabezado ───────────────────────────────────────────────────────────────── */
+  .head { border-bottom: 2.5px solid #f97316; padding-bottom: 2.5mm; margin-bottom: 5mm; flex: none; }
+  .head h2 { font-size: 27px; line-height: 1.15; color: #111827; font-weight: 700; letter-spacing: -0.2px; }
+  .head .sub { font-size: 14.5px; color: #6b7280; margin-top: 1.5mm; }
+  .eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: #c2410c; margin-bottom: 1.5mm; }
+
+  /* ── Cuerpo y pie ─────────────────────────────────────────────────────────────── */
+  .body { flex: 1; display: flex; flex-direction: column; gap: 3.4mm; min-height: 0; }
+  .foot {
+    flex: none; margin-top: 3mm; padding-top: 2mm; border-top: 1px solid #e5e7eb;
+    display: flex; justify-content: space-between; font-size: 10.5px; color: #9ca3af; letter-spacing: 0.3px;
+  }
+  .foot .n { font-weight: 700; color: #c2410c; }
+
+  /* ── Texto ────────────────────────────────────────────────────────────────────── */
+  ul { list-style: none; }
+  li { position: relative; padding-left: 6.5mm; margin-bottom: 2mm; font-size: 16px; }
+  li::before { content: "▸"; position: absolute; left: 0; top: 0; color: #f97316; font-size: 15px; }
+  li ul { margin-top: 1.5mm; }
+  li li { font-size: 14px; color: #4b5563; margin-bottom: 1mm; }
+  li li::before { content: "–"; color: #9ca3af; }
+  .small { font-size: 14px; color: #4b5563; }
+  .lead { font-size: 17px; color: #374151; }
+  strong { color: #111827; font-weight: 700; }
+  em { color: #4b5563; font-style: normal; background: #fef3c7; padding: 0 1mm; border-radius: 2px; }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 13.5px; background: #f3f4f6; color: #9a3412; padding: 0.3mm 1.2mm; border-radius: 3px; }
+
+  /* ── Tarjetas y columnas ──────────────────────────────────────────────────────── */
+  .cols { display: flex; gap: 5mm; flex: 1; min-height: 0; }
+  .col { flex: 1; min-width: 0; }
+  .col.b2 { flex: 2; }
+  .card { border: 1px solid #e5e7eb; border-radius: 7px; padding: 3.5mm 4mm; background: #fff; }
+  .card .t { font-size: 15.5px; font-weight: 700; color: #c2410c; margin-bottom: 1.6mm; }
+  .card .d { font-size: 14px; color: #4b5563; }
+  .card.acc { background: #fff7ed; border-color: #fdba74; }
+  .card.gray { background: #f9fafb; }
+  .card.sm .t { font-size: 14.5px; }
+  .card.sm .d { font-size: 13px; }
+  .stack.k5 { gap: 2.2mm; }
+  .stack.k5 .card { padding: 2.4mm 3.2mm; }
+  .stack.k5 .card .t { font-size: 13.8px; }
+  .stack.k5 .card .d { font-size: 12.4px; line-height: 1.34; }
+  .two.compact { gap: 4mm; }
+  .two.compact .card { padding: 2.6mm 3.2mm; }
+  .two.compact .card .t { font-size: 14px; }
+  .two.compact .card .d { font-size: 12.3px; line-height: 1.34; }
+
+  /* ── Indicadores ──────────────────────────────────────────────────────────────── */
+  .kpis { display: flex; gap: 4mm; }
+  .kpi { flex: 1; border: 1px solid #e5e7eb; border-top: 3px solid #f97316; border-radius: 6px; padding: 3mm 2mm; text-align: center; background: #fff; }
+  .kpi .v { font-size: 26px; font-weight: 800; color: #c2410c; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .kpi .r { font-size: 11.5px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1.2mm; }
+  .kpi .n2 { font-size: 10.5px; color: #9ca3af; margin-top: 0.8mm; }
+
+  /* ── Diagrama de flujo (recuadros + flechas) ──────────────────────────────────── */
+  .flow { display: flex; align-items: stretch; gap: 2mm; }
+  .step { flex: 1; border: 1px solid #e5e7eb; border-radius: 7px; padding: 3mm; background: #fff; display: flex; flex-direction: column; }
+  .step .n { width: 6mm; height: 6mm; border-radius: 50%; background: #f97316; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-bottom: 1.8mm; }
+  .step .t { font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 1.2mm; }
+  .step .d { font-size: 12.5px; color: #6b7280; line-height: 1.35; }
+  .step.k { background: #fff7ed; border-color: #fdba74; }
+  .arrow { align-self: center; color: #f97316; font-size: 17px; font-weight: 700; flex: none; }
+
+  /* ── Capas ────────────────────────────────────────────────────────────────────── */
+  .layers { display: flex; flex-direction: column; gap: 2.2mm; }
+  .layer { border-radius: 6px; padding: 2.6mm 4mm; border-left: 5px solid #f97316; background: #f9fafb; border-top: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; }
+  .layer .t { font-size: 15px; font-weight: 700; color: #111827; }
+  .layer .d { font-size: 13px; color: #4b5563; margin-top: 0.8mm; }
+  .layer.l1 { border-left-color: #f97316; background: #fff7ed; }
+  .layer.l2 { border-left-color: #84cc16; background: #f7fee7; }
+  .layer.l3 { border-left-color: #0ea5e9; background: #f0f9ff; }
+  .layer.l4 { border-left-color: #a855f7; background: #faf5ff; }
+
+  /* ── Tablas ───────────────────────────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { background: #f9fafb; color: #374151; text-align: left; font-weight: 700; padding: 1.8mm 2.4mm; border: 1px solid #e5e7eb; font-size: 13px; }
+  td { padding: 1.7mm 2.4mm; border: 1px solid #e5e7eb; vertical-align: top; color: #374151; }
+  tbody tr:nth-child(even) { background: #fcfcfd; }
+  td.c { text-align: center; }
+  table.tight td, table.tight th { padding: 1.3mm 2mm; font-size: 12.5px; }
+  table.tight { font-size: 12.4px; line-height: 1.3; }
+  table.dense td, table.dense th { padding: 0.9mm 1.8mm; font-size: 11.8px; line-height: 1.28; }
+
+  /* ── Avisos ───────────────────────────────────────────────────────────────────── */
+  .note { border-radius: 6px; padding: 2.6mm 4mm; font-size: 14px; background: #fff7ed; border-left: 4px solid #f97316; color: #374151; }
+  .note.info { background: #f0f9ff; border-left-color: #0ea5e9; }
+  .note.ok { background: #f0fdf4; border-left-color: #16a34a; }
+  .badge { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 0.6mm 2mm; border-radius: 3px; background: #f3f4f6; color: #4b5563; }
+  .badge.acc { background: #ffedd5; color: #9a3412; }
+
+  /* ── Portada ──────────────────────────────────────────────────────────────────── */
+  .cover { justify-content: center; padding: 18mm 22mm; }
+  .cover .inst { font-size: 12.5px; letter-spacing: 2.4px; text-transform: uppercase; color: #6b7280; font-weight: 700; }
+  .cover h1 { font-size: 34px; line-height: 1.2; color: #111827; margin: 7mm 0 4mm; letter-spacing: -0.4px; }
+  .cover .rule { width: 62mm; height: 4px; background: #f97316; border-radius: 2px; margin: 0 0 5mm; }
+  .cover .sub { font-size: 17px; color: #4b5563; }
+  .cover .meta { margin-top: 12mm; font-size: 13.5px; color: #6b7280; line-height: 1.7; }
+
+  .two { display: flex; gap: 5mm; }
+  .two > * { flex: 1; }
+  .stack { display: flex; flex-direction: column; gap: 2.6mm; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════ 1 · PORTADA ══════════════════════════ -->
+<div class="slide cover">
+  <div class="inst">Trabajo de Aplicación Profesional</div>
+  <h1>Sistema de punto de venta, inventario y facturación electrónica para un negocio de venta al detalle</h1>
+  <div class="rule"></div>
+  <div class="sub">
+    Aplicación web y servicio de facturación electrónica (UBL 2.1 · SUNAT)
+  </div>
+  <div class="meta">
+    [COMPLETAR: nombre del tesista] · [COMPLETAR: carrera y sede]<br>
+    [COMPLETAR: institución] · [COMPLETAR: nombre del asesor]<br>
+    Sustentación — [COMPLETAR: fecha]
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">1 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 2 · AGENDA ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Recorrido de la exposición</div>
+    <h2>Agenda</h2>
+    <div class="sub">Veinte minutos: problema, solución construida, validación y resultados</div>
+  </div>
+  <div class="body">
+    <div class="two">
+      <div class="card gray">
+        <div class="t">1 · Planteamiento</div>
+        <div class="d">Problema (3) · Objetivos (4) · Justificación (5) · Alcance y limitaciones (6)</div>
+      </div>
+      <div class="card gray">
+        <div class="t">2 · Metodología y arquitectura</div>
+        <div class="d">Metodología (7) · Arquitectura general (8) · Arquitectura por capas (9) · Modelo de datos (10) · Módulos (11)</div>
+      </div>
+    </div>
+    <div class="two">
+      <div class="card acc">
+        <div class="t">3 · Funcionamiento</div>
+        <div class="d">Flujo de venta y pedidos (12) · Facturación electrónica (13) · Control de caja y arqueo (14) · Ingeniería de requisitos (15)</div>
+      </div>
+      <div class="card acc">
+        <div class="t">4 · Validación y resultados</div>
+        <div class="d">Pruebas y calidad (16) · Incidencias corregidas (17) · Resultados entregados (18) · Demostración en vivo (19) · Conclusiones (20) · Recomendaciones (21) · Cierre (22)</div>
+      </div>
+    </div>
+    <div class="note info">
+      Los anexos técnicos (arquitectura, modelo de datos, requerimientos, plan de pruebas e informe) acompañan esta
+      presentación y respaldan cada afirmación con el archivo del proyecto que la sustenta.
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">2 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 3 · PROBLEMA ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Situación actual</div>
+    <h2>El problema: vender, controlar stock y cumplir con la SUNAT sin un sistema único</h2>
+  </div>
+  <div class="body">
+    <div class="two">
+      <div class="stack">
+        <div class="card">
+          <div class="t">Cómo se operaba</div>
+          <div class="d">
+            El negocio atendía el mostrador con anotaciones y herramientas aisladas: la venta y el inventario no estaban
+            integrados, el cierre de caja se reconstruía a mano y el comprobante fiscal se emitía por fuera del flujo de venta.
+          </div>
+        </div>
+        <div class="card">
+          <div class="t">Consecuencias verificadas en el propio desarrollo</div>
+          <div class="d">
+            Precios cobrados distintos de los declarados, descuentos que no llegaban al comprobante, pedidos que no se
+            recuperaban en caja y diferencias de efectivo sin explicación.
+          </div>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card acc">
+          <div class="t">Riesgo tributario</div>
+          <div class="d">
+            Cada comprobante electrónico debe emitirse con su serie y correlativo y ser aceptado por la SUNAT. Numerar
+            a mano o fuera del sistema abre la puerta a <strong>números repetidos u omitidos</strong> y a sanciones.
+          </div>
+        </div>
+        <div class="card acc">
+          <div class="t">Necesidad concreta</div>
+          <div class="d">
+            Un solo sistema donde la venta, el stock, la caja y el comprobante electrónico sean el <strong>mismo hecho
+            registrado una sola vez</strong>, con trazabilidad de quién hizo cada cosa.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">3 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 4 · OBJETIVOS ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Objetivos</div>
+    <h2>Objetivo general y objetivos específicos</h2>
+  </div>
+  <div class="body">
+    <div class="card acc">
+      <div class="t">Objetivo general</div>
+      <div class="d">
+        Desarrollar e implantar un sistema de punto de venta, inventario y facturación electrónica que unifique la
+        operación del negocio —venta, stock, caja y comprobante fiscal— y que emita comprobantes electrónicos válidos
+        ante la SUNAT, en funcionamiento real dentro del establecimiento.
+      </div>
+    </div>
+    <div class="two">
+      <div class="stack">
+        <div class="card sm"><div class="t">1 · Analizar los procesos</div><div class="d">Levantar los procesos de venta, inventario, caja y emisión, y traducirlos a requerimientos funcionales y no funcionales con sus actores.</div></div>
+        <div class="card sm"><div class="t">2 · Diseñar la arquitectura</div><div class="d">Definir una arquitectura por capas que aísle las reglas del negocio, separe la custodia del certificado digital y use una base documental compartida.</div></div>
+        <div class="card sm"><div class="t">3 · Implementar los módulos</div><div class="d">Construir los ocho bloques del sistema, incluido el flujo de emisión a la SUNAT con XML UBL 2.1, firma digital y lectura del CDR.</div></div>
+      </div>
+      <div class="stack">
+        <div class="card sm"><div class="t">4 · Verificar la calidad</div><div class="d">Cubrir las reglas críticas con pruebas automatizadas y verificaciones estáticas, y validar el sistema con el usuario en la operación diaria.</div></div>
+        <div class="card sm"><div class="t">5 · Poner en operación</div><div class="d">Desplegar el sistema en el negocio, corregir las incidencias detectadas en el uso real y dejar la documentación de usuario y técnica.</div></div>
+        <div class="card sm ok"><div class="t">Resultado del objetivo general</div><div class="d">El sistema quedó en operación real. La operación y las cifras comerciales del negocio no forman parte del alcance de este informe.</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">4 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 5 · JUSTIFICACIÓN ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Justificación</div>
+    <h2>Por qué el trabajo se justifica</h2>
+  </div>
+  <div class="body">
+    <div class="two">
+      <div class="card">
+        <div class="t">Operativa</div>
+        <div class="d">
+          Unifica mostrador, caja e inventario en un solo flujo. El pedido del vendedor llega al cajero, el cobro
+          descuenta el stock y la caja cuadra con lo que realmente entró.
+        </div>
+      </div>
+      <div class="card">
+        <div class="t">Tributaria</div>
+        <div class="d">
+          El comprobante electrónico se genera dentro del sistema, se firma con el certificado del negocio y se envía a
+          la SUNAT; el CDR queda guardado como constancia en el propio documento de venta.
+        </div>
+      </div>
+    </div>
+    <div class="two">
+      <div class="card">
+        <div class="t">De ingeniería</div>
+        <div class="d">
+          Las reglas del negocio viven en módulos puros y probados (195 pruebas automatizadas), lo que permite
+          corregir un cálculo en un solo lugar y volver a verificarlo.
+        </div>
+      </div>
+      <div class="card">
+        <div class="t">De validación real</div>
+        <div class="d">
+          El sistema se usa en un negocio en operación. Las incidencias aparecidas en el uso diario —siete corregidas y
+          documentadas— son la evidencia de que el trabajo se validó sobre la realidad y no sobre supuestos.
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <strong>Criterio de este informe:</strong> no se declaran mejoras porcentuales ni cifras de venta. Lo que se
+      afirma se puede verificar en el repositorio del proyecto y en la documentación que lo acompaña.
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">5 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 6 · ALCANCE Y LIMITACIONES ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Delimitación</div>
+    <h2>Alcance y limitaciones</h2>
+  </div>
+  <div class="body">
+    <div class="two">
+      <div class="card gray">
+        <div class="t">Dentro del alcance</div>
+        <div class="d">
+          <ul>
+            <li>Aplicación web (punto de venta, inventario, caja, fiscal, clientes, proveedores, reportes y administración).</li>
+            <li>Servicio de facturación electrónica propio: validación, XML UBL 2.1, firma digital y envío a la SUNAT.</li>
+            <li>Base documental compartida en Firestore y emisión de documentos con validez fiscal.</li>
+            <li>Documentación: manual de usuario y paquete técnico de anexos.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card">
+        <div class="t">Fuera del alcance / limitaciones</div>
+        <div class="d">
+          <ul>
+            <li>La aplicación móvil complementaria existe, pero no forma parte del alcance de este informe: se menciona como trabajo relacionado.</li>
+            <li>Las reglas de la base de datos aplican control de acceso por usuario autenticado; la restricción fina por rol vive en la aplicación y queda como trabajo futuro.</li>
+            <li>La conciliación por billetera es opcional al cerrar el turno; el conteo ciego es configurable y está apagado por defecto.</li>
+            <li>El sistema no mide ni declara el impacto comercial del negocio: eso exigiría datos de operación que este trabajo no administra.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">6 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 7 · METODOLOGÍA ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Metodología</div>
+    <h2>Enfoque iterativo con validación del usuario en la operación</h2>
+    <div class="sub">Cada ciclo nació de una observación o de un defecto reportado al usar el sistema en el mostrador</div>
+  </div>
+  <div class="body">
+    <div class="flow">
+      <div class="step"><div class="n">1</div><div class="t">Observar y relevar</div><div class="d">El tesista observa el proceso real y el usuario describe el caso concreto que necesita resolver.</div></div>
+      <div class="arrow">▸</div>
+      <div class="step"><div class="n">2</div><div class="t">Modelar la regla</div><div class="d">La regla del negocio se escribe una sola vez, en un módulo puro y aislado de la interfaz y de la base.</div></div>
+      <div class="arrow">▸</div>
+      <div class="step"><div class="n">3</div><div class="t">Implementar y probar</div><div class="d">Se implementa en el servicio y en la pantalla, y se agregan pruebas automatizadas de la regla.</div></div>
+      <div class="arrow">▸</div>
+      <div class="step"><div class="n">4</div><div class="t">Desplegar y usar</div><div class="d">Se publica y se usa en el turno real; el uso del mostrador es la prueba de aceptación.</div></div>
+      <div class="arrow">▸</div>
+      <div class="step k"><div class="n">5</div><div class="t">Corregir y documentar</div><div class="d">La incidencia se corrige, se registra con su causa y su evidencia, y alimenta el ciclo siguiente.</div></div>
+    </div>
+    <div class="two">
+      <div class="card acc sm">
+        <div class="t">Evidencia del proceso</div>
+        <div class="d">
+          70 confirmaciones de cambios entre el 10 y el 17 de septiembre de 2026, once bloques de historial de sesiones y
+          siete incidencias de operación corregidas y documentadas.
+        </div>
+      </div>
+      <div class="card sm">
+        <div class="t">Criterios de aceptación acordados con el usuario</div>
+        <div class="d">
+          El comprobante declara lo que se cobra; el pedido no mueve inventario; el cierre de caja controla el efectivo y
+          presenta el detalle de los medios electrónicos por separado.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">7 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 8 · ARQUITECTURA GENERAL ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Arquitectura</div>
+    <h2>Vista general: tres componentes y una base compartida</h2>
+  </div>
+  <div class="body">
+    <div class="two">
+      <div class="card">
+        <div class="t">1 · Aplicación web</div>
+        <div class="d">
+          React 19 y TypeScript 6, empaquetada con Vite. Interfaz en español, 27 páginas con carga diferida por módulo,
+          instalable y con funcionamiento sin conexión para consulta.
+        </div>
+      </div>
+      <div class="card">
+        <div class="t">2 · Servicio de facturación electrónica</div>
+        <div class="d">
+          API propia en FastAPI con Pydantic. Construye el XML UBL 2.1 con <code>sunat_py</code>, lo ajusta, lo firma
+          digitalmente, lo empaqueta en ZIP y lo envía por SOAP a la SUNAT. Se ejecuta como contenedor.
+        </div>
+      </div>
+      <div class="card acc">
+        <div class="t">3 · Base documental compartida</div>
+        <div class="d">
+          Cloud Firestore como fuente única de verdad: productos, documentos de venta, movimientos de stock, turnos,
+          contadores de numeración, configuración y auditoría.
+        </div>
+      </div>
+    </div>
+    <div class="note info">
+      <strong>Trabajo relacionado (fuera del alcance):</strong> existe además una aplicación móvil complementaria en
+      React Native que comparte el mismo modelo de datos. No se evalúa en este informe.
+    </div>
+    <div class="note">
+      <strong>Por qué el certificado digital no está en el navegador:</strong> la firma ocurre en el servicio, dentro de la
+      red del negocio. El navegador nunca recibe el certificado ni las credenciales fiscales, y la lógica tributaria se
+      puede actualizar sin volver a publicar la aplicación web.
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">8 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 9 · ARQUITECTURA POR CAPAS ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Arquitectura</div>
+    <h2>Arquitectura por capas de la aplicación web</h2>
+    <div class="sub">Cada capa conoce solo a la inmediatamente inferior: la interfaz no decide cálculos que deben ser únicos</div>
+  </div>
+  <div class="body">
+    <div class="layers">
+      <div class="layer l1">
+        <div class="t">Presentación — <code>src/pages/</code> y <code>src/components/</code></div>
+        <div class="d">27 páginas y 42 archivos de componentes de interfaz. Estado de pantalla, formularios y navegación por estado (sin enrutador). Cada página se carga de forma diferida.</div>
+      </div>
+      <div class="layer l2">
+        <div class="t">Servicios — <code>src/services/</code></div>
+        <div class="d">22 módulos, uno por dominio. Es la única capa que habla con Firestore; aquí viven las transacciones y los lotes de escritura de venta, stock, kardex y turno.</div>
+      </div>
+      <div class="layer l3">
+        <div class="t">Reglas del negocio — <code>src/lib/</code> (módulos puros)</div>
+        <div class="d">29 módulos sin dependencias de Firebase ni de React: dinero y redondeo, descuentos y promociones, importes e IGV del comprobante, arqueo de caja, contadores, reglas de pedidos, saneamiento previo a la escritura.</div>
+      </div>
+      <div class="layer l4">
+        <div class="t">Servicio fiscal — <code>routers/</code> → <code>services/</code> → <code>xml_utils</code> + <code>sunat_py</code> → SUNAT</div>
+        <div class="d">Expone la emisión, valida la carga útil, orquesta el armado y la firma del XML y conserva los archivos generados.</div>
+      </div>
+    </div>
+    <div class="note">
+      <strong>Regla de una sola implementación.</strong> La fórmula del efectivo esperado de un turno estaba escrita a
+      mano en seis lugares y dos de ellos calculaban distinto; hoy es una sola función en <code>src/lib/</code>, usada por
+      todas las pantallas. Lo mismo con la lectura del descuento de una venta y con los importes que se declaran a la
+      SUNAT: los comparte el comprobante impreso y el envío electrónico, así no pueden contradecirse.
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">9 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 10 · MODELO DE DATOS ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Modelo de datos</div>
+    <h2>Dieciséis colecciones documentales con prefijo <code>tbl</code></h2>
+  </div>
+  <div class="body">
+    <table class="tight">
+      <thead><tr><th style="width:26%">Colección</th><th style="width:34%">Qué guarda</th><th>Decisión de modelado relevante</th></tr></thead>
+      <tbody>
+        <tr><td><code>tblDocumentos</code></td><td>Notas de venta, boletas, facturas, notas de crédito y débito, y pedidos</td><td>Un documento es la venta y su estado fiscal; el pedido vive aquí como tipo <code>PENDIENTE</code>, sin serie ni número</td></tr>
+        <tr><td><code>tblContadores</code></td><td>Correlativos por serie</td><td><strong>Dos espacios separados</strong>: notas de venta y comprobantes con validez fiscal no comparten numeración</td></tr>
+        <tr><td><code>tblProductos</code> · <code>tblMovimientos</code></td><td>Catálogo con precios, stock, afectación y kits; kardex de entradas y salidas</td><td>El precio es precio final al público y la afectación es del producto; en el kardex el signo lo decide el tipo de movimiento</td></tr>
+        <tr><td><code>tblTurnos</code> · <code>tblCierresCaja</code></td><td>Turnos de caja y sus cierres</td><td>El turno es registro de caja: no se reescribe; una corrección se autoriza, se justifica y se audita</td></tr>
+        <tr><td><code>tblClientes</code> · <code>tblProveedores</code></td><td>Cartera con crédito y saldo; proveedores, compras y pagos</td><td>El crédito se calcula desde los documentos, no se guarda como saldo suelto</td></tr>
+        <tr><td><code>tblUsuarios</code> · <code>tblCajas</code> · <code>tblConfiguracion</code></td><td>Roles y permisos; puntos de emisión con sus series; parámetros de la empresa</td><td>La caja define las series con las que se emite; el punto de emisión forma parte del hash del comprobante</td></tr>
+        <tr><td><code>tblAuditLog</code> · <code>tblErrores</code></td><td>Acciones con su responsable; errores de la aplicación</td><td>Sustentan el control interno y permiten reconstruir un incidente</td></tr>
+      </tbody>
+    </table>
+    <div class="note info">
+      Los índices compuestos exigidos por las consultas se declaran en un archivo versionado del repositorio y se
+      despliegan con un comando: una consulta sin su índice falla en la operación, no en el desarrollo.
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">10 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 11 · MÓDULOS ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Funcionalidad</div>
+    <h2>Módulos del sistema</h2>
+  </div>
+  <div class="body">
+    <div class="two">
+      <div class="stack">
+        <div class="card sm"><div class="t">Punto de venta</div><div class="d">Búsqueda por nombre, código o lectura de código de barras; presentaciones y listas de precio; promociones y descuento manual con tope; pago múltiple; envío a domicilio; pantalla del cliente por código QR.</div></div>
+        <div class="card sm"><div class="t">Pedidos y caja</div><div class="d">El vendedor envía el pedido y el cajero lo cobra desde el mismo carrito eligiendo comprobante y forma de pago; traslado de pedidos entre cajas.</div></div>
+        <div class="card sm"><div class="t">Inventario</div><div class="d">Productos y kits, stock mínimo, vencimientos, ajustes, toma de inventario, kardex por producto y rotación.</div></div>
+      </div>
+      <div class="stack">
+        <div class="card sm"><div class="t">Control de caja</div><div class="d">Apertura y cierre de turno, arqueo con desglose por origen, conciliación por medio electrónico, gastos de caja y auditoría de cierres.</div></div>
+        <div class="card sm"><div class="t">Fiscal</div><div class="d">Notas de venta, consolidación a boleta, notas de crédito y débito, envío a la SUNAT con estado del CDR, registro de ventas y registro para el SIRE.</div></div>
+        <div class="card sm"><div class="t">Clientes, proveedores y reportes</div><div class="d">Estado de cuenta y crédito por cliente; compras y pagos a proveedores; egresos; reportes por fecha, turno, empleado y categoría, con exportación.</div></div>
+        <div class="card sm"><div class="t">Administración</div><div class="d">Empresa y series, listas de precio, cajas, usuarios con roles y permisos por usuario, auditoría de acciones y panel de errores.</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">11 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 12 · FLUJO DE VENTA Y PEDIDOS ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Funcionamiento</div>
+    <h2>Flujo de venta y pedidos: vendedor, caja y comprobante</h2>
+    <div class="sub">El comprobante se genera una sola vez, al cobrar; el pedido es un ticket en espera, no un comprobante</div>
+  </div>
+  <div class="body">
+    <div class="flow">
+      <div class="step"><div class="n">1</div><div class="t">El vendedor arma la venta</div><div class="d">Productos, cantidades, presentaciones, promociones y cliente. Ve el total cotizado que se le promete al cliente.</div></div>
+      <div class="arrow">▸</div>
+      <div class="step"><div class="n">2</div><div class="t">Envía el pedido a caja</div><div class="d">El pedido nace como <code>PENDIENTE</code>, con un código propio del tipo <code>PED-000123</code>, <strong>sin serie, sin correlativo y sin forma de pago</strong>.</div></div>
+      <div class="arrow">▸</div>
+      <div class="step"><div class="n">3</div><div class="t">El cajero lo cobra</div><div class="d"><em>Cobrar pedido</em> trae el pedido al carrito en modo pedido: el cajero elige comprobante y forma de pago con la misma interfaz de cobro del punto de venta.</div></div>
+      <div class="arrow">▸</div>
+      <div class="step k"><div class="n">4</div><div class="t">Se emite el comprobante</div><div class="d">Recién aquí se asigna serie y correlativo, se descuenta el stock, se escribe el kardex, se registra el turno y se genera el documento fiscal.</div></div>
+    </div>
+    <div class="two">
+      <div class="card acc sm">
+        <div class="t">Por qué la numeración se asigna al cobrar</div>
+        <div class="d">Antes, cada intento numeraba el pedido y, si el cajero cambiaba de comprobante, quemaba un correlativo y dejaba un hueco en la serie. Un pedido que no se cobra no debe consumir un número fiscal ni dejar un hueco.</div>
+      </div>
+      <div class="card acc sm">
+        <div class="t">Por qué el pedido no reserva stock</div>
+        <div class="d">Un pedido es un ticket en espera. Reservar creaba dos caminos de escritura del inventario y retenía stock en silencio. El inventario se descuenta <strong>una sola vez, al cobrar</strong>; si el stock ya no alcanza, el cobro falla con un mensaje claro antes de emitir.</div>
+      </div>
+    </div>
+    <div class="note info">
+      Las cuatro operaciones del cobro se ejecutan dentro de una transacción: contador, documento, stock y kardex, o se
+      aplican todas o no se aplica ninguna. Eliminar un pedido solo lo marca como cancelado —no hay comprobante que
+      anular y el stock nunca se tocó—.
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">12 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 13 · FACTURACIÓN ELECTRÓNICA ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Funcionamiento</div>
+    <h2>Facturación electrónica: flujo de emisión a la SUNAT</h2>
+    <div class="sub">Cada paso tiene un componente responsable y un artefacto verificable</div>
+  </div>
+  <div class="body">
+    <div class="flow">
+      <div class="step"><div class="n">1</div><div class="t">Carga útil</div><div class="d">La aplicación arma emisor, receptor, líneas y totales a partir de <strong>lo cobrado</strong>: el descuento se reparte entre las líneas antes de despejar el IGV.</div></div>
+      <div class="arrow">▸</div>
+      <div class="step"><div class="n">2</div><div class="t">Validación</div><div class="d">El servicio valida la carga con modelos Pydantic: tipo y número de documento, serie, correlativo, cantidades y precios con dos decimales.</div></div>
+      <div class="arrow">▸</div>
+      <div class="step"><div class="n">3</div><div class="t">XML y ajustes</div><div class="d">Se genera el XML UBL 2.1 y se ajustan hora de emisión, importes exactos, totales de IGV, correlativos y punto de emisión.</div></div>
+      <div class="arrow">▸</div>
+      <div class="step"><div class="n">4</div><div class="t">Firma y envío</div><div class="d">Se firma con el certificado digital del negocio, se empaqueta en ZIP con la nomenclatura exigida y se envía por SOAP a la SUNAT.</div></div>
+      <div class="arrow">▸</div>
+      <div class="step k"><div class="n">5</div><div class="t">Constancia</div><div class="d">La respuesta (CDR) se guarda en el documento: estado, código, descripción, hash y XML firmado, consultables después desde los reportes.</div></div>
+    </div>
+    <div class="two">
+      <div class="card sm">
+        <div class="t">Reglas fiscales que se sostienen en el código</div>
+        <div class="d">
+          El comprobante declara lo cobrado, no el precio de lista. El IGV solo existe en la afectación gravada: los
+          productos exonerados, inafectos y gratuitos no llevan IGV y dividirlos haría que el comprobante declare menos
+          de lo cobrado. Todo lo que viaja a la SUNAT va con dos decimales.
+        </div>
+      </div>
+      <div class="card sm acc">
+        <div class="t">Duplicados y contingencias</div>
+        <div class="d">
+          Si un comprobante ya aceptado se reenvía, la SUNAT responde con el código que indica que ya estaba registrado
+          y el sistema lo marca como aceptado en lugar de tratarlo como error. El CDR queda guardado aunque la respuesta
+          venga incompleta.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">13 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 14 · CAJA Y ARQUEO ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Funcionamiento</div>
+    <h2>Control de caja y arqueo</h2>
+    <div class="sub">Se cuadra el efectivo; los medios electrónicos se concilian aparte</div>
+  </div>
+  <div class="body">
+    <div class="two">
+      <div class="stack">
+        <div class="card sm">
+          <div class="t">Fórmula única del efectivo esperado</div>
+          <div class="d">Efectivo esperado = monto inicial + ventas en efectivo − gastos de caja − devuelto al cliente. Las transferencias <strong>no entran</strong> en el esperado ni en la diferencia: son informativas y se concilian contra la billetera o el banco.</div>
+        </div>
+        <div class="card sm">
+          <div class="t">Controles del cierre</div>
+          <div class="d">
+            Conteo ciego configurable —el cajero cuenta sin ver cuánto debería haber, y la diferencia aparece recién en el análisis—;
+            conciliación por medio electrónico opcional (Yape, Plin, tarjeta) declarada al cerrar; gastos de caja con egreso registrado.
+          </div>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card sm">
+          <div class="t">Solo turnos cerrados suman al consolidado del día</div>
+          <div class="d">Un turno abierto tiene un esperado pero todavía no tiene un contado: incluirlo inventaba una diferencia que no existía. El rótulo avisa cuántos turnos quedaron abiertos.</div>
+        </div>
+        <div class="card sm acc">
+          <div class="t">Rastro y formalidad</div>
+          <div class="d">El arqueo por comprobante indica quién vendió cuando no es el mismo cajero del turno. Los documentos de caja se imprimen con nombre y RUC del negocio, quién cerró el turno y las líneas de firma del cajero y del supervisor.</div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <strong>Dos ejes que no se mezclan:</strong> el <em>bolsillo</em> (dónde entró el dinero: cajón o medio electrónico,
+      que es contra lo que se concilia) y el <em>origen</em> (venta del día, cobranza de un crédito anterior o nota de
+      crédito/débito). Una venta a crédito no entra a ningún bolsillo hasta que se cobra.
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">14 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 15 · REQUISITOS ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Ingeniería de requisitos</div>
+    <h2>Actores, permisos y requerimientos</h2>
+  </div>
+  <div class="body">
+    <div class="two">
+      <div class="card">
+        <div class="t">Actores y roles</div>
+        <div class="d">
+          <ul>
+            <li><strong>Administrador:</strong> acceso total, configuración, usuarios y series.</li>
+            <li><strong>Gerente:</strong> operación y reportes; sin gestión de usuarios ni configuración.</li>
+            <li><strong>Cajero:</strong> cobra, emite el comprobante, abre y cierra su turno.</li>
+            <li><strong>Vendedor:</strong> arma la venta y la envía a caja; no emite ni cobra.</li>
+            <li><strong>Personalizado:</strong> plantilla ajustable permiso por permiso.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card sm">
+          <div class="t">48 permisos otorgables por usuario</div>
+          <div class="d">La plantilla del rol es el punto de partida; cada permiso —anular, rectificar caja, ver costos, aplicar descuento, corregir pago— se otorga o se retira de forma individual. La interfaz oculta lo que el usuario no puede hacer.</div>
+        </div>
+        <div class="card sm">
+          <div class="t">Requerimientos funcionales por bloque</div>
+          <div class="d">Venta y emisión · Inventario y trazabilidad · Caja y control interno · Fiscal y cumplimiento · Clientes, proveedores y compras · Reportes y consultas · Administración y seguridad. El Anexo 3 los enumera con su caso de uso.</div>
+        </div>
+        <div class="card sm acc">
+          <div class="t">Requerimientos no funcionales</div>
+          <div class="d">Seguridad y control de acceso · Operación sin conexión y sincronización · Usabilidad en mostrador y en móvil · Auditoría y trazabilidad · Mantenibilidad (reglas aisladas y probadas) · Desempeño con carga diferida por módulo.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">15 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 16 · PRUEBAS Y CALIDAD ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Aseguramiento de la calidad</div>
+    <h2>Pruebas y verificación</h2>
+  </div>
+  <div class="body">
+    <div class="kpis">
+      <div class="kpi"><div class="v">195</div><div class="r">Pruebas automatizadas</div><div class="n2">12 archivos · 25 conjuntos</div></div>
+      <div class="kpi"><div class="v">25 373</div><div class="r">Líneas de código</div><div class="n2">136 archivos sin contar pruebas</div></div>
+      <div class="kpi"><div class="v">0</div><div class="r">Errores de lint</div><div class="n2">línea base de avisos acotada</div></div>
+      <div class="kpi"><div class="v">16</div><div class="r">Colecciones</div><div class="n2">modelo documental en uso</div></div>
+    </div>
+    <div class="two">
+      <div class="card sm">
+        <div class="t">Pruebas automatizadas sobre reglas puras</div>
+        <div class="d">
+          Corren con el verificador nativo de Node, sin marco de pruebas ni base de datos, porque las reglas del negocio
+          son módulos puros: dinero y redondeo, promociones y descuentos, reparto del descuento e IGV del comprobante,
+          arqueo y bolsillos de pago, contadores y correlativos, reglas de pedidos, nombres de vendedor y cajero, y
+          saneamiento de datos antes de escribir.
+        </div>
+      </div>
+      <div class="card sm">
+        <div class="t">Verificación estática y de construcción</div>
+        <div class="d">
+          TypeScript en modo estricto sin tipos comodín ni aserciones de no nulidad, análisis estático de estilo sobre
+          el código, y compilación de producción como parte del flujo de trabajo. Hay una regla explícita de no
+          incrementar la línea base de avisos.
+        </div>
+      </div>
+    </div>
+    <div class="two">
+      <div class="card sm">
+        <div class="t">Casos de aceptación con el usuario</div>
+        <div class="d">Ciclo completo de vendedor a cajero, boleta consolidada del día, arqueo de un turno con cobro por medio electrónico, anulación con reposición de stock y consulta del estado del envío a la SUNAT.</div>
+      </div>
+      <div class="card sm acc">
+        <div class="t">Lo que las pruebas no garantizan</div>
+        <div class="d">Una prueba que pasa repite la intención con la que se escribió; puede estar aprobando una regla equivocada. Y las verificaciones estáticas no dicen nada sobre los datos que se escriben en la base: eso se descubre usando el sistema.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">16 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 17 · INCIDENCIAS ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Evidencia del proceso de validación</div>
+    <h2>Incidencias detectadas en operación y corregidas</h2>
+    <div class="sub">Todas aparecieron al usar el sistema en el mostrador, no en el desarrollo</div>
+  </div>
+  <div class="body">
+    <table class="dense">
+      <thead><tr><th style="width:28%">Incidencia observada</th><th style="width:38%">Causa y corrección</th><th>Efecto evitado</th></tr></thead>
+      <tbody>
+        <tr><td>Enviar una venta a caja fallaba siempre</td><td>La base rechaza los valores indefinidos y el compilador no lo advierte: se sanean los datos en el borde de escritura</td><td>El flujo de vendedor a cajero nunca había funcionado</td></tr>
+        <tr><td>El cajero no veía los pedidos enviados</td><td>La lista se filtraba por la caja del cajero y los cajeros no tenían caja; hoy el reparto lo decide una regla probada que nunca oculta un pedido</td><td>Ventas perdidas por un pedido invisible</td></tr>
+        <tr><td>El comprobante del pedido declaraba el precio de lista</td><td>El pedido guardaba el descuento con otro nombre de campo que el que lee el comprobante; la lectura quedó en una sola función, con respaldo para los documentos anteriores</td><td>Declarar a la SUNAT más de lo cobrado</td></tr>
+        <tr><td>La boleta consolidada perdía el descuento</td><td>La consolidación sumaba totales netos y rearmaba las líneas a precio de lista; ahora agrupa por producto, precio y unidad, y declara el descuento</td><td>Un total consolidado que no explicaba lo cobrado</td></tr>
+        <tr><td>Items del pedido sin afectación tributaria</td><td>El pedido guardaba los items con la forma del carrito; ahora copia la forma del documento de venta, con la afectación de cada producto</td><td>Productos exonerados declarados como gravados</td></tr>
+        <tr><td>Envío rechazado por más de dos decimales</td><td>El precio unitario efectivo llevaba hasta seis decimales; se reparte el descuento dejando dos decimales sin perder el total cobrado</td><td>Todo comprobante con descuento quedaba sin emitir</td></tr>
+        <tr><td>Un contador paralelo podía repetir un número</td><td>El flujo de pedidos usaba el espacio de numeración de los comprobantes fiscales; las claves de contador quedaron en una sola función probada</td><td>Un número de comprobante ya emitido repetido</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">17 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 18 · RESULTADOS ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Resultados</div>
+    <h2>Funcionalidad entregada y puesta en operación</h2>
+  </div>
+  <div class="body">
+    <div class="kpis">
+      <div class="kpi"><div class="v">27</div><div class="r">Páginas</div><div class="n2">con carga diferida por módulo</div></div>
+      <div class="kpi"><div class="v">22</div><div class="r">Servicios de datos</div><div class="n2">uno por dominio</div></div>
+      <div class="kpi"><div class="v">29</div><div class="r">Módulos de reglas puras</div><div class="n2">probados sin navegador</div></div>
+      <div class="kpi"><div class="v">16</div><div class="r">Colecciones</div><div class="n2">con auditoría y registro de errores</div></div>
+    </div>
+    <div class="two">
+      <div class="card">
+        <div class="t">El sistema está en operación real en un negocio</div>
+        <div class="d">
+          Se usa en el mostrador para vender, controlar el inventario, cerrar el turno y emitir comprobantes
+          electrónicos que la SUNAT acepta. Las incidencias de la diapositiva anterior se detectaron precisamente ahí.
+          Este informe no declara cifras de operación ni porcentajes de mejora: no administra esos datos.
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card sm">
+          <div class="t">Entregables del trabajo</div>
+          <div class="d">Sistema web y servicio de facturación en operación · Manual de usuario por módulo · Paquete técnico con arquitectura, modelo de datos, requerimientos y plan de pruebas · Presentación y guion de sustentación.</div>
+        </div>
+        <div class="card sm">
+          <div class="t">Estado de verificación</div>
+          <div class="d">195 pruebas automatizadas en verde, verificación de tipos y análisis de estilo sin errores, y compilación de producción correcta: el mismo control que se exige antes de cada publicación.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">18 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 19 · DEMOSTRACIÓN ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Demostración en vivo</div>
+    <h2>Qué se muestra en tres minutos</h2>
+    <div class="sub">Recorrido de un caso real: del pedido del vendedor al comprobante aceptado y al turno cuadrado</div>
+  </div>
+  <div class="body">
+    <div class="flow">
+      <div class="step"><div class="n">1</div><div class="t">Punto de venta</div><div class="d">Agregar un producto con promoción de volumen y mostrar cómo cambia el importe de la línea. <em>40 s</em></div></div>
+      <div class="arrow">▸</div>
+      <div class="step"><div class="n">2</div><div class="t">Enviar a caja</div><div class="d">Mostrar el pedido generado con su código, sin serie ni correlativo y sin forma de pago. <em>20 s</em></div></div>
+      <div class="arrow">▸</div>
+      <div class="step"><div class="n">3</div><div class="t">Cobrar el pedido</div><div class="d">Ver el descuento del vendedor en la franja del carrito, elegir boleta y cobrar. <em>60 s</em></div></div>
+      <div class="arrow">▸</div>
+      <div class="step k"><div class="n">4</div><div class="t">Comprobante y SUNAT</div><div class="d">Serie y correlativo asignados recién ahora, importes declarados y estado del envío con el CDR. <em>30 s</em></div></div>
+      <div class="arrow">▸</div>
+      <div class="step"><div class="n">5</div><div class="t">Arqueo del turno</div><div class="d">Efectivo esperado, contado y diferencia, con el desglose por origen y por medio. <em>20 s</em></div></div>
+    </div>
+    <div class="note info">
+      <strong>Si algo falla en vivo:</strong> se dice con naturalidad y se continúa. No se improvisa una explicación técnica
+      ni se intenta arreglarlo frente al jurado. Se muestra el resultado capturado en el anexo de pruebas y se pasa a la
+      diapositiva siguiente, ofreciendo repetir la demostración al terminar la exposición.
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">19 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 20 · CONCLUSIONES ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Cierre</div>
+    <h2>Conclusiones</h2>
+  </div>
+  <div class="body">
+    <div class="stack k5">
+      <div class="card">
+        <div class="t">1 · El objetivo se cumplió y el sistema está en operación</div>
+        <div class="d">Venta, inventario, caja y comprobante electrónico funcionan como un solo hecho registrado una sola vez, y el sistema se usa hoy en un negocio para emitir comprobantes que la SUNAT acepta.</div>
+      </div>
+      <div class="card">
+        <div class="t">2 · La corrección fiscal se sostuvo en decisiones verificables</div>
+        <div class="d">El comprobante declara lo que se cobra; el IGV solo se despeja en la afectación gravada; la numeración se asigna una sola vez, al cobrar, en dos espacios separados de contadores.</div>
+      </div>
+      <div class="card">
+        <div class="t">3 · La separación por capas hizo posible verificar sin navegador</div>
+        <div class="d">Las reglas en módulos puros permitieron 195 pruebas automatizadas sobre dinero, descuentos, IGV, arqueo, contadores y pedidos, con una sola implementación por regla.</div>
+      </div>
+      <div class="card">
+        <div class="t">4 · La validación real fue la que encontró los defectos importantes</div>
+        <div class="d">Los siete defectos que afectaban dinero, numeración o declaración fiscal aparecieron usando el sistema en el mostrador: la lección es de método, verificar la intención de la regla y no solo que la prueba pase.</div>
+      </div>
+      <div class="card acc">
+        <div class="t">5 · Hay límites declarados</div>
+        <div class="d">El control de acceso fino por rol en la base de datos y la medición del impacto comercial quedan fuera del trabajo y se declaran como limitaciones, no se presentan como logros.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">20 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 21 · RECOMENDACIONES ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Trabajo futuro</div>
+    <h2>Recomendaciones y líneas de continuación</h2>
+  </div>
+  <div class="body">
+    <div class="two">
+      <div class="stack">
+        <div class="card sm"><div class="t">1 · Control de acceso en la base de datos</div><div class="d">Llevar la restricción por rol a las reglas de la base, hoy limitadas a exigir usuario autenticado, para que el permiso no dependa solo de la interfaz.</div></div>
+        <div class="card sm"><div class="t">2 · Alinear la aplicación móvil con el flujo vigente</div><div class="d">Portar a la aplicación móvil las reglas ya corregidas en la web —descuentos, reparto del descuento, consolidación e IGV— para que ambos clientes declaren lo mismo.</div></div>
+        <div class="card sm"><div class="t">3 · Medir el efecto en la operación</div><div class="d">Con el registro de ventas, turnos y documentos ya disponible, medir tiempo de atención, incidencias y descuadres antes y después, para poder afirmar el impacto con evidencia.</div></div>
+      </div>
+      <div class="stack">
+        <div class="card sm"><div class="t">4 · Controles de caja del rubro</div><div class="d">Consolidado del día con esperado y contado, detalle declarado contra sistema por medio de pago, y habilitar el conteo ciego como práctica por defecto.</div></div>
+        <div class="card sm"><div class="t">5 · Multiplicar puntos de venta</div><div class="d">Extender el modelo de cajas y puntos de emisión a varias sucursales, con consolidación y reportes por local.</div></div>
+        <div class="card sm acc"><div class="t">6 · Auditoría de comprobantes anteriores</div><div class="d">Revisar en solo lectura los comprobantes consolidados emitidos antes de la corrección del descuento, para determinar si alguno requiere una nota de crédito.</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">21 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ 22 · CIERRE ══════════════════════════ -->
+<div class="slide cover" style="justify-content:center">
+  <div class="eyebrow">Fin de la exposición</div>
+  <h1>Gracias por su atención</h1>
+  <div class="rule"></div>
+  <div class="sub">
+    Quedamos atentos a las preguntas del jurado.<br>
+    La diapositiva siguiente reúne los datos técnicos de respaldo.
+  </div>
+  <div class="meta">
+    [COMPLETAR: nombre del tesista] · [COMPLETAR: institución]<br>
+    Documentación disponible: manual de usuario, anexos técnicos e informe del trabajo.
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">22 / 22</span></div>
+</div>
+
+<!-- ══════════════════════════ RESPALDO (para preguntas del jurado) ══════════════════════════ -->
+<div class="slide">
+  <div class="head">
+    <div class="eyebrow">Respaldo</div>
+    <h2>Datos técnicos completos para las preguntas del jurado</h2>
+  </div>
+  <div class="body">
+    <div class="two compact">
+      <div class="card sm">
+        <div class="t">Medidas del repositorio</div>
+        <div class="d">
+          25 373 líneas TypeScript en 136 archivos (sin las pruebas) · 27 páginas · 22 servicios · 29 módulos puros.<br>
+          42 archivos de componentes de interfaz · 16 colecciones · 2 espacios de contadores · 195 pruebas automatizadas en 12 archivos.<br>
+          70 confirmaciones de cambios del 10 al 17 de septiembre de 2026 · 11 bloques de historial de sesiones.
+        </div>
+      </div>
+      <div class="card sm">
+        <div class="t">Tecnologías</div>
+        <div class="d">
+          React 19 · TypeScript 6 estricto · Vite 8 · Tailwind CSS 3 · <code>qrcode</code> · <code>html5-qrcode</code> · <code>recharts</code>.<br>
+          Firebase 12: autenticación y Firestore con persistencia local y varios usuarios por equipo.<br>
+          Servicio fiscal: FastAPI · Pydantic · <code>sunat_py</code> (UBL 2.1) · Docker y entorno sin servidor.<br>
+          Móvil complementaria en React Native (trabajo relacionado, fuera del alcance).
+        </div>
+      </div>
+    </div>
+    <div class="two compact">
+      <div class="card sm">
+        <div class="t">Reglas críticas y dónde viven</div>
+        <div class="d">
+          Contadores y numeración: <code>lib/contadores.ts</code> · Importes, descuento e IGV: <code>lib/sunat-importes.ts</code>.<br>
+          Efectivo esperado y bolsillos: <code>lib/arqueo.ts</code> y <code>lib/pagos.ts</code>.<br>
+          Pedidos entre cajas: <code>lib/pedidos.ts</code> · Nombres en el papel: <code>lib/personal.ts</code>.<br>
+          Saneamiento al escribir: <code>lib/limpio.ts</code> · Consolidado: <code>lib/consolidado.ts</code>.
+        </div>
+      </div>
+      <div class="card sm">
+        <div class="t">Estados y tipos de documento</div>
+        <div class="d">
+          Envío a la SUNAT: pendiente → enviando → aceptado, rechazado o error; el código del CDR y el XML firmado se conservan en el documento.<br>
+          Documentos: nota de venta, boleta, factura, notas de crédito y débito, y pedido (<code>PENDIENTE</code>), ausente de los reportes fiscales.
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <strong>Cifras de operación:</strong> este trabajo no declara ventas, mejoras ni porcentajes del negocio. La única
+      afirmación de operación es que el sistema está en uso real y que las incidencias documentadas se detectaron allí.
+      Los anexos 1 a 5 desarrollan arquitectura, modelo de datos, requerimientos, plan de pruebas e informe.
+    </div>
+  </div>
+  <div class="foot"><span>Sustentación del Trabajo de Aplicación Profesional</span><span class="n">Respaldo</span></div>
+</div>
+
+</body>
+</html>

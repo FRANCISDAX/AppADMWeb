@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>TAP — Requerimientos y casos de uso</title>
+  <link rel="stylesheet" href="tap.css">
+</head>
+<body>
+  <div class="page">
+    <div class="portada">
+      <div class="institucion">Trabajo de Aplicación Profesional</div>
+      <h1>Ingeniería de requisitos del sistema</h1>
+      <div class="filete"></div>
+      <p class="subtitulo">Anexo 3 — Requerimientos funcionales, no funcionales, casos de uso e historias de usuario</p>
+      <p class="meta">Sistema de punto de venta, inventario y facturación electrónica<br/>Anexo técnico · Documento generado a partir del código fuente</p>
+    </div>
+    <div class="salto"></div>
+
+    <h2 id="s1">1. Alcance del sistema</h2>
+
+    <p>El sistema es una aplicación web de gestión comercial orientada a establecimientos de venta al detalle
+    con emisión de comprobantes electrónicos en el Perú. Cubre la operación completa del negocio en un solo
+    cuerpo funcional: el <strong>punto de venta</strong> con catálogo, carrito y cobro; el <strong>inventario</strong>
+    con kardex y control de existencias; los <strong>turnos y el arqueo de caja</strong> con cuadre de efectivo; la
+    <strong>gestión de clientes y crédito</strong>; los <strong>proveedores y compras</strong>; la <strong>facturación
+    electrónica</strong> con notas de venta internas, boletas, facturas, notas de crédito y débito, consolidación de
+    notas de venta en boleta y envío a la administración tributaria; los <strong>reportes</strong> operativos y
+    fiscales; la <strong>administración de usuarios, roles y permisos</strong>; y una <strong>pantalla de cliente</strong>
+    sincronizada para mostrar el detalle de la compra en curso.</p>
+
+    <p>La navegación no utiliza biblioteca de rutas: el estado de la sección activa se mantiene en memoria en
+    <code>src/App.tsx</code> (<em>estado</em> <code>seccion</code>) y el menú se construye a partir de la constante
+    <code>MENU</code>, filtrando cada opción según el permiso declarado en <code>perm</code>. Los módulos se cargan de
+    forma diferida con <code>React.lazy</code> y <code>React.Suspense</code>.</p>
+
+    <p>La aplicación se apoya en <strong>Firebase</strong> (Authentication y Cloud Firestore) como única capa de
+    persistencia: los servicios de <code>src/services/</code> conversan directamente con Firestore y no existe
+    servidor de aplicación propio en este repositorio. El envío de comprobantes a la administración tributaria se
+    delega en un servicio externo cuya URL se configura en el sistema.</p>
+
+    <h3>1.1 Módulos y páginas de la aplicación</h3>
+
+    <p>La carpeta <code>src/pages/</code> contiene veintisiete páginas. A continuación se enumera cada archivo con su
+    propósito, agrupado por módulo funcional.</p>
+
+    <h4>Operación</h4>
+    <table class="compacta">
+      <thead><tr><th style="width:32%">Archivo</th><th>Propósito</th></tr></thead>
+      <tbody>
+        <tr><td><code>Pdv.tsx</code></td><td>Punto de venta: catálogo, carrito, comprobante, formas de pago, descuentos, envío y cobro.</td></tr>
+        <tr><td><code>DashboardOperaciones.tsx</code></td><td>Tablero del día orientado a la operación, con navegación directa a los módulos.</td></tr>
+        <tr><td><code>Inventario.tsx</code></td><td>Alta, edición, eliminación y ajuste de productos; toma física de stock y exportación.</td></tr>
+        <tr><td><code>RotacionInventario.tsx</code></td><td>Rotación de productos y detección de mercadería sin movimiento.</td></tr>
+        <tr><td><code>Kardex.tsx</code></td><td>Historial de movimientos de stock por producto en un rango de fechas.</td></tr>
+        <tr><td><code>Turnos.tsx</code></td><td>Apertura y cierre de turno, gastos del turno y seguimiento de envíos a domicilio.</td></tr>
+        <tr><td><code>PantallaCliente.tsx</code></td><td>Vista pública, sin autenticación, que refleja el carrito del PDV en tiempo real.</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Caja</h4>
+    <table class="compacta">
+      <thead><tr><th style="width:32%">Archivo</th><th>Propósito</th></tr></thead>
+      <tbody>
+        <tr><td><code>ArqueoCaja.tsx</code></td><td>Arqueo por día y por turno: esperado, contado, diferencia, conciliación y rectificación.</td></tr>
+        <tr><td><code>Egresos.tsx</code></td><td>Registro y consulta de gastos y salidas de dinero, con categoría y afectación a la caja.</td></tr>
+        <tr><td><code>AuditoriaCaja.tsx</code></td><td>Revisión de los movimientos de caja y de las inconsistencias detectadas.</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Ventas y fiscal</h4>
+    <table class="compacta">
+      <thead><tr><th style="width:32%">Archivo</th><th>Propósito</th></tr></thead>
+      <tbody>
+        <tr><td><code>Reportes.tsx</code></td><td>Notas de venta, consolidación a boleta y registro fiscal: emisión, anulación, notas y envío.</td></tr>
+        <tr><td><code>ReporteFechas.tsx</code></td><td>Ventas y comprobantes agrupados por rango de fechas.</td></tr>
+        <tr><td><code>ReporteTurnos.tsx</code></td><td>Resumen de ventas y cobros por turno de caja.</td></tr>
+        <tr><td><code>ReporteSire.tsx</code></td><td>Registro de ventas en el formato de la declaración tributaria mensual, con descarga.</td></tr>
+        <tr><td><code>VentasPorEmpleado.tsx</code></td><td>Ventas atribuidas a cada usuario en un periodo.</td></tr>
+        <tr><td><code>Analisis.tsx</code></td><td>Estadísticas del mes: evolución, categorías y productos destacados.</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Clientes y proveedores</h4>
+    <table class="compacta">
+      <thead><tr><th style="width:32%">Archivo</th><th>Propósito</th></tr></thead>
+      <tbody>
+        <tr><td><code>Clientes.tsx</code></td><td>Padrón de clientes con búsqueda, filtro por deuda y exportación.</td></tr>
+        <tr><td><code>ClienteDetalle.tsx</code></td><td>Ficha del cliente: datos, crédito, descuento, estado de cuenta y cobranza.</td></tr>
+        <tr><td><code>Proveedores.tsx</code></td><td>Padrón de proveedores con panel de compras, precios y confiabilidad.</td></tr>
+        <tr><td><code>ProveedorDetalle.tsx</code></td><td>Ficha del proveedor: contactos, historial de compras y pagos.</td></tr>
+        <tr><td><code>Compras.tsx</code></td><td>Registro de compras de mercadería y su efecto en el inventario y en la caja.</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Administración</h4>
+    <table class="compacta">
+      <thead><tr><th style="width:32%">Archivo</th><th>Propósito</th></tr></thead>
+      <tbody>
+        <tr><td><code>Dashboard.tsx</code></td><td>Tablero gerencial con indicadores, alertas de stock y de vencimiento y widgets reordenables.</td></tr>
+        <tr><td><code>Usuarios.tsx</code></td><td>Listado de usuarios, alta, edición y activación o desactivación.</td></tr>
+        <tr><td><code>UsuarioDetalle.tsx</code></td><td>Edición de un usuario: rol, permisos por función, caja y series de comprobante.</td></tr>
+        <tr><td><code>Configuracion.tsx</code></td><td>Configuración del sistema: empresa, parámetros tributarios, impresora, envío, plantillas, listas de precio, promociones y cajas.</td></tr>
+        <tr><td><code>Auditoria.tsx</code></td><td>Registro de acciones del sistema y registro de errores de la aplicación.</td></tr>
+        <tr><td><code>Login.tsx</code></td><td>Autenticación del usuario.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="nota">
+      <strong>Delimitación del alcance.</strong> El sistema no implementa módulos de recursos humanos, contabilidad
+      formal ni tesorería. Los gastos se registran como egresos afectos o no a la caja del turno, y el resultado
+      económico se obtiene de los reportes de ventas, compras y egresos. La facturación electrónica se limita a la
+      emisión, el registro del resultado del envío y la conservación del archivo de respuesta; la firma digital y el
+      cálculo del XML se delegan en el servicio externo configurado.
+    </div>
+
+    <div class="salto"></div>
+    <h2 id="s2">2. Actores y roles</h2>
+
+    <p>Los roles y permisos se declaran en <code>src/constants/permisos.ts</code>. El sistema define cinco roles en la
+    constante <code>ROLES</code>: <code>ADMIN</code>, <code>GERENTE</code>, <code>CAJERO</code>, <code>VENDEDOR</code>
+    y <code>PERSONALIZADO</code>. Cada rol es una plantilla de permisos: la constante <code>PERMISOS_POR_ROL</code>
+    asigna un valor booleano a cada una de las claves de <code>CLAVES_PERMISOS</code>. El rol <code>ADMIN</code> recibe
+    todos los permisos en verdadero, el rol <code>GERENTE</code> recibe todos menos <code>usuarios</code>,
+    <code>configuracion</code>, <code>eliminarProducto</code>, <code>rectificarTurno</code> y
+    <code>proveedores</code>, y los roles <code>CAJERO</code> y <code>VENDEDOR</code> parten de todos los permisos en
+    falso y habilitan un subconjunto explícito. El rol <code>PERSONALIZADO</code> no define plantilla propia: cuando no
+    se lo encuentra, la función <code>permisosPorRol</code> devuelve los permisos del rol <code>CAJERO</code> como
+    respaldo.</p>
+
+    <h3>2.1 Rol, plantilla y ajuste por usuario</h3>
+
+    <p>El diseño separa tres niveles. El <strong>rol</strong> es la plantilla y se guarda en el campo <code>rol</code>
+    del documento <code>tblUsuarios/{uid}</code>. Los <strong>permisos efectivos por usuario</strong> se guardan en el
+    campo <code>permisos</code> del mismo documento y se administran usuario por usuario desde
+    <em>Usuarios → Editar</em>, cuyas opciones se agrupan con la constante <code>MODULOS</code> en cinco bloques:
+    <em>Dashboards</em>, <em>Módulos (Tabs)</em>, <em>Opciones del Menú</em>, <em>Funciones</em> y
+    <em>Acceso Especial</em>. La resolución de un permiso ocurre en <code>tienePermiso</code>
+    (<code>src/context/permisos.tsx</code>): si el usuario tiene el permiso guardado en verdadero se concede, si lo
+    tiene en falso se deniega, y si la clave no está guardada se usa el valor por defecto del rol. Esta última regla
+    permite incorporar permisos nuevos sin migrar los documentos existentes.</p>
+
+    <p>El <strong>acceso especial <code>verTodo</code></strong> (rótulo «Ver todo (acceso especial)») actúa como
+    supervisor: quien lo posee no queda restringido a sus propios registros. Se aplica en el arqueo
+    (<code>ArqueoCaja.tsx</code> usa <code>verTodo</code> para decidir si filtra por usuario), en la búsqueda del turno
+    abierto (<code>buscarTurnoAbierto(usuarioId, permiteOtros)</code> acepta el turno de otro usuario), en los reportes y
+    en la consolidación de notas de venta.</p>
+
+    <p>Los permisos se sincronizan en vivo mediante <code>onSnapshot</code> sobre <code>tblUsuarios/{uid}</code>, de modo
+    que un cambio de permisos se refleja en la interfaz del usuario afectado sin reiniciar la sesión. La interfaz es la
+    primera barrera: cada página y cada bloque condicional evalúa el permiso antes de mostrar la acción, y las páginas
+    muestran un aviso explícito cuando falta el permiso del módulo (por ejemplo,
+    <code>ArqueoCaja.tsx</code> y <code>Usuarios.tsx</code>).</p>
+
+    <h3>2.2 Matriz de roles</h3>
+
+    <p>La tabla resume el alcance de cada rol según <code>PERMISOS_POR_ROL</code>. La columna «No puede» indica lo que
+    la plantilla del rol deniega por defecto; el administrador puede revertirlo por usuario.</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:13%">Rol</th><th style="width:44%">Qué puede hacer (plantilla)</th><th>Qué no puede (plantilla)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>ADMIN</strong></td>
+          <td>Todas las funciones: ventas y cobro de pedidos, inventario completo (crear, editar, eliminar, ajustar stock, ver costos), turnos (abrir, cerrar, rectificar, editar monto inicial), arqueo, rectificación de caja, corrección de pagos, anulación de ventas, cobro de crédito, egresos, clientes, proveedores y compras, usuarios, configuración, reportes, SIRE, auditoría y el acceso especial <code>verTodo</code>.</td>
+          <td>Nada: la plantilla concede las 48 claves de permiso en verdadero.</td>
+        </tr>
+        <tr>
+          <td><strong>GERENTE</strong></td>
+          <td>Prácticamente toda la operación: ventas, inventario con alta y edición, ajuste de stock, turnos con apertura y cierre, arqueo, rectificación de caja, anulación, cobro de crédito, egresos, clientes, reportes, SIRE y auditoría, además del acceso especial <code>verTodo</code>.</td>
+          <td>Denegado respecto del administrador: <code>usuarios</code> (gestión de usuarios), <code>configuracion</code>, <code>eliminarProducto</code>, <code>rectificarTurno</code> (rectificar un turno ya cerrado) y <code>proveedores</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>CAJERO</strong></td>
+          <td>Ventas y cobro: PDV, cobro de ventas pendientes (<code>cobrarVenta</code>), eliminación de ventas pendientes (<code>cancelarVentaPendiente</code>), ver los pedidos enviados a caja (<code>verVentasPendientes</code>), reportes por vendedor, clientes, notas de venta, impresión de ticket, apertura y cierre de turno, cobro de crédito, alta y edición de productos, ajuste de stock, egresos, dashboard, dashboard de operaciones, información y descuento manual.</td>
+          <td>No puede eliminar productos, ver costos, anular ventas, rectificar caja ni turnos, corregir pagos, editar el monto inicial, enviar ventas a caja, acceder a proveedores y compras, gestionar usuarios, configurar el sistema, consultar el SIRE, el arqueo de caja, el kardex, la rotación de inventario, el estado de cuenta ni la auditoría, ni usar el acceso especial <code>verTodo</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>VENDEDOR</strong></td>
+          <td>Armar la venta en el PDV, buscar productos y clientes, aplicar descuento manual (<code>aplicarDescuento</code>), enviar la venta a caja (<code>enviarACaja</code>), imprimir el ticket del comprobante ya emitido, alta y edición de productos, clientes, notas de venta, turnos, dashboard e información.</td>
+          <td>No puede cobrar: carece de <code>cobrarVenta</code>, y tampoco ve las ventas pendientes (<code>verVentasPendientes</code>), ni cobra crédito, ni abre o cierra turno, ni ajusta stock, ni egresa dinero de caja, ni accede a reportes, compras, proveedores, usuarios, configuración, auditoría o al arqueo.</td>
+        </tr>
+        <tr>
+          <td><strong>PERSONALIZADO</strong></td>
+          <td>Lo que el administrador habilite explícitamente en <em>Usuarios → Editar → Funciones</em>; mientras una clave no esté guardada, rige la plantilla del rol <code>CAJERO</code> como respaldo.</td>
+          <td>Todo lo que no se le haya concedido; su alcance efectivo depende de la asignación individual de permisos.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>2.3 El flujo vendedor → cajero</h3>
+
+    <p>El sistema separa la persona que <em>arma</em> la venta de la que la <em>cobra</em>. El vendedor, que tiene
+    <code>enviarACaja</code> y no tiene <code>cobrarVenta</code>, ve el PDV sin la selección de comprobante, sin la
+    sección de formas de pago y sin la tarjeta de descuento global; el bloque del botón principal ofrece
+    <em>Enviar a caja</em> y la función <code>enviarACaja</code> de <code>Pdv.tsx</code> invoca
+    <code>crearVentaPendiente</code> (<code>src/services/ventas.ts</code>). La venta queda registrada como
+    <strong>pedido</strong>: su campo <code>tipoDoc</code> toma el valor <code>PENDIENTE</code>, no tiene serie ni
+    correlativo fiscal, carece de forma de pago y su identificador es un código propio <code>PED-000123</code>
+    generado por <code>codigoPedido</code> a partir del contador <code>pedido</code> (<code>CLAVE_PEDIDO</code> en
+    <code>src/lib/contadores.ts</code>). El pedido <strong>no descuenta stock</strong>: la salida de inventario ocurre
+    únicamente al cobrar.</p>
+
+    <p>El cajero, que sí tiene <code>cobrarVenta</code>, ve el panel <code>PanelVentasPendientes</code> montado arriba
+    del carrito dentro del PDV (se muestra solo con el permiso <code>verVentasPendientes</code>). El panel lista los
+    pedidos, y al pulsar <em>Cobrar pedido</em> entrega el documento al PDV mediante la propina
+    <code>onCobrarPedido</code>, que ejecuta <code>activarPedido</code> y guarda el pedido en el estado
+    <code>pedidoActivo</code> construido por <code>pedidoParaCarrito</code>. A partir de ese momento el carrito muestra
+    los ítems del pedido en modo lectura, con una franja de aviso, y el cajero elige el <strong>comprobante</strong>
+    (Nota de Venta, Boleta o Factura, con las mismas validaciones de documento del PDV) y la <strong>forma de
+    pago</strong> en la interfaz habitual del carrito; el botón principal pasa a mostrar <em>Cobrar pedido</em> y llama
+    a <code>cobrarVentaPendiente</code>. El monto no se recalcula: en modo pedido la variable <code>total</code> del PDV
+    toma el valor cotizado por el vendedor.</p>
+
+    <div class="aviso">
+      <strong>Invariante del flujo.</strong> El comprobante se genera una sola vez, al cobrar. El pedido nace sin serie
+      ni correlativo y sin forma de pago, y la numeración fiscal se asigna dentro de
+      <code>cobrarVentaPendiente</code> mediante <code>claveContador(tipoFinal, serieDestino)</code>. Eliminar un pedido
+      se registra como <code>cancelado</code> y no deja huecos en las series, porque nunca consumió un número.
+    </div>
+
+    <div class="salto"></div>
+    <h2 id="s3">3. Requerimientos funcionales</h2>
+
+    <p>Se enumeran 89 requerimientos funcionales agrupados por módulo. La columna «Regla de negocio asociada» describe
+    la condición que el sistema hace cumplir; la columna «Evidencia» señala el archivo y, cuando aporta precisión, la
+    función o el componente que la implementa. Todos los archivos citados existen en el repositorio.</p>
+
+    <h3>3.1 Punto de venta: catálogo y carrito</h3>
+    <table class="compacta evitar-corte">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-01</td><td>El sistema debe presentar el catálogo de productos activos para armar la venta.</td><td>El catálogo se filtra por categoría y por texto libre, y sólo se listan productos disponibles; un producto con stock cero se muestra como agotado y no se puede agregar. El filtro de texto considera nombre, código y alias de voz.</td><td><code>src/pages/Pdv.tsx</code> — <code>lista</code>, <code>add()</code></td></tr>
+        <tr><td>RF-02</td><td>El sistema debe buscar productos por nombre, código o alias de voz.</td><td>La búsqueda es insensible a mayúsculas y compara contra los tres campos; el resultado vacío se informa con el mensaje «Sin resultados».</td><td><code>src/pages/Pdv.tsx</code> — <code>lista</code></td></tr>
+        <tr><td>RF-03</td><td>El sistema debe permitir leer el código de barras de un producto con la cámara del dispositivo.</td><td>El código leído se normaliza quitando espacios y guiones antes de compararlo con el código del producto; si el producto no existe, está inactivo o no tiene stock, se informa al usuario y no se agrega nada al carrito.</td><td><code>src/pages/Pdv.tsx</code> — <code>handleBarcodeDetectado</code>; <code>src/components/EscanearCodigo.tsx</code></td></tr>
+        <tr><td>RF-04</td><td>El sistema debe ofrecer un bloque de venta rápida con los productos de mayor uso.</td><td>Se muestran primero los productos marcados como favoritos; si no hay ninguno marcado, se usan los más vendidos por contador de ventas, hasta doce productos, excluyendo los que no tienen stock.</td><td><code>src/pages/Pdv.tsx</code> — bloque «VENTA RÁPIDA»; campo <code>esFavorito</code> y <code>vecesVendido</code> en <code>src/pages/Inventario.tsx</code></td></tr>
+        <tr><td>RF-05</td><td>El sistema debe permitir vender por presentaciones o unidades de venta distintas de la unidad base.</td><td>Cada presentación declara un factor de conversión; el stock disponible se recalcula dividiendo el stock base por el factor y el precio de la línea se multiplica por el factor. La presentación de venta se selecciona por línea del carrito.</td><td><code>src/pages/Pdv.tsx</code> — <code>presentacionesSel</code>, <code>stockEnPresentacion()</code>, <code>totalBruto</code></td></tr>
+        <tr><td>RF-06</td><td>El sistema debe aplicar listas de precio por producto y por cliente.</td><td>La lista activa se resuelve con la precedencia: selección manual del cajero, lista asignada al cliente, y lista general. Un precio de lista sólo se usa si está definido y es mayor que cero.</td><td><code>src/pages/Pdv.tsx</code> — <code>listaPrecioActiva</code>, <code>precioFinal()</code></td></tr>
+        <tr><td>RF-07</td><td>El sistema debe permitir agregar ítems manuales que no existen en el catálogo, bajo el concepto «Embalaje y Otros».</td><td>Los ítems manuales se seleccionan de las plantillas configuradas por el administrador, no descuentan stock, se registran en la categoría de ítems manuales y no participan de promociones. Si no hay plantillas configuradas, el sistema lo informa y remite a Configuración.</td><td><code>src/pages/Pdv.tsx</code> — <code>manualItems</code>, modal «Embalaje y Otros»; <code>src/lib/categorias.ts</code> (<code>CATEGORIA_MANUAL</code>)</td></tr>
+        <tr><td>RF-08</td><td>El sistema debe permitir pausar la venta en curso y recuperarla después.</td><td>La venta pausada conserva el carrito, los ítems manuales, el comprobante elegido, los pagos cargados, el cliente y el modo de pago. No se recupera una venta pausada si el carrito actual tiene contenido, y al recuperarla se elimina de la lista de pausadas.</td><td><code>src/pages/Pdv.tsx</code> — <code>pausarVenta()</code>, <code>recuperarVenta()</code>; <code>src/lib/ventas-pausadas.ts</code></td></tr>
+        <tr><td>RF-09</td><td>El sistema debe permitir vaciar la venta completa.</td><td>La acción descarta el catálogo cargado, los ítems manuales y la forma de pago elegida; al quedar la venta sin contenido, los botones de cobro se deshabilitan y se exige al menos un producto para volver a operar.</td><td><code>src/pages/Pdv.tsx</code> — <code>vaciarCarrito()</code>, <code>limpiarPagoSiVacio()</code></td></tr>
+        <tr><td>RF-10</td><td>El sistema debe controlar la disponibilidad de stock durante la carga de la venta.</td><td>No se permite agregar más unidades que el stock disponible en la presentación elegida; en los productos compuestos, el stock se deduce del componente más escaso según el mínimo de unidades armables.</td><td><code>src/pages/Pdv.tsx</code> — <code>kitStock()</code>, <code>stockEnPresentacion()</code>, <code>add()</code></td></tr>
+        <tr><td>RF-11</td><td>El sistema debe advertir sobre productos vencidos, próximos a vencer o por debajo del costo.</td><td>Se marca «VENCIDO» si la fecha de vencimiento ya pasó, el número de días si faltan siete o menos, y «BAJO COSTO» si el precio aplicado de la línea es inferior al precio de compra.</td><td><code>src/pages/Pdv.tsx</code> — línea del carrito; <code>src/lib/ui-utils.ts</code> (<code>estadoVencimiento</code>)</td></tr>
+        <tr><td>RF-12</td><td>El sistema debe proteger el margen mínimo por producto.</td><td>Si el precio aplicado queda por debajo del precio mínimo configurado, la venta se bloquea con el detalle de los productos afectados. Si el producto vence dentro de siete días, la protección no se aplica. Si el precio queda por debajo del costo sin violar el mínimo, se solicita confirmación expresa.</td><td><code>src/pages/Pdv.tsx</code> — bloque «Protección de margen mínimo» en <code>cobrar()</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.2 Punto de venta: cliente, comprobante y cobro</h3>
+    <table class="compacta evitar-corte">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-13</td><td>El sistema debe identificar al cliente por documento, consultando primero el padrón local y luego el servicio de consulta de documentos.</td><td>Se acepta documento de identidad de ocho dígitos o registro único de contribuyentes de once. Si el documento está en el padrón se usan los datos guardados; si no, se consulta el servicio externo; si tampoco se encuentra o no hay conexión, se habilita el ingreso manual del nombre.</td><td><code>src/pages/Pdv.tsx</code> — <code>consultarCliente()</code>; <code>src/lib/consultaSunat.ts</code>; <code>src/services/clientes.ts</code></td></tr>
+        <tr><td>RF-14</td><td>El sistema debe permitir buscar clientes registrados por nombre o razón social para autocompletar la venta.</td><td>La búsqueda se activa a partir de dos caracteres, espera un breve intervalo para no saturar de consultas y ofrece hasta veinte coincidencias. Al elegir una, se cargan documento, razón social y dirección, y se ajusta el tipo de comprobante según la longitud del documento.</td><td><code>src/pages/Pdv.tsx</code> — <code>busquedaCliente</code>, <code>resultadosCliente</code>; <code>src/services/clientes.ts</code> — <code>buscarClientes</code></td></tr>
+        <tr><td>RF-15</td><td>El sistema debe permitir elegir el tipo de comprobante entre nota de venta, boleta y factura.</td><td>La selección está disponible para quien cobra. El documento ingresado ajusta automáticamente el tipo entre boleta y factura según su longitud, pero no modifica una nota de venta ya elegida.</td><td><code>src/pages/Pdv.tsx</code> — <code>tipoComp</code>, botones de tipo de comprobante</td></tr>
+        <tr><td>RF-16</td><td>El sistema debe exigir registro único de contribuyentes de once dígitos para emitir factura.</td><td>La emisión de factura requiere documento de once dígitos, que el documento haya sido consultado y validado, y que la razón social esté informada.</td><td><code>src/pages/Pdv.tsx</code> — <code>cobrar()</code>, validaciones de <code>tipoComp === 'factura'</code></td></tr>
+        <tr><td>RF-17</td><td>El sistema debe exigir documento de identidad del cliente cuando la boleta supera el tope configurado.</td><td>El tope se toma del parámetro <code>topeBoletaDni</code> de la configuración de la empresa, con valor por omisión de setecientos. Si el total supera el tope, la boleta exige documento de identidad de ocho dígitos validado por consulta.</td><td><code>src/pages/Pdv.tsx</code> — <code>cobrar()</code>, <code>cobrarPedido()</code>; <code>src/pages/Configuracion.tsx</code> — campo «Tope boleta con DNI»</td></tr>
+        <tr><td>RF-18</td><td>El sistema debe ofrecer formas de pago en efectivo, Yape, Plin, transferencia y tarjeta, y adicionalmente crédito.</td><td>Los medios electrónicos se agrupan tras el botón de transferencia. Sólo el efectivo puede exceder el total, porque el excedente es el vuelto; ningún medio electrónico puede superar el total. El crédito es exclusivo y va por el total de la venta.</td><td><code>src/pages/Pdv.tsx</code> — <code>MEDIOS_ELECTRONICOS</code>, <code>agregarPago()</code>, <code>elegirCredito()</code>; <code>src/lib/pagos.ts</code> — <code>MEDIOS</code>, <code>topeSugerido</code></td></tr>
+        <tr><td>RF-19</td><td>El sistema debe permitir combinar varias formas de pago en una misma venta.</td><td>Los montos cargados deben cubrir exactamente el total, con una tolerancia de un céntimo. El sistema informa lo que falta, el vuelto o la confirmación de que el total está cubierto, y calcula los montos aplicados que efectivamente entran a la caja.</td><td><code>src/lib/pagos.ts</code> — <code>resumenPagos</code>; <code>src/pages/Pdv.tsx</code> — <code>resumen</code></td></tr>
+        <tr><td>RF-20</td><td>El sistema debe registrar el número de operación de los pagos electrónicos.</td><td>El campo se solicita únicamente para los medios que lo requieren y se guarda por pago; la referencia del documento toma el número de operación del primer pago electrónico informado.</td><td><code>src/lib/pagos.ts</code> — <code>pideOperacion</code>; <code>src/pages/Pdv.tsx</code> — <code>actualizarPago()</code>, campo <code>referencia</code></td></tr>
+        <tr><td>RF-21</td><td>El sistema debe calcular y mostrar el vuelto cuando el cliente entrega efectivo por encima del total.</td><td>El efectivo aplicado cubre lo que los medios electrónicos no cubrieron y el excedente se devuelve como vuelto; se conservan por separado el monto recibido y el vuelto, para que la caja contabilice el monto aplicado y no el entregado.</td><td><code>src/lib/pagos.ts</code> — <code>resumenPagos</code> (<code>vuelto</code>, <code>efectivoAplicado</code>); <code>src/pages/Pdv.tsx</code> — <code>ventaOk.vuelto</code></td></tr>
+        <tr><td>RF-22</td><td>El sistema debe registrar el envío a domicilio con zona, costo, dirección, referencia y notas.</td><td>La sección de envío se habilita con el parámetro <code>envioHabilitado</code>. Al elegir la zona se toma su costo; el costo del envío se suma al total de la venta y se guarda con estado pendiente. En modo pedido, el envío cargado por el vendedor se hereda y no se edita.</td><td><code>src/pages/Pdv.tsx</code> — estado <code>envio</code>, bloque «ENVÍO»; <code>src/pages/Configuracion.tsx</code> — pestaña Envío; <code>src/services/envios.ts</code></td></tr>
+        <tr><td>RF-23</td><td>El sistema debe solicitar confirmación mostrando el desglose antes de registrar la venta.</td><td>El aviso previo informa total, cantidad de productos, forma o formas de pago con sus montos, vuelto y tipo de comprobante. La venta no se registra si el usuario no confirma.</td><td><code>src/pages/Pdv.tsx</code> — bloque de confirmación en <code>cobrar()</code>; <code>src/components/notifications.tsx</code></td></tr>
+        <tr><td>RF-24</td><td>El sistema debe permitir imprimir el comprobante recién emitido.</td><td>Al finalizar el cobro se ofrece la impresión del comprobante generado y la opción de iniciar una nueva venta; el documento se relee desde la base antes de imprimir.</td><td><code>src/pages/Pdv.tsx</code> — <code>imprimirComprobante()</code>, modal «Venta registrada»; <code>src/lib/pdf.ts</code> — <code>abrirPDFComprobante</code></td></tr>
+        <tr><td>RF-25</td><td>El sistema debe ofrecer una pantalla complementaria para que el cliente vea su compra en curso.</td><td>La pantalla se abre en otra ventana con un identificador de sesión y se enlaza mediante código de respuesta rápida. El contenido (ítems, descuento, costo de envío y total) se sincroniza al cambiar el carrito, y la sesión se cierra al desmontar la vista del punto de venta.</td><td><code>src/pages/Pdv.tsx</code> — <code>toggleDisplay()</code>, <code>broadcastCart</code>; <code>src/lib/customer-display.ts</code>; <code>src/pages/PantallaCliente.tsx</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.3 Descuentos y promociones</h3>
+    <table class="compacta evitar-corte">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-26</td><td>El sistema debe administrar promociones de volumen con sus tipos y parámetros.</td><td>Se admiten los tipos tres por dos, segunda unidad al cincuenta por ciento, lleva y paga, porcentaje por volumen y monto fijo por grupo. Cada regla se asocia a uno o más productos y se activa o desactiva.</td><td><code>src/services/promociones-volumen.ts</code> — <code>guardarPromocionVolumen</code>, <code>listarPromocionesVolumen</code>, <code>promocionesAplicables</code>; <code>src/pages/Configuracion.tsx</code> — pestaña Promociones</td></tr>
+        <tr><td>RF-27</td><td>El sistema debe calcular el descuento de cada tipo de promoción de volumen.</td><td>Tres por dos descuenta una unidad por cada grupo de tres; la segunda al cincuenta por ciento descuenta la mitad del precio por cada par; lleva y paga exige una cantidad mínima y descuenta una unidad; el porcentaje descuenta sobre el subtotal de los productos de la regla; el monto fijo reemplaza el precio del grupo por un importe predefinido y descuenta sólo si el resultado es positivo. Toda regla exige al menos dos unidades.</td><td><code>src/lib/descuentos.ts</code> — <code>calcDescuentoVolumen</code></td></tr>
+        <tr><td>RF-28</td><td>El sistema debe aplicar el descuento por producto configurado en la ficha del artículo.</td><td>El porcentaje de descuento del producto se aplica sobre el precio unitario efectivo, considerando primero el precio especial si corresponde.</td><td><code>src/lib/descuentos.ts</code> — <code>calcDescuentoProducto</code>, <code>precioUnitarioEfectivo</code>; <code>src/pages/Inventario.tsx</code> — campo de descuento por producto</td></tr>
+        <tr><td>RF-29</td><td>El sistema debe aplicar el descuento por cliente frecuente configurado en la ficha del cliente.</td><td>El porcentaje del cliente se aplica sobre el subtotal que queda después de los descuentos de producto y de volumen, y sólo si está entre mayor que cero y hasta cien.</td><td><code>src/lib/descuentos.ts</code> — <code>calcDescuentoCliente</code>; <code>src/pages/ClienteDetalle.tsx</code> — campo de descuento del cliente</td></tr>
+        <tr><td>RF-30</td><td>El sistema debe permitir cargar un descuento manual global, en porcentaje o en monto, sujeto al permiso correspondiente.</td><td>Sin el permiso <code>aplicarDescuento</code> la tarjeta de descuentos no se muestra y se explica el motivo. El descuento en monto se limita al subtotal disponible.</td><td><code>src/pages/Pdv.tsx</code> — <code>puedeDescontar</code>, tarjeta «Descuentos»; <code>src/lib/descuentos.ts</code> — <code>calcDescuentoGlobal</code>; <code>src/constants/permisos.ts</code> — <code>aplicarDescuento</code></td></tr>
+        <tr><td>RF-31</td><td>El sistema debe hacer cumplir el tope de descuento manual configurado por el negocio.</td><td>El tope se mide como porcentaje del subtotal, tanto si el descuento se cargó en porcentaje como en monto. El valor cero significa sin tope: es el mismo criterio del límite de crédito. Superado el tope, el sistema avisa, indica el valor máximo admisible y deshabilita los botones de cobro y de envío a caja.</td><td><code>src/lib/descuentos.ts</code> — <code>revisarDescuentoManual</code>; <code>src/pages/Pdv.tsx</code> — <code>revisionDescuento</code>; <code>src/pages/Configuracion.tsx</code> — campo <code>descuentoMaximoPorcentaje</code></td></tr>
+        <tr><td>RF-32</td><td>El sistema debe volver a validar el tope del descuento manual al crear el pedido, como segunda barrera.</td><td>La validación del servidor de aplicación rechaza el pedido con el mensaje del tope cuando el descuento global cargado lo excede, aun si la interfaz lo hubiera permitido.</td><td><code>src/services/ventas.ts</code> — <code>crearVentaPendiente</code>, bloque de tope con <code>revisarDescuentoManual</code></td></tr>
+        <tr><td>RF-33</td><td>El sistema debe aplicar los descuentos automáticos en un orden determinados y acumular su efecto.</td><td>El cálculo se realiza en el orden producto, volumen, cliente y descuento global, aplicando cada capa sobre el subtotal resultante de la anterior. El resumen muestra el importe de cada componente y el total final no puede ser negativo.</td><td><code>src/lib/descuentos.ts</code> — <code>calcularDescuentos</code>; <code>src/pages/Pdv.tsx</code> — <code>descuentosCalc</code></td></tr>
+        <tr><td>RF-34</td><td>El sistema debe permitir al cajero alternar entre el precio especial y el precio normal de un producto con promoción.</td><td>Mientras el precio especial esté activo se muestra tachado el precio de lista; el descuento por volumen se evalúa sobre unidades base, no sobre unidades de venta, para que una compra por presentación no pierda la promoción.</td><td><code>src/pages/Pdv.tsx</code> — <code>togglePromo()</code>, <code>tienePromo()</code>, comentario de unidades base en <code>descuentosCalc</code></td></tr>
+        <tr><td>RF-35</td><td>El sistema debe declarar el descuento de la venta en el comprobante y en el documento enviado a la administración tributaria.</td><td>Las líneas se declaran a precio de lista y el descuento se informa de manera explícita, de modo que la suma de las líneas menos el descuento iguale el total cobrado. La lectura del descuento acepta el nombre nuevo y el heredado desde documentos anteriores.</td><td><code>src/lib/sunat-importes.ts</code> — <code>descuentoDeVenta</code>, <code>itemsParaSunat</code>; <code>src/lib/pdf.ts</code>; <code>src/services/ventas.ts</code> — campo <code>descuentoTotal</code> en <code>crearVentaPendiente</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.4 Ventas pendientes, pedidos y reparto por caja</h3>
+    <table class="compacta evitar-corte">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-36</td><td>El sistema debe permitir enviar a caja la venta armada por el vendedor, como pedido sin comprobante.</td><td>El pedido se guarda con tipo pendiente, sin serie ni correlativo fiscal, con un código propio correlativo del espacio de pedidos, sin forma de pago y sin descontar stock. La confirmación previa advierte que el comprobante y la forma de pago los elegirá el cajero.</td><td><code>src/services/ventas.ts</code> — <code>crearVentaPendiente</code>; <code>src/lib/contadores.ts</code> — <code>CLAVE_PEDIDO</code>, <code>codigoPedido</code>; <code>src/pages/Pdv.tsx</code> — <code>enviarACaja()</code></td></tr>
+        <tr><td>RF-37</td><td>El sistema debe listar los pedidos pendientes de cobro y refrescarlos periódicamente.</td><td>La consulta no filtra por caja y recupera los pedidos en estado pendiente, ordenados del más reciente al más antiguo. El panel actualiza la lista automáticamente cada treinta segundos y muestra la antigüedad de cada pedido.</td><td><code>src/services/ventas.ts</code> — <code>obtenerVentasPendientes</code>; <code>src/components/PanelVentasPendientes.tsx</code></td></tr>
+        <tr><td>RF-38</td><td>El sistema debe repartir los pedidos entre los cajeros según la caja asignada, sin ocultar ninguno.</td><td>Un usuario sin caja asignada ve todos los pedidos; con caja asignada ve los de su caja y los que no tienen caja; los pedidos de otra caja se muestran en un bloque separado, con la advertencia de que el comprobante se emitirá con las series de la caja que cobra.</td><td><code>src/lib/pedidos.ts</code> — <code>repartirPedidos</code>, <code>nombreCaja</code>, <code>avisoOtraCaja</code>; <code>src/components/PanelVentasPendientes.tsx</code></td></tr>
+        <tr><td>RF-39</td><td>El sistema debe cobrar un pedido trayéndolo al carrito del punto de venta y conservando el monto cotizado.</td><td>El carrito muestra los ítems del pedido en modo lectura y el total es el cotizado por el vendedor, sin recalcular promociones. En modo pedido se ocultan el envío, los descuentos, el cliente, el crédito y las acciones de carrito. El pedido sólo puede traerse si el carrito está vacío, y cambiar de pedido durante el cobro exige confirmación.</td><td><code>src/lib/pedidos.ts</code> — <code>pedidoParaCarrito</code>; <code>src/pages/Pdv.tsx</code> — <code>activarPedido()</code>, <code>soltarPedido()</code>, <code>const total</code></td></tr>
+        <tr><td>RF-40</td><td>El sistema debe generar el comprobante del pedido en el momento de cobrarlo, con las series de la caja que cobra.</td><td>La serie y el correlativo se asignan una sola vez, al cobrar, tomando la serie del tipo elegido según la caja del cajero y con respaldo en la configuración de la empresa. El documento guarda el código del pedido original para su trazabilidad; si el tipo final no es nota de venta se registra el bloque fiscal en estado pendiente, y si es nota de venta ese bloque no existe.</td><td><code>src/services/ventas.ts</code> — <code>cobrarVentaPendiente</code>; <code>src/lib/contadores.ts</code> — <code>claveContador</code>; <code>src/pages/Pdv.tsx</code> — <code>cobrarPedido()</code></td></tr>
+        <tr><td>RF-41</td><td>El sistema debe validar la disponibilidad de stock al cobrar el pedido.</td><td>El inventario se descuenta únicamente al cobrar. Si el stock se agotó mientras el pedido esperaba, el cobro falla con un mensaje que indica el producto, el disponible y lo pedido, sin dejar el comprobante emitido.</td><td><code>src/services/ventas.ts</code> — <code>cobrarVentaPendiente</code>, control de <code>stockActual</code></td></tr>
+        <tr><td>RF-42</td><td>El sistema debe permitir al cajero eliminar un pedido indicando un motivo obligatorio.</td><td>La eliminación exige el permiso correspondiente y motivos informados; el pedido se marca como cancelado, no se borra físicamente y conserva el motivo y el usuario que lo eliminó. No se anula ningún comprobante y no se repone stock, porque el pedido no consumió número ni descontó inventario.</td><td><code>src/services/ventas.ts</code> — <code>cancelarVentaPendiente</code>; <code>src/components/PanelVentasPendientes.tsx</code> — <code>confirmarCancelacion()</code></td></tr>
+        <tr><td>RF-43</td><td>El sistema debe permitir transferir los pedidos abiertos de una caja a otra.</td><td>La transferencia se ejecuta por lotes, exige que las cajas de origen y destino sean distintas e informa la cantidad de pedidos efectivamente movidos. No altera series, correlativos ni importes, porque el identificador de caja del pedido sólo determina su reparto.</td><td><code>src/services/ventas.ts</code> — <code>moverPedidosDeCaja</code>; <code>src/pages/Configuracion.tsx</code> — pestaña Cajas</td></tr>
+        <tr><td>RF-44</td><td>El sistema debe identificar a las dos personas que intervinieron cuando la venta la armó una y la cobró otra.</td><td>Si el vendedor y el cajero son personas distintas, ambos se imprimen en el comprobante y se registran por separado; si la venta la hizo una sola persona, el nombre se imprime una sola vez, sin repetirse.</td><td><code>src/lib/personal.ts</code> — <code>personalDeVenta</code>, <code>lineasPersonal</code>, <code>textoPersonal</code>; <code>src/services/ventas.ts</code> — campos <code>vendedor</code> y <code>cajero</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.5 Facturación electrónica y cumplimiento tributario</h3>
+    <table class="compacta evitar-corte">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-45</td><td>El sistema debe mantener secuencias de numeración independientes por tipo de documento y por serie.</td><td>Las notas de venta usan un espacio de numeración propio y las boletas, facturas y notas de crédito y débito usan otro; por ello una nota de venta jamás comparte contador con una boleta, aunque la serie se llame igual. La clave del contador se construye siempre con la función que la compone y el campo del correlativo es único.</td><td><code>src/lib/contadores.ts</code> — <code>claveContador</code>, <code>CAMPO_CONTADOR</code>, <code>espacioContador</code>; <code>src/services/ventas.ts</code> — <code>registrarVenta</code></td></tr>
+        <tr><td>RF-46</td><td>El sistema debe sembrar el contador desde el máximo correlativo ya emitido cuando el contador no existe.</td><td>Antes de numerar se verifica la existencia del contador; si no existe, se calcula el máximo correlativo emitido para ese tipo y serie y se siembra dentro de la misma transacción que emite el comprobante, de modo que no queden contadores sin documento ni correlativos repetidos tras una restauración de la base.</td><td><code>src/services/ventas.ts</code> — <code>registrarVenta</code> (lectura de <code>maxExistente</code>); <code>src/services/notas.ts</code> — <code>maxCorrelativoEmitido</code>; <code>src/lib/contadores.ts</code></td></tr>
+        <tr><td>RF-47</td><td>El sistema debe emitir notas de venta internas como documentos no declarados a la administración tributaria.</td><td>Las notas de venta no llevan bloque fiscal, lo que las excluye del envío electrónico. Se numeran con el prefijo configurado para notas de venta.</td><td><code>src/services/ventas.ts</code> — <code>registrarVenta</code>, condición <code>venta.tipoDoc !== 'NV'</code></td></tr>
+        <tr><td>RF-48</td><td>El sistema debe emitir boletas y facturas electrónicas con su serie y correlativo propios.</td><td>Boletas y facturas toman su serie de la configuración de la empresa o de la caja del usuario. La impresión declara el importe en letras y los datos fiscales del emisor.</td><td><code>src/services/ventas.ts</code> — <code>registrarVenta</code>; <code>src/lib/pdf.ts</code> — <code>abrirPDFComprobante</code>; <code>src/lib/numero-a-letras.ts</code></td></tr>
+        <tr><td>RF-49</td><td>El sistema debe agrupar las notas de venta del día en una boleta consolidada.</td><td>La consolidación exige el permiso correspondiente, no admite una lista vacía y requiere un correlativo disponible en la serie de boletas. La boleta consolidada suma los totales netos de las notas agrupadas, declara la suma de sus descuentos y consolida las líneas agrupando por producto, precio y unidad. Cada nota consolidada se marca como tal y queda vinculada al documento que la agrupó.</td><td><code>src/services/consolidado.ts</code> — <code>generarConsolidado</code>; <code>src/lib/consolidado.ts</code> — <code>consolidarItems</code>, <code>totalConsolidado</code>, <code>descuentoConsolidado</code>; <code>src/pages/Reportes.tsx</code> — <code>handleConsolidar()</code></td></tr>
+        <tr><td>RF-50</td><td>El sistema debe emitir notas de crédito y de débito sobre un comprobante aceptado.</td><td>La emisión exige que el comprobante original tenga respuesta de aceptación y un turno abierto, porque la nota afecta la caja. La serie se resuelve según el tipo de nota y el tipo del documento original. Una nota de crédito no puede superar el importe del comprobante original. La nota puede afectar stock cuando se trata de una devolución. El importe de la nota se registra con signo negativo en el turno cuando es nota de crédito, y la devolución se reparte entre los bolsillos en la misma proporción en que se cobró el comprobante original.</td><td><code>src/services/notas.ts</code> — <code>crearNotaCreditoDebito</code>; <code>src/pages/Reportes.tsx</code> — <code>crearNota()</code>; <code>src/constants/tributario.ts</code> — <code>TIPOS_NOTA_SUNAT</code></td></tr>
+        <tr><td>RF-51</td><td>El sistema debe enviar boletas, facturas y notas al servicio de la administración tributaria e interpretar la respuesta.</td><td>El envío exige correlativo asignado y configuración del servicio. El sistema marca el documento como en envío, interpreta la respuesta como aceptada, rechazada, error o duplicada, guarda el código y la descripción de la respuesta, el archivo devuelto y el resumen digital, y ante una falta de respuesta por tiempo de espera advierte que el comprobante pudo ser aceptado y sugiere reintentar.</td><td><code>src/services/sunat.ts</code> — <code>enviarDocumentoASunat</code>, <code>enviarNotaASunat</code>, <code>datosCdr</code>, <code>parsearCdrXml</code>; <code>src/lib/sunat.ts</code></td></tr>
+        <tr><td>RF-52</td><td>El sistema debe tratar un comprobante ya registrado como aceptado en lugar de fallar.</td><td>Si la respuesta indica que el comprobante ya fue registrado, se marca como aceptado y se informa al usuario, en lugar de reportar un error.</td><td><code>src/services/sunat.ts</code> — tratamiento del código 1033 en <code>enviarDocumentoASunat</code></td></tr>
+        <tr><td>RF-53</td><td>El sistema debe registrar el resultado del envío aunque falten campos en la respuesta del servicio.</td><td>Los campos ausentes de la respuesta se guardan como nulos antes de escribir, para que el registro del resultado no falle y el usuario reciba el mensaje del envío y no un error de escritura.</td><td><code>src/services/sunat.ts</code> — <code>datosCdr</code>; <code>src/lib/limpio.ts</code> — <code>limpiarUndefined</code></td></tr>
+        <tr><td>RF-54</td><td>El sistema debe declarar la afectación tributaria de cada producto y propagarla al comprobante.</td><td>La afectación es un atributo del producto y manda por sobre la configuración del negocio, que sólo actúa como valor por omisión para el producto que no la declara. El impuesto general a las ventas se calcula únicamente en las afectaciones gravadas; en las exoneradas, inafectas y gratuitas el precio se declara tal cual. Los ítems manuales llevan su propia afectación, que arranca con la configurada para el negocio.</td><td><code>src/lib/sunat-importes.ts</code> — <code>afectacionDe</code>, <code>valorUnitarioSunat</code>; <code>src/constants/tributario.ts</code> — <code>TIPO_AFECTACION</code>, <code>AFECTACION_POR_DEFECTO</code>; <code>src/pages/Pdv.tsx</code> — selector de afectación de los ítems manuales</td></tr>
+        <tr><td>RF-55</td><td>El sistema debe enviar las cantidades, los precios unitarios y los totales con dos decimales.</td><td>El reparto del descuento entre las líneas y el redondeo a dos decimales conservan el total cobrado; el residuo del redondeo se repone línea por línea. Las cantidades con más de dos decimales se declaran con dos, y todos los totales se redondean antes de enviarse.</td><td><code>src/lib/sunat-importes.ts</code> — <code>itemsParaSunat</code>, <code>cantidadSunat</code>, <code>redondear2</code>; <code>src/lib/dinero.ts</code></td></tr>
+        <tr><td>RF-56</td><td>El sistema debe anular un comprobante con reglas explícitas de permiso y de fecha.</td><td>La anulación exige el permiso correspondiente y se admite únicamente para documentos del día actual. No se admite si el documento ya fue anulado, si ya fue consolidado ni si fue aceptado por la administración tributaria, caso en el que se indica emitir una nota de crédito. La anulación repone el stock, marca el documento como anulado sin borrarlo, registra el motivo y el usuario, y ajusta los totales del turno o los acumula como importes anulados si el turno ya estaba cerrado.</td><td><code>src/services/ventas.ts</code> — <code>anularNotaVenta</code>; <code>src/pages/Reportes.tsx</code> — <code>puedeAnular()</code></td></tr>
+        <tr><td>RF-57</td><td>El sistema debe impedir modificar un comprobante o una nota de venta ya consolidada.</td><td>La corrección del medio de pago se admite sólo mientras el documento está pendiente o, en el caso de una nota de venta, mientras no haya sido consolidada.</td><td><code>src/services/reportes.ts</code> — <code>corregirTipoPago</code>; <code>src/pages/Reportes.tsx</code> — <code>puedeCorregir()</code></td></tr>
+        <tr><td>RF-58</td><td>El sistema debe generar el registro de ventas del periodo en el formato de la declaración tributaria mensual.</td><td>El reporte se arma por periodo mensual, con el mes elegido por el usuario, y se descarga como archivo de texto cuyas columnas se separan con el carácter de barra vertical, en el orden que exige el formato del registro: periodo, tipo de documento, serie, número, fecha de emisión, tipo y número del documento de identidad del adquirente, razón social, tipo de moneda, monto de operaciones gravadas, monto de descuentos, monto total de ventas, monto de impuestos y estado del ítem. La base gravada se calcula por el tipo de afectación de cada ítem del documento, el impuesto se calcula sobre esa base a la tasa vigente y las notas de crédito se declaran con signo negativo para restar del total. Los documentos anulados se excluyen de la exportación y se contabilizan aparte.</td><td><code>src/pages/ReporteSire.tsx</code> — <code>calcularDoc</code>, <code>toCsvRows</code>, <code>descargarCsv</code>, <code>handleExportar</code>; <code>src/constants/permisos.ts</code> — permiso <code>sire</code></td></tr>
+        <tr><td>RF-59</td><td>El sistema debe exportar los registros de notas de venta y del registro fiscal a planilla de cálculo.</td><td>La exportación se realiza por mes y respeta el filtro de usuario aplicado en la pantalla.</td><td><code>src/pages/Reportes.tsx</code> — <code>exportarExcelNv()</code>, <code>exportarExcelSunat()</code>; <code>src/lib/excel.ts</code> — <code>exportarExcel</code></td></tr>
+        <tr><td>RF-60</td><td>El sistema debe impedir emitir un comprobante o cobrar un crédito sin un turno abierto.</td><td>Toda venta, el cobro de un pedido y la emisión de una nota exigen un turno abierto del usuario o, para un supervisor, de cualquier caja. Si no existe, la operación se rechaza con un mensaje que indica abrir un turno.</td><td><code>src/pages/Pdv.tsx</code> — <code>cobrar()</code>, <code>cobrarPedido()</code>; <code>src/pages/Reportes.tsx</code> — <code>crearNota()</code>; <code>src/services/turnos.ts</code> — <code>buscarTurnoAbierto</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.6 Inventario, kardex y rotación</h3>
+    <table class="compacta evitar-corte">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-61</td><td>El sistema debe permitir dar de alta y editar productos del catálogo.</td><td>El alta y la edición están sujetas a los permisos correspondientes. El código del producto es obligatorio y, si no se informa, se usa el identificador generado. La eliminación de un producto se bloquea cuando tiene movimientos registrados, y también cuando es componente de un producto compuesto.</td><td><code>src/pages/Inventario.tsx</code> — <code>guardar()</code>, <code>validar()</code>, <code>eliminar()</code>; permisos <code>crearProducto</code>, <code>editarProducto</code>, <code>eliminarProducto</code></td></tr>
+        <tr><td>RF-62</td><td>El sistema debe permitir definir productos compuestos por otros productos del catálogo.</td><td>Un producto compuesto declara sus componentes y las cantidades requeridas; no puede incluir otro producto compuesto. La venta de un compuesto descuenta el stock de sus componentes y registra los movimientos correspondientes.</td><td><code>src/pages/Inventario.tsx</code> — <code>isKit</code>, <code>kitItems</code>; <code>src/services/ventas.ts</code> — descomposición de <code>kitItems</code> en <code>registrarVenta</code>; <code>src/pages/Pdv.tsx</code> — <code>kitStock()</code></td></tr>
+        <tr><td>RF-63</td><td>El sistema debe registrar la afectación tributaria de cada producto.</td><td>La ficha del producto guarda el código de afectación elegido del catálogo tributario; el valor por omisión depende de si la empresa opera en una región exonerada. La afectación viaja con cada ítem del documento de venta y con cada ítem del pedido enviado a caja.</td><td><code>src/pages/Inventario.tsx</code> — campo de afectación; <code>src/pages/Pdv.tsx</code> — <code>enviarACaja()</code>, <code>tipoAfectacion</code> del ítem; <code>src/constants/tributario.ts</code></td></tr>
+        <tr><td>RF-64</td><td>El sistema debe controlar el stock mínimo por producto y señalar los faltantes.</td><td>El stock se clasifica como agotado, bajo o disponible comparándolo con el mínimo configurado; la vista permite filtrar los productos con stock bajo.</td><td><code>src/pages/Inventario.tsx</code> — condición <code>soloStockBajo</code>, insignias de estado; <code>src/lib/inventario-reportes.ts</code> — <code>generarReporteStockBajo</code></td></tr>
+        <tr><td>RF-65</td><td>El sistema debe administrar el precio de venta, el precio especial, el precio de compra y el precio mínimo de cada producto.</td><td>El acceso a los costos está sujeto al permiso correspondiente. El precio mínimo es la protección contra la venta bajo piso; si no se informa, el producto no queda protegido. Los cambios de precio se registran en el historial de precios.</td><td><code>src/pages/Inventario.tsx</code> — <code>precioMinimo</code>, permiso <code>verCostos</code>; <code>src/services/historial-precios.ts</code> — <code>registrarCambioPrecio</code>; <code>src/components/CompararPrecios.tsx</code></td></tr>
+        <tr><td>RF-66</td><td>El sistema debe registrar la fecha de vencimiento de los productos y avisar sobre ella.</td><td>La fecha es opcional y, cuando existe, se clasifica el producto como vencido o próximo a vencer dentro de los siete días, tanto en el inventario como en el punto de venta. Un producto por vencer queda exceptuado de la protección de precio mínimo.</td><td><code>src/pages/Inventario.tsx</code> — <code>fechaVencimiento</code>; <code>src/lib/ui-utils.ts</code> — <code>estadoVencimiento</code>; <code>src/components/dashboard/AlertaVencimientoWidget.tsx</code></td></tr>
+        <tr><td>RF-67</td><td>El sistema debe permitir ajustar el stock con entrada o salida, motivo y nota.</td><td>El ajuste exige el permiso correspondiente, una cantidad entera mayor que cero y, tratándose de una salida, una cantidad que no supere el stock existente. El ajuste actualiza el stock y registra el movimiento con el stock anterior y el nuevo en una misma operación, y queda asentado en la auditoría.</td><td><code>src/pages/Inventario.tsx</code> — <code>guardarAjuste()</code>, <code>abrirAjuste()</code>; permiso <code>ajustarStock</code></td></tr>
+        <tr><td>RF-68</td><td>El sistema debe permitir realizar una toma física de inventario y aplicar las diferencias.</td><td>La toma permite contar por categoría y producto, y resume los productos contados, con sobrante, con faltante y correctos. Al aplicar, cada diferencia genera el movimiento de ajuste de entrada o de salida correspondiente.</td><td><code>src/pages/Inventario.tsx</code> — <code>tomaConteos</code>, <code>tomaStats</code>, <code>aplicarToma()</code>, <code>imprimirToma()</code></td></tr>
+        <tr><td>RF-69</td><td>El sistema debe registrar el kardex con todos los movimientos de stock.</td><td>Cada movimiento guarda el producto, el tipo de movimiento, la cantidad en valor absoluto con el signo determinado por la naturaleza de la operación, el stock anterior, el stock nuevo, la fecha y el usuario. El kardex se consulta por producto en un rango de fechas.</td><td><code>src/services/kardex.ts</code> — <code>consultarKardex</code>, <code>cargarProductos</code>; <code>src/pages/Kardex.tsx</code></td></tr>
+        <tr><td>RF-70</td><td>El sistema debe generar reportes de inventario por stock general, stock bajo, mayor inversión, categoría, valorización y utilidad.</td><td>Los reportes calculan totales de existencias, valor de compra, valor de venta, ganancia potencial, margen y cantidad de productos sin stock o bajo mínimo.</td><td><code>src/lib/inventario-reportes.ts</code> — <code>generarReporte</code> y sus variantes; <code>src/components/ModalReportes.tsx</code></td></tr>
+        <tr><td>RF-71</td><td>El sistema debe medir la rotación de los productos y detectar la mercadería sin movimiento.</td><td>La vista de rotación ordena los productos según su nivel de movimiento y permite identificar los que no se venden.</td><td><code>src/pages/RotacionInventario.tsx</code>; permiso <code>rotacionInventario</code></td></tr>
+        <tr><td>RF-72</td><td>El sistema debe exportar el inventario a planilla de cálculo.</td><td>La exportación incluye nombre, código, categoría, existencias, mínimo, precios y fecha de vencimiento, y agrega el estado de stock de cada producto.</td><td><code>src/pages/Inventario.tsx</code> — <code>exportarExcelInv()</code>; <code>src/lib/excel.ts</code></td></tr>
+        <tr><td>RF-73</td><td>El sistema debe administrar las categorías de producto.</td><td>Las categorías tienen nombre, orden, estado e ícono, y el identificador se deriva del nombre. La categoría se administra desde un modal y también desde la configuración; el renombrado actualiza los productos que la usaban.</td><td><code>src/components/ModalCategorias.tsx</code>; <code>src/services/categorias.ts</code> — <code>guardarCategoria</code>, <code>eliminarCategoria</code>, <code>listarCategorias</code>; <code>src/pages/Inventario.tsx</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.7 Caja: turnos, arqueo, gastos y cierre del día</h3>
+    <table class="compacta evitar-corte">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-74</td><td>El sistema debe permitir abrir un turno de caja con tipo de turno y monto inicial.</td><td>Un usuario no puede tener más de un turno abierto: si ya lo tiene, el sistema lo rechaza indicando la fecha de apertura del turno vigente. El turno registra usuario, caja, tipo, fecha de apertura y monto inicial en cero para los acumulados de ventas y cobros.</td><td><code>src/services/turnos.ts</code> — <code>abrirTurno</code>; permiso <code>abrirTurno</code></td></tr>
+        <tr><td>RF-75</td><td>El sistema debe permitir cerrar el turno registrando el efectivo contado y las observaciones.</td><td>Sólo el titular del turno puede cerrarlo, salvo un supervisor. El cierre calcula el efectivo esperado, la diferencia con lo contado, y genera un análisis con causas y recomendaciones. El turno pasa a cerrado y se crea el registro de cierre con la copia de las ventas y los gastos del turno, en una sola transacción.</td><td><code>src/services/turnos.ts</code> — <code>cerrarTurno</code>; <code>src/components/CierreCaja.tsx</code>; permiso <code>cerrarTurno</code></td></tr>
+        <tr><td>RF-76</td><td>El sistema debe calcular el efectivo esperado con una fórmula única.</td><td>El efectivo esperado es el monto inicial más el efectivo cobrado, menos los gastos pagados en efectivo y menos el vuelto entregado por transferencia. Las transferencias no forman parte del cuadre de la caja. La fórmula reside en una sola función, utilizada por el cierre, la rectificación, los egresos, las compras pagadas desde caja, el arqueo y el análisis de cierre.</td><td><code>src/lib/arqueo.ts</code> — <code>efectivoEsperadoDe</code>; <code>src/services/turnos.ts</code>; <code>src/services/egresos.ts</code>; <code>src/services/compras.ts</code>; <code>src/pages/ArqueoCaja.tsx</code></td></tr>
+        <tr><td>RF-77</td><td>El sistema debe permitir corregir el monto inicial mientras el turno está abierto.</td><td>La edición del monto inicial se admite sólo en turnos abiertos y queda registrada en la auditoría.</td><td><code>src/services/turnos.ts</code> — <code>editarMontoInicial</code>; permiso <code>editarMontoInicial</code></td></tr>
+        <tr><td>RF-78</td><td>El sistema debe ofrecer el conteo a ciegas del efectivo al cerrar el turno.</td><td>El conteo a ciegas es un parámetro configurable, desactivado por omisión. Con el parámetro activo, el cajero ingresa el efectivo contado sin ver el efectivo esperado y la diferencia se muestra recién al analizar el cierre, para evitar que el conteo se ajuste copiando el resultado del sistema.</td><td><code>src/components/CierreCaja.tsx</code> — propiedad <code>conteoCiego</code>; <code>src/pages/Configuracion.tsx</code> — interruptor <code>conteoCiego</code>; <code>src/pages/Turnos.tsx</code></td></tr>
+        <tr><td>RF-79</td><td>El sistema debe permitir declarar la conciliación por billetera al cerrar el turno.</td><td>La conciliación es opcional y no bloquea el cierre. Por cada medio electrónico se compara lo que el sistema registró con lo declarado y se calcula la diferencia; se guarda en el turno y en el registro de cierre, y se muestra en el arqueo. Los documentos anteriores a la incorporación del detalle por medio se agrupan como transferencia sin detalle, sin inferir un medio inexistente.</td><td><code>src/lib/arqueo.ts</code> — <code>mediosDelTurno</code>, <code>ConciliacionMedios</code>; <code>src/components/CierreCaja.tsx</code> — <code>armarConciliacion()</code>; <code>src/services/turnos.ts</code></td></tr>
+        <tr><td>RF-80</td><td>El sistema debe presentar el arqueo del día por turno, con esperado, contado y diferencia.</td><td>El arqueo acepta una fecha con navegación diaria, muestra los totales del día y el detalle de cada turno con su estado, sus totales por bolsillo, el desglose por origen del dinero, los gastos, las observaciones y los comprobantes. Sólo un supervisor ve los turnos de todos los usuarios. Si un turno está abierto se permite cargar un conteo de vista previa y el sistema muestra la diferencia y los diagnósticos sin registrarla.</td><td><code>src/pages/ArqueoCaja.tsx</code>; <code>src/services/reportes.ts</code> — <code>obtenerArqueoDelDia</code>; permiso <code>arqueoCaja</code>, <code>verTodo</code></td></tr>
+        <tr><td>RF-81</td><td>El sistema debe desglosar el dinero de cada bolsillo según su origen.</td><td>Dentro de cada bolsillo se distingue lo proveniente de ventas del día, de la cobranza de créditos anteriores y de las notas de crédito o débito. La suma de los tres componentes iguala el total registrado del bolsillo, y el sistema informa si el desglose derivado no explica ese total.</td><td><code>src/lib/arqueo.ts</code> — <code>desglosarTurno</code>, <code>lineasDeOrigen</code>, <code>sumarDesgloses</code>; <code>src/pages/ArqueoCaja.tsx</code> — <code>Origenes</code>, <code>OrigenesCorto</code></td></tr>
+        <tr><td>RF-82</td><td>El sistema debe generar diagnósticos automáticos cuando el efectivo no cuadra.</td><td>Ante una diferencia, el sistema propone pistas y alertas: coincidencia con el importe de una venta en efectivo o por transferencia, posible confusión entre medios, gastos no registrados, faltantes pequeños atribuibles al vuelto, sobrantes significativos, diferencias exactas asociadas al monto inicial y ausencia de ventas en efectivo.</td><td><code>src/lib/diagnosticos.ts</code> — <code>diagnosticarDiferencia</code>; <code>src/pages/ArqueoCaja.tsx</code> — <code>DiagnosticoPanel</code></td></tr>
+        <tr><td>RF-83</td><td>El sistema debe registrar los gastos y egresos de dinero, afectos o no a la caja del turno.</td><td>El registro exige monto mayor que cero, descripción y categoría. Cuando el gasto se paga con dinero de caja, el sistema verifica que el efectivo disponible alcance, descuenta el importe del efectivo esperado y lo acumula en los gastos del turno; cuando se paga por transferencia, lo acumula en el bolsillo correspondiente. Los egresos se consultan por rango de fechas y se exportan.</td><td><code>src/services/egresos.ts</code> — <code>registrarEgreso</code>, <code>registrarEgresoEnTurno</code>, <code>obtenerEgresosPorFecha</code>; <code>src/pages/Egresos.tsx</code></td></tr>
+        <tr><td>RF-84</td><td>El sistema debe permitir rectificar el monto inicial de un turno ya cerrado, dejando constancia.</td><td>La rectificación exige el permiso correspondiente, se admite sólo sobre turnos cerrados y con un motivo informado. El sistema guarda el monto original, el monto real, el ajuste, el motivo, el usuario y la fecha, recalcula el efectivo esperado y la diferencia, y registra la acción en la auditoría. El turno es un registro de caja y no se reescribe más allá del campo necesario.</td><td><code>src/services/turnos.ts</code> — <code>rectificarTurno</code>; <code>src/pages/ArqueoCaja.tsx</code> — <code>onRectificar()</code>; permiso <code>rectificarTurno</code></td></tr>
+        <tr><td>RF-85</td><td>El sistema debe consolidar el cierre del día sumando únicamente los turnos cerrados.</td><td>El consolidado del día acumula monto inicial, efectivo esperado, efectivo contado y diferencia sólo de los turnos cerrados, porque un turno abierto tiene esperado pero todavía no tiene conteo. El rótulo informa cuántos turnos quedaron abiertos y el pie aclara que la caja cuadra únicamente el efectivo.</td><td><code>src/services/reportes.ts</code> — <code>obtenerArqueoDelDia</code>, acumulación condicionada a <code>estado === 'cerrado'</code>; <code>src/pages/ArqueoCaja.tsx</code> — bloque «Caja del día»</td></tr>
+        <tr><td>RF-86</td><td>El sistema debe permitir imprimir el arqueo del día y el acta de cierre de caja.</td><td>Ambos documentos se emiten en formato portable, encabezados con los datos de la empresa y firmados por el cajero que cerró el turno y por el supervisor.</td><td><code>src/lib/pdf.ts</code> — <code>abrirPDFArqueo</code>, <code>abrirPDFCierreCaja</code>; <code>src/pages/ArqueoCaja.tsx</code> — botón «Exportar PDF»</td></tr>
+        <tr><td>RF-87</td><td>El sistema debe permitir el seguimiento de los envíos a domicilio pendientes.</td><td>El sistema lista los envíos a domicilio de los últimos días cuyo estado no sea entregado ni cancelado, mostrando el comprobante, el cliente, la dirección y el importe, y permite actualizar el estado del envío.</td><td><code>src/services/envios.ts</code> — <code>obtenerEnviosPendientesAnteriores</code>, <code>actualizarEstadoEnvio</code>; <code>src/pages/Turnos.tsx</code></td></tr>
+        <tr><td>RF-88</td><td>El sistema debe registrar el cobro de una venta al crédito e incorporarlo al turno.</td><td>El cobro exige un turno abierto y actualiza el importe cobrado del documento, marcándolo como pagado al alcanzar el total. El cobro se incorpora al turno como movimiento de cobranza de crédito, en el bolsillo que corresponde al medio utilizado, con su número de operación cuando se informa. Una venta a crédito no ingresa a ningún bolsillo de la caja por tratarse de un importe pendiente de cobro.</td><td><code>src/services/clientes.ts</code> — <code>registrarCobro</code>; <code>src/lib/pagos.ts</code> — <code>bolsilloDe</code>, <code>bolsillosDeVenta</code>; <code>src/pages/ClienteDetalle.tsx</code> — <code>handleCobrar()</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.8 Clientes y crédito</h3>
+    <table class="compacta evitar-corte">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-89</td><td>El sistema debe dar de alta un cliente a partir de su documento, completando los datos con la consulta de documentos y permitiendo el ingreso manual.</td><td>El alta busca primero al cliente en el padrón; si no existe, consulta el servicio externo y, cuando no obtiene datos, registra el documento igualmente. La ficha guarda el tipo de documento, la razón social, los datos de contacto, la lista de precio asignada, el porcentaje de descuento y la configuración de crédito. Una ficha ya existente no se duplica.</td><td><code>src/services/clientes.ts</code> — <code>crearOCargarCliente</code>, <code>actualizarCliente</code>; <code>src/pages/ClienteDetalle.tsx</code> — <code>handleGuardar()</code></td></tr>
+        <tr><td>RF-90</td><td>El sistema debe controlar la venta a crédito según el estado del cliente, su saldo y su límite.</td><td>No se permite vender a crédito a un cliente inexistente ni a uno que no tenga el crédito activo. El límite igual a cero significa sin límite configurado, no límite nulo. Si la venta dejara el saldo por encima del límite, se rechaza con el detalle del saldo, el límite y el excedente. El disponible se calcula como la diferencia entre el límite y el saldo, y es infinito cuando no hay límite. Si la lectura del estado falla, la venta a crédito se bloquea antes que otorgar crédito sin información.</td><td><code>src/lib/credito.ts</code> — <code>evaluarVentaCredito</code>, <code>disponibleDe</code>, <code>SIN_LIMITE</code>; <code>src/services/clientes.ts</code> — <code>obtenerEstadoCredito</code>; <code>src/components/CreditoPanel.tsx</code></td></tr>
+        <tr><td>RF-91</td><td>El sistema debe presentar el estado de cuenta del cliente y sus comprobantes.</td><td>La ficha lista las ventas del cliente y muestra el saldo pendiente, el límite y el disponible, además de los documentos que componen la deuda.</td><td><code>src/pages/ClienteDetalle.tsx</code> — <code>obtenerVentasDelCliente</code>; <code>src/services/clientes.ts</code></td></tr>
+        <tr><td>RF-92</td><td>El sistema debe recalcular el saldo del cliente y corregir los cobros que superen el total del documento.</td><td>El recálculo suma los importes pendientes de las ventas a crédito del cliente y actualiza el saldo registrado. La corrección de cobros excedidos limita el importe cobrado al total del documento y lo marca como pagado, informando cuántos documentos se corrigieron.</td><td><code>src/services/clientes.ts</code> — <code>calcularSaldoCredito</code>, <code>actualizarSaldoCredito</code>, <code>corregirCobrosExcedidos</code>; <code>src/pages/ClienteDetalle.tsx</code> — <code>handleRecalcularSaldo()</code></td></tr>
+        <tr><td>RF-93</td><td>El sistema debe permitir consultar a los clientes con deuda y buscar clientes por nombre o documento.</td><td>La consulta de clientes con deuda los ordena de mayor a menor saldo. La búsqueda combina la coincidencia exacta por documento con la coincidencia parcial por nombre o documento, y devuelve hasta veinte resultados. El padrón se pagina por cursores con veinticinco registros por página.</td><td><code>src/services/clientes.ts</code> — <code>obtenerClientesConDeuda</code>, <code>buscarClientes</code>, <code>cargarClientesPagina</code>; <code>src/pages/Clientes.tsx</code></td></tr>
+        <tr><td>RF-94</td><td>El sistema debe validar el estado del cliente ante la administración tributaria.</td><td>La validación consulta el documento y guarda el resultado y el estado devuelto en la ficha del cliente.</td><td><code>src/services/clientes.ts</code> — <code>validarSunatCliente</code>; <code>src/pages/ClienteDetalle.tsx</code> — <code>handleValidarSunat()</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.9 Proveedores, compras y pagos</h3>
+    <table class="compacta evitar-corte">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-95</td><td>El sistema debe registrar proveedores con documento, datos de contacto y personas de contacto.</td><td>El nombre es obligatorio; el identificador del documento se usa como clave cuando está informado. La consulta de documentos permite autocompletar la razón social y la dirección a partir del registro único de contribuyentes o del documento de identidad. La búsqueda de proveedores se realiza por nombre o documento y admite coincidencia parcial.</td><td><code>src/services/proveedores.ts</code> — <code>guardarProveedor</code>, <code>consultarProveedor</code>, <code>buscarProveedores</code>, tipo <code>ContactoProveedor</code>; <code>src/pages/Proveedores.tsx</code>; <code>src/pages/ProveedorDetalle.tsx</code></td></tr>
+        <tr><td>RF-96</td><td>El sistema debe registrar compras de mercadería que incrementen el stock y generen el movimiento correspondiente.</td><td>La compra exige al menos un producto con cantidad mayor que cero, proveedor informado y total mayor que cero. El sistema valida la existencia de cada producto, incrementa el stock considerando el factor de conversión de la presentación comprada y crea el movimiento con el stock anterior y el nuevo, en una sola transacción.</td><td><code>src/services/compras.ts</code> — <code>registrarCompra</code>; <code>src/components/ModalCompra.tsx</code>; <code>src/pages/Compras.tsx</code></td></tr>
+        <tr><td>RF-97</td><td>El sistema debe permitir pagar una compra con dinero de la caja del turno.</td><td>Cuando el pago se realiza desde la caja, el sistema verifica que el efectivo disponible alcance y, si no alcanza, rechaza la operación indicando el disponible. Si alcanza, registra el gasto en el turno y lo acumula en los gastos pagados en efectivo.</td><td><code>src/services/compras.ts</code> — <code>registrarCompra</code>, rama <code>tipoPago === 'caja'</code>; <code>src/lib/arqueo.ts</code> — <code>efectivoEsperadoDe</code></td></tr>
+        <tr><td>RF-98</td><td>El sistema debe registrar los pagos realizados a un proveedor y su historial.</td><td>Cada pago se asocia al proveedor y queda disponible en su historial, junto con las compras registradas.</td><td><code>src/services/pagos-proveedores.ts</code> — <code>registrarPagoProveedor</code>, <code>obtenerPagosProveedor</code>; <code>src/components/ProveedorHistorial.tsx</code></td></tr>
+        <tr><td>RF-99</td><td>El sistema debe presentar indicadores de proveedores: compras por proveedor, evolución de precios, confiabilidad y ranking.</td><td>El panel de proveedores agrupa las compras por proveedor, muestra la variación de precios de compra en el tiempo y ordena a los proveedores según un índice de confiabilidad.</td><td><code>src/components/reportes/ComprasPorProveedor.tsx</code>; <code>src/components/reportes/EvolucionPrecios.tsx</code>; <code>src/components/reportes/DashboardProveedores.tsx</code>; <code>src/components/reportes/RankingConfiabilidad.tsx</code>; <code>src/pages/Reportes.tsx</code></td></tr>
+        <tr><td>RF-100</td><td>El sistema debe permitir anular el movimiento de una compra o la compra completa, revirtiendo el stock.</td><td>La anulación descuenta las unidades incorporadas y restaura el stock anterior, informando el nuevo stock resultante y el importe revertido.</td><td><code>src/services/reportes.ts</code> — <code>anularMovimientoCompra</code>, <code>anularCompraCompleta</code>; <code>src/pages/Compras.tsx</code></td></tr>
+        <tr><td>RF-101</td><td>El sistema debe sugerir compras a partir del nivel de existencias.</td><td>La sugerencia se apoya en el stock actual y el stock mínimo para proponer los productos a reponer.</td><td><code>src/components/SugerenciaCompra.tsx</code>; <code>src/components/dashboard/AlertaStockWidget.tsx</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.10 Reportes, tableros y auditoría</h3>
+    <table class="compacta evitar-corte">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-102</td><td>El sistema debe generar reportes de ventas por rango de fechas.</td><td>Se incluyen los comprobantes reales —nota de venta, boleta y factura—, se excluyen los anulados y las boletas consolidadas, y se incorporan las notas de crédito y de débito para que la nota de crédito reste del total. La nota de débito suma y la de crédito resta.</td><td><code>src/services/reportes.ts</code> — <code>obtenerVentasPorRango</code>, <code>signoDoc</code>, <code>obtenerRangoMes</code>, <code>obtenerRangoDia</code>; <code>src/pages/ReporteFechas.tsx</code></td></tr>
+        <tr><td>RF-103</td><td>El sistema debe generar reportes por turno de caja.</td><td>El reporte resume los turnos cerrados y los turnos en curso en un rango, con sus totales de venta, efectivo, transferencia y gastos, y permite filtrar por mes y tipo de turno.</td><td><code>src/services/reportes.ts</code> — <code>cargarTurnosCerrados</code>, <code>cargarTodosLosTurnos</code>, <code>filtrarTurnosPorMes</code>, <code>calcularResumenMensual</code>; <code>src/pages/ReporteTurnos.tsx</code></td></tr>
+        <tr><td>RF-104</td><td>El sistema debe generar reportes de ventas por empleado.</td><td>El reporte agrupa las ventas por el vendedor identificado en el documento y, cuando el documento no lo tiene, por el usuario que lo registró: la atribución corresponde a quien vendió y no al cajero que cobró. Por cada empleado acumula la cantidad de documentos, el importe total —con la nota de crédito restando—, la cantidad de boletas, facturas y notas de crédito, el ticket promedio y el desglose por forma de pago de cada documento, y ordena a los empleados por importe vendido. Excluye los documentos anulados y los consolidados. La exportación se realiza como archivo delimitado.</td><td><code>src/pages/VentasPorEmpleado.tsx</code> — <code>empleados</code>, <code>handleExportar</code>; <code>src/services/ventas.ts</code> — campos <code>vendedorId</code>, <code>vendedorNombre</code>, <code>usuarioId</code>; permiso <code>ventasPorEmpleado</code></td></tr>
+        <tr><td>RF-105</td><td>El sistema debe generar reportes por categoría y por producto.</td><td>El reporte por categoría se construye a partir de la categoría guardada en cada ítem del documento, por lo que refleja el histórico y no la categoría actual del producto.</td><td><code>src/pages/Analisis.tsx</code>; <code>src/components/dashboard/VentasCategoriaWidget.tsx</code>; <code>src/components/dashboard/TopProductosWidget.tsx</code></td></tr>
+        <tr><td>RF-106</td><td>El sistema debe generar reportes de compras por rango de fechas.</td><td>El reporte recupera las compras del periodo y permite su exportación a planilla de cálculo.</td><td><code>src/services/reportes.ts</code> — <code>obtenerComprasPorRango</code>; <code>src/pages/Compras.tsx</code> — <code>exportarExcelCompras()</code></td></tr>
+        <tr><td>RF-107</td><td>El sistema debe ofrecer un tablero operativo del día con componentes reordenables por el usuario.</td><td>El tablero reúne indicadores de ventas del día y del mes, cantidad de transacciones, ticket promedio, productos más vendidos, ventas por categoría, alertas de stock bajo y agotado, alertas de vencimiento próximo, estado del turno activo y de los turnos cerrados del día, novedades del registro fiscal y accesos rápidos. El usuario puede ocultar y reordenar los componentes, y el orden elegido se guarda en su propio registro. El tablero permite saltar a los módulos relacionados y respeta el alcance por usuario: quien no tiene el acceso especial ve únicamente los documentos que él registró. Los documentos anulados y los consolidados quedan excluidos de los totales.</td><td><code>src/pages/DashboardOperaciones.tsx</code>; <code>src/components/dashboard/index.ts</code>; <code>src/hooks/use-dashboard-widgets.ts</code>; <code>src/services/dashboard.ts</code> — <code>cargarWidgetOrder</code>, <code>guardarWidgetOrder</code>; <code>src/components/ui/sortable-item.tsx</code></td></tr>
+        <tr><td>RF-108</td><td>El sistema debe ofrecer un tablero gerencial resumido del último turno registrado.</td><td>El tablero resume el último turno por fecha de apertura: importe vendido, cantidad de transacciones, ticket promedio, productos más vendidos, distribución de ventas por hora, participación de las formas de pago y las últimas ventas del turno. Las ventas anuladas y las consolidadas no se computan, y cada venta reciente puede abrirse en su detalle.</td><td><code>src/pages/Dashboard.tsx</code>; <code>src/components/ModalDetalleVenta.tsx</code>; permiso <code>dashboard</code> en <code>src/App.tsx</code></td></tr>
+        <tr><td>RF-109</td><td>El sistema debe registrar en un historial de auditoría las acciones relevantes de los usuarios.</td><td>Cada registro guarda usuario, identificador, acción, entidad, identificador de la entidad, detalle y marca de tiempo. Se registran, entre otras acciones, el alta y la anulación de comprobantes, el envío a caja, el cobro y la eliminación de pedidos, la transferencia de pedidos entre cajas, la apertura y el cierre de turnos, la edición del monto inicial, la rectificación de turnos, los ajustes de stock, los egresos y los cambios de precio. La consulta permite filtrar por rango de fechas, usuario y acción, y exportar el resultado.</td><td><code>src/lib/audit.ts</code> — <code>logActividad</code>, <code>obtenerLogs</code>, <code>logsToCSV</code>, <code>descargarArchivo</code>; <code>src/pages/Auditoria.tsx</code>; <code>src/pages/AuditoriaCaja.tsx</code></td></tr>
+        <tr><td>RF-110</td><td>El sistema debe registrar los errores de la aplicación para su diagnóstico.</td><td>Se capturan los errores de presentación, los de cada pantalla, los globales y los de promesas rechazadas. Cada registro guarda el mensaje, la traza, el contexto, la ruta, el dispositivo, el usuario y la fecha. El sistema descarta los errores de ruido conocidos y limita la cantidad registrada por ventana de tiempo para evitar que un fallo repetido inunde el registro. La consulta muestra los errores y permite depurarlos por antigüedad.</td><td><code>src/lib/errores.ts</code> — <code>normalizarError</code>, <code>esRuido</code>, <code>crearGuardiaErrores</code>, <code>instalarCapturaGlobal</code>, <code>trocearLotes</code>; <code>src/services/errores.ts</code> — <code>registrarError</code>, <code>obtenerErrores</code>, <code>limpiarErrores</code>; <code>src/components/auditoria/ErroresPanel.tsx</code>; <code>src/components/ErrorBoundary.tsx</code>; <code>src/main.tsx</code></td></tr>
+        <tr><td>RF-111</td><td>El sistema debe permitir exportar a planilla de cálculo los listados de negocio.</td><td>La exportación se ofrece para inventario, clientes, proveedores, egresos, compras, notas de venta y registro fiscal, con encabezado de empresa y título del reporte.</td><td><code>src/lib/excel.ts</code> — <code>exportarExcel</code>; <code>src/pages/Inventario.tsx</code>; <code>src/pages/Clientes.tsx</code>; <code>src/pages/Proveedores.tsx</code>; <code>src/pages/Egresos.tsx</code>; <code>src/pages/Compras.tsx</code>; <code>src/pages/Reportes.tsx</code></td></tr>
+        <tr><td>RF-112</td><td>El sistema debe permitir consultar el detalle de un comprobante o venta desde los reportes.</td><td>El detalle muestra el tipo de comprobante, el número, la fecha, el cliente, los ítems con su presentación y subtotal, el desglose de las formas de pago registradas y el estado de anulación.</td><td><code>src/components/ModalDetalleVenta.tsx</code>; <code>src/pages/Reportes.tsx</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.11 Usuarios, permisos y configuración</h3>
+    <table class="compacta evitar-corte">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-113</td><td>El sistema debe permitir crear y editar usuarios, asignándoles rol, permisos por función, caja y series.</td><td>El alta crea la cuenta de acceso y el documento del usuario con su rol y sus permisos; cuando no se especifican permisos se aplican los del rol. La edición permite cambiar nombre, rol, permisos, estado y caja. Un usuario sin caja asignada ve todos los pedidos y emite con las series de la configuración de la empresa. El sistema no escribe campos opcionales sin valor. Los cambios de permisos se reflejan en vivo en la sesión del usuario afectado.</td><td><code>src/services/usuarios.ts</code> — <code>crearUsuario</code>, <code>editarUsuario</code>, <code>activarDesactivarUsuario</code>, <code>resetearPassword</code>; <code>src/pages/UsuarioDetalle.tsx</code>; <code>src/context/permisos.tsx</code></td></tr>
+        <tr><td>RF-114</td><td>El sistema debe validar que las series de comprobante no se repitan entre cajas ni con las de la empresa.</td><td>Antes de guardar, el sistema compara las siete series del usuario con las de los demás usuarios y con las series globales, considerando el espacio de numeración al que pertenecen. Rechaza una serie repetida, una serie que comparta el contador de la serie global, una serie con formato inválido y una serie ya ocupada por otro usuario. El mensaje indica el conflicto concreto.</td><td><code>src/lib/series.ts</code> — <code>validarSeries</code>, <code>seriesEfectivas</code>, <code>mensajeConflictos</code>, <code>formatoSerieValido</code>; <code>src/services/usuarios.ts</code> — <code>validarSeriesUsuario</code>, <code>obtenerSeriesOcupadas</code>, <code>obtenerSeriesEmpresa</code></td></tr>
+        <tr><td>RF-115</td><td>El sistema debe administrar la configuración de la empresa.</td><td>La configuración comprende la razón social, el registro único de contribuyentes, la dirección fiscal, los datos de contacto, la sucursal, el mensaje legal de los comprobantes, el tope de boleta con documento de identidad, el parámetro de región exonerada, el interruptor de conteo a ciego y el tope de descuento manual.</td><td><code>src/pages/Configuracion.tsx</code> — pestañas Empresa y SUNAT; <code>src/hooks/use-configuracion.ts</code></td></tr>
+        <tr><td>RF-116</td><td>El sistema debe administrar las series y el punto de emisión de los comprobantes.</td><td>Se configuran el prefijo de nota de venta, la serie de boleta y de factura, las cuatro series de notas de crédito y débito, y el código de punto de emisión. Las series se validan también a nivel de empresa contra las series de las cajas activas.</td><td><code>src/pages/Configuracion.tsx</code> — campos de series; <code>src/lib/series.ts</code> — <code>validarSeriesEmpresa</code>, <code>CAMPOS_EMPRESA</code>; <code>src/lib/sunat.ts</code> — <code>puntoEmisionDe</code></td></tr>
+        <tr><td>RF-117</td><td>El sistema debe administrar la dirección del servicio de emisión electrónica y el modo de operación.</td><td>Se configura la dirección del servicio para pruebas y para producción, y la dirección del servicio de consulta de documentos. El envío a producción exige que la dirección esté configurada y advierte al usuario que la acción envía un comprobante real.</td><td><code>src/pages/Configuracion.tsx</code> — pestaña SUNAT; <code>src/lib/sunat.ts</code> — <code>endpointSunat</code>; <code>src/pages/Reportes.tsx</code> — <code>enviarDoc()</code></td></tr>
+        <tr><td>RF-118</td><td>El sistema debe administrar las listas de precio.</td><td>Se definen una o más listas con su identificador y nombre; la asignación al cliente se realiza en su ficha y el cajero puede forzarla en el punto de venta. Los precios por lista se definen por producto.</td><td><code>src/pages/Configuracion.tsx</code> — <code>ListasPrecioTab</code>; <code>src/pages/Pdv.tsx</code> — selector de lista; <code>src/services/clientes.ts</code> — campo <code>listaPrecio</code></td></tr>
+        <tr><td>RF-119</td><td>El sistema debe administrar las plantillas de ítems manuales.</td><td>Las plantillas se componen de nombre y precio, y son las que el punto de venta ofrece al agregar un ítem bajo el concepto «Embalaje y Otros».</td><td><code>src/pages/Configuracion.tsx</code> — <code>PlantillasTab</code>, campo <code>plantillasManuales</code>; <code>src/pages/Pdv.tsx</code> — modal «Embalaje y Otros»</td></tr>
+        <tr><td>RF-120</td><td>El sistema debe administrar las cajas como puntos de emisión y permitir transferir sus pedidos.</td><td>Cada caja declara su nombre y las siete series con las que emite. La caja se asigna al usuario y define las series de sus comprobantes; quien la necesita es el usuario que emite, y el vendedor la usa para dirigir sus pedidos. Desde la configuración se pueden transferir los pedidos abiertos de una caja a otra.</td><td><code>src/services/cajas.ts</code> — <code>guardarCaja</code>, <code>cargarCajas</code>, <code>eliminarCaja</code>; <code>src/pages/Configuracion.tsx</code> — pestaña Cajas; <code>src/services/ventas.ts</code> — <code>moverPedidosDeCaja</code></td></tr>
+        <tr><td>RF-121</td><td>El sistema debe administrar las categorías de producto y las promociones de volumen desde la configuración.</td><td>Las categorías definen el orden y la visibilidad de los filtros del catálogo. Las promociones de volumen se crean, editan y eliminan desde la configuración, con su tipo, sus parámetros y los productos alcanzados.</td><td><code>src/pages/Configuracion.tsx</code> — pestañas Promociones y Categorías; <code>src/services/categorias.ts</code>; <code>src/services/promociones-volumen.ts</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.12 Aplicación móvil complementaria</h3>
+    <p>El proyecto contempla una <strong>aplicación móvil complementaria</strong> desarrollada con tecnología React Native, que
+    versiona el usuario por separado de este repositorio y que cubre el mismo dominio funcional: punto de venta,
+    inventario, turnos y arqueo, clientes y crédito, notas de comprobante y reportes. Ambos clientes comparten el
+    modelo de datos y las convenciones de permisos y de numeración, de modo que una operación registrada desde el
+    teléfono es visible desde la aplicación web. El alcance detallado de la aplicación móvil no forma parte de este
+    anexo, que se circunscribe al cliente web.</p>
+    <table class="compacta">
+      <thead><tr><th style="width:8%">Código</th><th style="width:26%">Requerimiento</th><th style="width:38%">Regla de negocio asociada</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr><td>RF-122</td><td>El sistema debe compartir el modelo de datos y las reglas de negocio con la aplicación móvil complementaria.</td><td>Las claves de permisos y los roles replican los de la aplicación móvil, y la numeración de comprobantes se apoya en las mismas claves de contador, de manera que la numeración no se duplique entre clientes.</td><td><code>src/constants/permisos.ts</code> — comentario de cabecera «Mismas claves/roles que helper/UsuariosHelper.js de la app RN»; <code>src/services/ventas.ts</code> — comentario «misma estructura que RN» en el objeto de venta; <code>src/lib/pagos.ts</code> — documentos de la aplicación móvil sin arreglo de pagos</td></tr>
+      </tbody>
+    </table>
+
+    <div class="salto"></div>
+    <h2 id="s4">4. Requerimientos no funcionales</h2>
+
+    <p>Los requerimientos no funcionales describen atributos de calidad verificables sobre la implementación. Se
+    enumeran veintiuno, cada uno con su justificación técnica y la evidencia que lo respalda.</p>
+
+    <table class="compacta">
+      <thead><tr><th style="width:10%">Código</th><th style="width:22%">Atributo</th><th style="width:34%">Requerimiento y justificación técnica</th><th>Evidencia</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>RNF-01</td>
+          <td>Usabilidad — idioma</td>
+          <td>Toda la interfaz, los mensajes de error, los rótulos y los documentos impresos deben estar redactados en español. La totalidad de los textos visibles al usuario se declara en español, sin cadenas en otro idioma.</td>
+          <td><code>index.html</code> — atributo <code>lang="es"</code>; <code>src/pages/*.tsx</code> y <code>src/components/*.tsx</code>; <code>src/lib/pdf.ts</code></td>
+        </tr>
+        <tr>
+          <td>RNF-02</td>
+          <td>Usabilidad — acceso rápido</td>
+          <td>El sistema debe ofrecer una paleta de comandos para navegar entre secciones sin recorrer el menú. Se implementa con el atajo de teclado que combina la tecla de control, la tecla de mayúsculas y la letra correspondiente, y se cierra con la tecla de escape.</td>
+          <td><code>src/components/command-palette.tsx</code> — <code>addEventListener('keydown')</code>, manejo de <code>Escape</code>; <code>src/App.tsx</code> — <code>CommandPalette</code></td>
+        </tr>
+        <tr>
+          <td>RNF-03</td>
+          <td>Usabilidad — seguridad de la operación</td>
+          <td>Toda acción destructiva o irreversible debe solicitar confirmación expresa antes de ejecutarse, y las acciones críticas deben informar su consecuencia. Se confirma la venta mostrando el desglose del cobro, el envío de una venta a caja, la eliminación de un pedido —advirtiendo que no se anula comprobante ni se toca el stock—, la anulación de un comprobante, la consolidación de notas de venta, la transferencia de pedidos entre cajas y la desactivación de un usuario.</td>
+          <td><code>src/components/notifications.tsx</code> — <code>confirm</code>; usos en <code>src/pages/Pdv.tsx</code>, <code>src/components/PanelVentasPendientes.tsx</code>, <code>src/pages/Reportes.tsx</code>, <code>src/pages/Usuarios.tsx</code></td>
+        </tr>
+        <tr>
+          <td>RNF-04</td>
+          <td>Usabilidad — mensajes dirigidos</td>
+          <td>Los mensajes de error y de rechazo deben ser específicos, indicar el valor que falta o el límite aplicado y, cuando corresponda, señalar dónde se corrige. El sistema indica el producto y el stock disponible cuando la venta excede las existencias, el importe que falta por cubrir, el porcentaje máximo admisible del descuento manual con la sección donde se modifica, el saldo, el límite y el excedente cuando la venta a crédito supera el tope, y el conflicto concreto de series con la serie y el campo en conflicto.</td>
+          <td><code>src/lib/pagos.ts</code> — <code>motivo</code> en <code>resumenPagos</code>; <code>src/lib/descuentos.ts</code> — <code>mensaje</code> en <code>revisarDescuentoManual</code>; <code>src/lib/credito.ts</code> — <code>motivo</code> en <code>evaluarVentaCredito</code>; <code>src/lib/series.ts</code> — <code>mensajeConflictos</code>; <code>src/services/ventas.ts</code> — mensaje de stock agotado en <code>cobrarVentaPendiente</code></td>
+        </tr>
+        <tr>
+          <td>RNF-05</td>
+          <td>Usabilidad — coherencia entre lo visible y lo permitido</td>
+          <td>El resultado que el usuario ve y la condición que el sistema aplica deben provenir del mismo cálculo, para que no puedan contradecirse. El resumen de pagos, la revisión del descuento manual y la evaluación del crédito se calculan con funciones puras que la interfaz utiliza para mostrar y el servicio para decidir.</td>
+          <td><code>src/lib/pagos.ts</code> — <code>resumenPagos</code>; <code>src/lib/descuentos.ts</code> — <code>revisarDescuentoManual</code>; <code>src/lib/credito.ts</code> — <code>evaluarVentaCredito</code>; <code>src/pages/Pdv.tsx</code>; <code>src/services/ventas.ts</code></td>
+        </tr>
+        <tr>
+          <td>RNF-06</td>
+          <td>Usabilidad — retroalimentación</td>
+          <td>Toda operación debe producir una confirmación visible. Los avisos emergentes se cierran automáticamente después de un breve intervalo y las páginas muestran indicadores de carga mientras consultan datos, además de estados vacíos explicativos cuando no hay resultados.</td>
+          <td><code>src/pages/Pdv.tsx</code> — <code>useToast</code>; <code>src/lib/ui-utils.ts</code>; estados de carga y vacío en <code>src/pages/Inventario.tsx</code>, <code>src/pages/ArqueoCaja.tsx</code>, <code>src/pages/Clientes.tsx</code></td>
+        </tr>
+        <tr>
+          <td>RNF-07</td>
+          <td>Rendimiento — carga diferida de módulos</td>
+          <td>Los módulos de la aplicación deben cargarse bajo demanda para reducir el tiempo de carga inicial y el tamaño del paquete principal. Veintitrés páginas se cargan de forma diferida y se renderizan dentro de un límite de suspensión con indicador de carga.</td>
+          <td><code>src/App.tsx</code> — <code>React.lazy</code> en 23 declaraciones, <code>React.Suspense</code> con <code>LoadingSquare</code></td>
+        </tr>
+        <tr>
+          <td>RNF-08</td>
+          <td>Rendimiento — consultas acotadas y paginadas</td>
+          <td>Las consultas que pueden devolver un volumen elevado deben acotarse con límite o resolverse por páginas mediante cursores, para evitar traer colecciones enteras. Se aplica límite a la consulta de pedidos pendientes, a la de movimientos por producto y a la de clientes por página, y se usa paginación por cursor con veinticinco registros en el padrón de clientes.</td>
+          <td><code>src/services/ventas.ts</code> — <code>obtenerVentasPendientes</code> con <code>limit(50)</code>; <code>src/services/clientes.ts</code> — <code>cargarClientesPagina</code>; <code>src/hooks/use-paginacion-firestore.ts</code>; <code>src/hooks/use-infinite-firestore.ts</code>; <code>src/components/ListaPaginada.tsx</code></td>
+        </tr>
+        <tr>
+          <td>RNF-09</td>
+          <td>Rendimiento — escrituras por lotes</td>
+          <td>Las operaciones que afectan varios documentos deben agruparse en lotes del tamaño máximo admitido por la capa de persistencia en lugar de ejecutarse en secuencia, y deben informar la cantidad de elementos efectivamente procesados. La utilidad de troceo garantiza lotes no vacíos y un tamaño válido, y la transferencia de pedidos devuelve el número real de pedidos movidos.</td>
+          <td><code>src/lib/errores.ts</code> — <code>trocearLotes</code>; <code>src/services/ventas.ts</code> — <code>moverPedidosDeCaja</code> con <code>writeBatch</code>; <code>src/services/clientes.ts</code> — <code>corregirCobrosExcedidos</code>; <code>src/pages/Inventario.tsx</code> — <code>guardarAjuste()</code>, <code>aplicarToma()</code></td>
+        </tr>
+        <tr>
+          <td>RNF-10</td>
+          <td>Disponibilidad — operación sin conexión</td>
+          <td>El sistema debe permitir consultar información aunque se interrumpa la conexión, manteniendo informado al usuario. La capa de persistencia se inicializa con caché local persistente y gestor de pestañas múltiples, la sesión se conserva en el almacenamiento local del navegador, y la aplicación muestra un aviso de «Sin conexión» en el encabezado y otro en el área de contenido que precisa que la consulta está disponible y que las ventas requieren conexión.</td>
+          <td><code>src/lib/firebase.ts</code> — <code>persistentLocalCache</code>, <code>persistentMultipleTabManager</code>, <code>browserLocalPersistence</code>; <code>src/App.tsx</code> — estado <code>online</code>, manejadores de los eventos <code>online</code> y <code>offline</code>, avisos de la barra superior y del contenido</td>
+        </tr>
+        <tr>
+          <td>RNF-11</td>
+          <td>Disponibilidad — instalación como aplicación</td>
+          <td>La aplicación debe poder instalarse en el dispositivo y funcionar con los recursos en caché. Se declara un manifiesto de aplicación web con sus íconos y colores, se registra un trabajador de servicio y se aplica una política de caché diferenciada por tipo de recurso, con estrategia de caché preferente para hojas de estilo, imágenes y tipografías, revalidación en segundo plano para los guiones y consulta preferente a la red para los servicios externos.</td>
+          <td><code>public/manifest.json</code>; <code>public/sw.js</code>; <code>index.html</code> — enlace al manifiesto y registro del trabajador de servicio; <code>firebase.json</code> — política de seguridad de contenido y alcance del trabajador</td>
+        </tr>
+        <tr>
+          <td>RNF-12</td>
+          <td>Seguridad — autenticación</td>
+          <td>El acceso debe requerir autenticación previa con correo electrónico y contraseña, y la sesión debe persistir entre pestañas del mismo equipo. El sistema observa el estado de la sesión, presenta la pantalla de acceso cuando no hay usuario y permite restablecer la contraseña por correo electrónico.</td>
+          <td><code>src/lib/firebase.ts</code> — <code>getAuth</code>, <code>setPersistence</code>; <code>src/context/auth.tsx</code> — <code>onAuthStateChanged</code>, <code>signOut</code>; <code>src/pages/Login.tsx</code>; <code>src/services/usuarios.ts</code> — <code>resetearPassword</code></td>
+        </tr>
+        <tr>
+          <td>RNF-13</td>
+          <td>Seguridad — sesión única por dispositivo</td>
+          <td>Una cuenta no debe permanecer activa en dos dispositivos a la vez. El sistema identifica el dispositivo con un identificador persistente, lo registra en el documento del usuario, vigila cambios en ese registro y cierra la sesión cuando otro dispositivo toma el control. Si la cuenta se detecta activa en otro equipo al iniciar, el sistema informa y permite continuar en el dispositivo actual, con lo cual se cierra la sesión del anterior.</td>
+          <td><code>src/context/auth.tsx</code> — <code>obtenerDeviceId</code>, campo <code>activeSession</code>, <code>vigilar()</code>, <code>continuarAqui()</code>, modal «Sesión en otro dispositivo»</td>
+        </tr>
+        <tr>
+          <td>RNF-14</td>
+          <td>Seguridad — cierre de sesión por inactividad</td>
+          <td>La sesión debe cerrarse automáticamente tras un periodo de inactividad, para evitar que un equipo desatendido quede operativo. El sistema reinicia un temporizador ante eventos de teclado, puntero, desplazamiento y contacto, y cierra la sesión cumplido el plazo.</td>
+          <td><code>src/App.tsx</code> — efecto de inactividad con <code>IDLE_MIN</code> y escucha de <code>mousemove</code>, <code>keydown</code>, <code>touchstart</code>, <code>scroll</code> y <code>click</code></td>
+        </tr>
+        <tr>
+          <td>RNF-15</td>
+          <td>Seguridad — autorización en la interfaz y en el servidor</td>
+          <td>Los permisos deben evaluarse en la interfaz y además en las reglas de acceso del servidor, de modo que la interfaz sea la primera barrera y no la única. La interfaz oculta o deshabilita las acciones no autorizadas, las páginas informan la falta del permiso del módulo, y las reglas declaradas en el proyecto restringen el acceso directo a los datos. La validación de segundo nivel se aplica además en las operaciones sensibles: el tope del descuento manual se revuelve en el servicio que crea el pedido aunque la interfaz ya lo haya verificado.</td>
+          <td><code>src/context/permisos.tsx</code> — <code>tienePermiso</code>; <code>src/App.tsx</code> — filtrado del menú por <code>perm</code>; <code>src/pages/ArqueoCaja.tsx</code>, <code>src/pages/Usuarios.tsx</code>, <code>src/pages/Inventario.tsx</code> — avisos de permiso faltante; <code>firestore.rules</code>; <code>src/services/ventas.ts</code> — segunda validación del tope de descuento</td>
+        </tr>
+        <tr>
+          <td>RNF-16</td>
+          <td>Seguridad — protección de credenciales</td>
+          <td>Las credenciales de los servicios externos no deben quedar escritas en el código. La configuración del proyecto se obtiene de variables de entorno, se distribuye una plantilla de ejemplo sin valores y el archivo de valores local queda excluido del control de versiones. El sistema advierte cuando faltan las variables obligatorias.</td>
+          <td><code>src/lib/firebase.ts</code> — lectura de <code>import.meta.env.VITE_FIREBASE_*</code>, comprobación de la clave de API; <code>.env.example</code>; <code>.gitignore</code></td>
+        </tr>
+        <tr>
+          <td>RNF-17</td>
+          <td>Integridad — atomicidad de las operaciones compuestas</td>
+          <td>Toda operación que afecte varios documentos relacionados debe confirmarse en su totalidad o no producir efecto alguno. La emisión de un comprobante, que afecta el contador, el stock, los movimientos, el documento de venta y el turno, se ejecuta en una transacción; lo mismo ocurre con el cobro de un pedido, la anulación de un comprobante, la emisión de una nota, el cierre del turno, el registro de una compra y el cobro de un crédito. Las lecturas se completan antes de las escrituras.</td>
+          <td><code>src/services/ventas.ts</code> — <code>registrarVenta</code>, <code>anularNotaVenta</code>, <code>cobrarVentaPendiente</code>, <code>crearVentaPendiente</code>, <code>cancelarVentaPendiente</code>; <code>src/services/turnos.ts</code> — <code>cerrarTurno</code>, <code>rectificarTurno</code>; <code>src/services/notas.ts</code>; <code>src/services/compras.ts</code>; <code>src/services/clientes.ts</code> — <code>registrarCobro</code></td>
+        </tr>
+        <tr>
+          <td>RNF-18</td>
+          <td>Integridad — numeración correlativa sin huecos ni duplicados</td>
+          <td>La numeración de comprobantes debe ser correlativa, sin repeticiones y sin huecos. Cada espacio de numeración tiene su propio contador, la clave del contador y el nombre del campo se construyen mediante funciones únicas, y el número se asigna dentro de la misma transacción que emite el documento. Cuando el contador no existe se siembra desde el máximo correlativo ya emitido, y un pedido —que no es comprobante— no consume numeración fiscal.</td>
+          <td><code>src/lib/contadores.ts</code> — <code>claveContador</code>, <code>CAMPO_CONTADOR</code>, <code>CLAVE_PEDIDO</code>; <code>src/lib/contadores.test.ts</code>; <code>src/services/ventas.ts</code>; <code>src/services/notas.ts</code> — <code>obtenerProximoCorrelativoSunat</code>, <code>maxCorrelativoEmitido</code></td>
+        </tr>
+        <tr>
+          <td>RNF-19</td>
+          <td>Integridad — rastro de auditoría</td>
+          <td>Toda acción relevante debe quedar registrada con usuario, acción, entidad afectada, detalle y marca de tiempo, y las acciones destructivas deben conservar el registro en lugar de eliminarlo. La eliminación de un pedido conserva el documento con su estado, su motivo y su responsable; la anulación de un comprobante conserva el documento marcado como anulado con el motivo y el usuario; la rectificación de un turno conserva el valor original, el valor corregido y el motivo.</td>
+          <td><code>src/lib/audit.ts</code> — <code>logActividad</code>; <code>src/services/ventas.ts</code> — <code>cancelarVentaPendiente</code>, <code>anularNotaVenta</code>; <code>src/services/turnos.ts</code> — <code>rectificarTurno</code>; <code>src/pages/Auditoria.tsx</code></td>
+        </tr>
+        <tr>
+          <td>RNF-20</td>
+          <td>Integridad — tolerancia a valores no admitidos</td>
+          <td>Los valores no admitidos por la capa de persistencia no deben llegar a la escritura. Toda escritura que pueda contener un campo opcional sin valor debe normalizarse antes de enviarse, y los campos ausentes de una respuesta externa deben convertirse en un valor nulo explícito. Se respetan los valores especiales de la capa de persistencia.</td>
+          <td><code>src/lib/limpio.ts</code> — <code>limpiarUndefined</code>, <code>rutaConUndefined</code>; <code>src/lib/limpio.test.ts</code>; usos en <code>src/services/ventas.ts</code> y <code>src/services/sunat.ts</code>; <code>src/services/sunat.ts</code> — <code>datosCdr</code>; <code>src/pages/Inventario.tsx</code> — uso de <code>deleteField()</code></td>
+        </tr>
+        <tr>
+          <td>RNF-21</td>
+          <td>Mantenibilidad — arquitectura en capas</td>
+          <td>La lógica de negocio debe residir en módulos puros, sin dependencia de la capa de persistencia ni de la biblioteca de interfaz, de modo que pueda probarse de forma aislada; los servicios concentran el acceso a datos y las páginas se ocupan de la presentación. Cada regla debe tener una única implementación, de manera que lo que se muestra y lo que se permite no puedan divergir. Se adoptan como ejemplos la fórmula del efectivo esperado, el reparto de una venta entre bolsillos, la lectura del descuento de una venta, la evaluación del crédito, la revisión del descuento manual, la clave de los contadores, la consolidación de ítems y el reparto de pedidos por caja, todas ellas con una sola implementación ubicada en la capa pura.</td>
+          <td><code>src/lib/arqueo.ts</code> — <code>efectivoEsperadoDe</code>; <code>src/lib/pagos.ts</code> — <code>bolsillosDeVenta</code>, <code>bolsilloDe</code>; <code>src/lib/sunat-importes.ts</code> — <code>descuentoDeVenta</code>; <code>src/lib/credito.ts</code>; <code>src/lib/descuentos.ts</code>; <code>src/lib/contadores.ts</code>; <code>src/lib/consolidado.ts</code>; <code>src/lib/pedidos.ts</code></td>
+        </tr>
+        <tr>
+          <td>RNF-22</td>
+          <td>Mantenibilidad — pruebas automatizadas</td>
+          <td>Las reglas de negocio de la capa pura deben estar cubiertas por pruebas automatizadas que puedan ejecutarse sin configuración adicional. El proyecto cuenta con 195 pruebas automatizadas agrupadas en 25 conjuntos, ejecutadas con el corredor nativo del entorno de ejecución y sin dependencias de marco de pruebas, sobre doce archivos de prueba de la capa pura. Las pruebas se ejecutan con la orden <code>npm test</code>.</td>
+          <td><code>package.json</code> — guion <code>test</code> con <code>node --test</code> sobre doce archivos; <code>src/lib/arqueo.test.ts</code>, <code>src/lib/pagos.test.ts</code>, <code>src/lib/descuentos.test.ts</code>, <code>src/lib/sunat-importes.test.ts</code>, <code>src/lib/consolidado.test.ts</code>, <code>src/lib/pedidos.test.ts</code>, <code>src/lib/contadores.test.ts</code>, <code>src/lib/credito.test.ts</code>, <code>src/lib/personal.test.ts</code>, <code>src/lib/limpio.test.ts</code>, <code>src/lib/errores.test.ts</code>, <code>src/lib/sunat.test.ts</code></td>
+        </tr>
+        <tr>
+          <td>RNF-23</td>
+          <td>Mantenibilidad — análisis estático y tipado</td>
+          <td>El código debe pasar el análisis estático sin errores y el comprobador de tipos sin observaciones, con tipado estricto. El proyecto declara el modo estricto de TypeScript y las comprobaciones de declaraciones y parámetros no utilizados, ejecuta el análisis estático como parte de sus órdenes de trabajo y compila verificando tipos antes de generar el paquete de distribución.</td>
+          <td><code>tsconfig.app.json</code> — <code>strict</code>, <code>noUnusedLocals</code>, <code>noUnusedParameters</code>, <code>erasableSyntaxOnly</code>, alias de rutas; <code>package.json</code> — guiones <code>build</code> (<code>tsc -b</code>) y <code>lint</code>; <code>.oxlintrc.json</code></td>
+        </tr>
+        <tr>
+          <td>RNF-24</td>
+          <td>Portabilidad — ejecución en navegador y despliegue estático</td>
+          <td>La aplicación debe ejecutarse en los navegadores de escritorio y móviles actuales y desplegarse como sitio estático. El proyecto se construye como aplicación de una sola página, con el paquete de la biblioteca de persistencia separado en un fragmento propio para aprovechar la caché del navegador, y la configuración de despliegue declara la cabecera de seguridad de contenido, la política de recursos y la exclusión de caché de la página principal.</td>
+          <td><code>vite.config.ts</code> — <code>manualChunks</code>, alias <code>@</code>, <code>chunkSizeWarningLimit</code>; <code>firebase.json</code> — cabeceras y reglas de reescritura; <code>package.json</code> — guiones <code>build</code> y <code>preview</code></td>
+        </tr>
+        <tr>
+          <td>RNF-25</td>
+          <td>Trazabilidad fiscal</td>
+          <td>El comprobante debe declarar exactamente lo que se cobra. El descuento se reparte por línea antes de separar el impuesto, las líneas se declaran a precio de lista con el descuento informado por separado, el impuesto sólo se calcula en las afectaciones gravadas, los importes enviados al servicio de emisión se expresan con dos decimales sin alterar el total, y los ítems manuales declaran la afectación configurada. La boleta consolidada declara la suma de los descuentos de las notas que agrupa.</td>
+          <td><code>src/lib/sunat-importes.ts</code> — <code>itemsParaSunat</code>, <code>afectacionDe</code>, <code>valorUnitarioSunat</code>, <code>descuentoDeVenta</code>, <code>redondear2</code>; <code>src/lib/consolidado.ts</code> — <code>descuentoConsolidado</code>; <code>src/services/consolidado.ts</code>; <code>src/lib/pdf.ts</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="salto"></div>
+    <h2 id="s5">5. Casos de uso</h2>
+
+    <h3>5.1 Diagrama de casos de uso</h3>
+
+    <div class="diagrama">
+      <div class="cajas">
+        <div class="caja">
+          <div class="titulo">Actores primarios</div>
+          <p><strong>Vendedor</strong> — arma la venta y la envía a caja.</p>
+          <p><strong>Cajero</strong> — cobra, emite comprobantes, abre y cierra el turno.</p>
+          <p><strong>Administrador</strong> — configura, administra usuarios, consolida y supervisa.</p>
+        </div>
+        <div class="caja">
+          <div class="titulo">Casos de uso del sistema</div>
+          <p>CU-01 Registrar venta en el punto de venta · CU-02 Enviar pedido a caja · CU-03 Cobrar un pedido eligiendo comprobante · CU-04 Consolidar notas de venta y enviar la boleta · CU-05 Abrir turno, operar y cerrar caja con arqueo · CU-06 Anular un comprobante con nota de crédito · CU-07 Aplicar descuento manual · CU-08 Administrar promociones y listas de precio · CU-09 Gestionar catálogo e inventario · CU-10 Ajustar stock y consultar kardex · CU-11 Registrar compra a proveedor · CU-12 Vender y cobrar a crédito · CU-13 Gestionar usuarios, roles y permisos · CU-14 Configurar empresa, series y cajas · CU-15 Consultar reportes y exportar · CU-16 Auditar acciones y errores</p>
+        </div>
+        <div class="caja">
+          <div class="titulo">Actores de apoyo</div>
+          <p><strong>Supervisor</strong> — usuario con el acceso especial que lo habilita a operar sobre turnos y documentos de otros usuarios.</p>
+          <p><strong>Cliente</strong> — recibe el comprobante y observa su compra en la pantalla complementaria.</p>
+          <p><strong>Servicio de emisión electrónica</strong> — recibe el comprobante y devuelve el resultado.</p>
+          <p><strong>Servicio de consulta de documentos</strong> — aporta nombres y direcciones a partir del documento.</p>
+        </div>
+      </div>
+    </div>
+
+    <h3>5.2 Resumen de casos de uso</h3>
+
+    <table class="compacta">
+      <thead>
+        <tr><th style="width:7%">Código</th><th style="width:23%">Caso de uso</th><th style="width:14%">Actor(es)</th><th style="width:26%">Precondiciones</th><th>Requisitos cubiertos</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>CU-01</td><td>Registrar venta en el punto de venta</td><td>Cajero</td><td>Sesión iniciada, turno abierto, productos con stock.</td><td>RF-01 a RF-25, RF-33 a RF-35, RF-45 a RF-48, RF-54, RF-55, RF-60</td></tr>
+        <tr><td>CU-02</td><td>Enviar un pedido a caja</td><td>Vendedor</td><td>Sesión iniciada con permiso de envío a caja, productos cargados.</td><td>RF-08, RF-10, RF-22, RF-31 a RF-33, RF-36</td></tr>
+        <tr><td>CU-03</td><td>Cobrar un pedido eligiendo comprobante y forma de pago</td><td>Cajero</td><td>Sesión iniciada con permiso de cobro, turno abierto, al menos un pedido pendiente.</td><td>RF-15 a RF-21, RF-37 a RF-41, RF-44, RF-45, RF-60</td></tr>
+        <tr><td>CU-04</td><td>Consolidar notas de venta en una boleta y enviarla</td><td>Administrador, Supervisor</td><td>Sesión iniciada con permiso de consolidación, notas de venta del día sin consolidar, configuración del servicio de emisión.</td><td>RF-45, RF-46, RF-49, RF-51 a RF-53, RF-59</td></tr>
+        <tr><td>CU-05</td><td>Abrir turno, operar y cerrar caja con arqueo</td><td>Cajero, Supervisor</td><td>Sesión iniciada con permiso de apertura y cierre, sin otro turno abierto del mismo usuario.</td><td>RF-74 a RF-86, RF-60</td></tr>
+        <tr><td>CU-06</td><td>Anular un comprobante emitiendo una nota de crédito</td><td>Cajero, Administrador</td><td>Comprobante aceptado por el servicio de emisión, turno abierto, motivo del catálogo tributario.</td><td>RF-18, RF-50, RF-51, RF-56, RF-60</td></tr>
+        <tr><td>CU-07</td><td>Aplicar un descuento manual a la venta</td><td>Cajero, Vendedor</td><td>Sesión iniciada con el permiso de descuento manual, productos cargados en el carrito.</td><td>RF-30, RF-31, RF-32, RF-33, RF-35</td></tr>
+        <tr><td>CU-08</td><td>Administrar promociones de volumen y listas de precio</td><td>Administrador</td><td>Permiso de configuración.</td><td>RF-06, RF-26, RF-27, RF-28, RF-29, RF-118, RF-121</td></tr>
+        <tr><td>CU-09</td><td>Gestionar el catálogo de productos</td><td>Administrador, Cajero, Vendedor</td><td>Permiso de creación o edición de productos.</td><td>RF-61 a RF-66, RF-72, RF-73</td></tr>
+        <tr><td>CU-10</td><td>Ajustar existencias y consultar el kardex</td><td>Administrador, Cajero</td><td>Permiso de ajuste de stock o de consulta del kardex.</td><td>RF-67 a RF-71</td></tr>
+        <tr><td>CU-11</td><td>Registrar una compra a proveedor</td><td>Administrador</td><td>Permiso sobre proveedores, proveedor registrado, productos existentes.</td><td>RF-95 a RF-101</td></tr>
+        <tr><td>CU-12</td><td>Vender y cobrar al crédito</td><td>Cajero</td><td>Turno abierto, cliente registrado con crédito activo.</td><td>RF-18, RF-88, RF-89 a RF-94</td></tr>
+        <tr><td>CU-13</td><td>Gestionar usuarios, roles y permisos</td><td>Administrador</td><td>Permiso de gestión de usuarios.</td><td>RF-113, RF-114, RF-120, RNF-13, RNF-15</td></tr>
+        <tr><td>CU-14</td><td>Configurar la empresa, las series y las cajas</td><td>Administrador</td><td>Permiso de configuración.</td><td>RF-17, RF-78, RF-115 a RF-121</td></tr>
+        <tr><td>CU-15</td><td>Consultar reportes y exportarlos</td><td>Administrador, Cajero, Supervisor</td><td>Permiso del reporte solicitado.</td><td>RF-58, RF-59, RF-102 a RF-108, RF-111, RF-112</td></tr>
+        <tr><td>CU-16</td><td>Auditar las acciones del sistema y los errores de la aplicación</td><td>Administrador</td><td>Permiso de auditoría.</td><td>RF-109, RF-110, RNF-19</td></tr>
+      </tbody>
+    </table>
+
+    <div class="salto"></div>
+    <h3>5.3 Detalle de los cinco casos de uso principales</h3>
+
+    <h4>CU-01 · Registrar venta en el punto de venta</h4>
+    <table class="compacta">
+      <tbody>
+        <tr><td style="width:22%"><strong>Actor primario</strong></td><td>Cajero.</td></tr>
+        <tr><td><strong>Actores de apoyo</strong></td><td>Cliente; servicio de consulta de documentos; servicio de emisión electrónica.</td></tr>
+        <tr><td><strong>Precondiciones</strong></td><td>Sesión iniciada; el usuario tiene el permiso de ventas y el de cobro; existe un turno abierto del usuario —o de cualquier caja si posee el acceso especial—; hay productos activos con existencias.</td></tr>
+        <tr><td><strong>Postcondiciones</strong></td><td>Existe un documento de venta con su comprobante numerado; el stock de cada producto vendido quedó descontado y con su movimiento registrado; el turno acumula los importes en el bolsillo que corresponde a cada medio de pago; el documento del cliente se actualizó con la fecha y el importe de la compra; la acción quedó registrada en la auditoría.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Flujo normal</strong></p>
+    <ol class="pasos">
+      <li>El cajero abre el módulo de punto de venta. El sistema carga el catálogo de productos activos y, si el administrador marcó favoritos o hay productos con ventas previas, muestra el bloque de venta rápida.</li>
+      <li>El cajero busca el producto por nombre, por código o con el lector de código de barras, o lo selecciona del catálogo o del bloque de venta rápida. El sistema verifica el estado del producto y sus existencias, agrega la unidad al carrito y, si el producto declara presentaciones de venta, selecciona la primera por omisión.</li>
+      <li>El sistema calcula el subtotal de la línea multiplicando el precio aplicable por el factor de conversión de la presentación y por la cantidad, y evalúa los descuentos automáticos en el orden producto, volumen, cliente. Muestra el precio tachado cuando la línea tiene precio especial y permite al cajero alternar entre precio especial y precio normal.</li>
+      <li>Si la venta incluye conceptos que no están en el catálogo, el cajero abre el modal «Embalaje y Otros», elige una plantilla configurada y agrega el ítem, ajustando su afectación tributaria si corresponde.</li>
+      <li>El cajero elige el tipo de comprobante entre nota de venta, boleta y factura. Si el tipo es factura o si la boleta supera el tope configurado, ingresa el documento del cliente y pulsa consultar; el sistema busca primero el padrón local y luego el servicio externo, completa la razón social y la dirección, y habilita el ingreso manual si no obtiene datos.</li>
+      <li>Si la venta se entrega a domicilio, el cajero habilita el envío, ingresa la dirección, la referencia y las notas, elige la zona y el sistema toma el costo de la zona y lo incorpora al total.</li>
+      <li>El cajero elige la forma de pago. Puede agregar efectivo, uno o varios medios electrónicos entre Yape, Plin, transferencia y tarjeta, o bien elegir crédito, que es exclusivo y va por el total. En cada medio electrónico puede informar el número de operación. El sistema precarga el importe faltante y muestra en todo momento lo pagado, lo que falta, el vuelto y el motivo por el cual todavía no se puede cobrar.</li>
+      <li>Opcionalmente, si el usuario tiene el permiso de descuento manual, el cajero carga un descuento global en porcentaje o en monto. El sistema revisa el tope configurado y, si el descuento lo excede, avisa con el valor admisible y deshabilita el cobro hasta que se corrija.</li>
+      <li>El cajero pulsa cobrar. El sistema verifica que la venta tenga al menos un ítem, valida el documento exigido por el tipo de comprobante, verifica que el pago cubra el total, comprueba la existencia de un turno abierto y controla la protección de margen mínimo: bloquea la operación si el precio quedó por debajo del mínimo y pide confirmación si quedó por debajo del costo. Finalmente muestra el aviso de confirmación con el total, la cantidad de productos, el desglose de las formas de pago, el vuelto y el tipo de comprobante.</li>
+      <li>Confirmada la operación, el sistema, dentro de una sola transacción, asigna el correlativo del espacio de numeración que corresponde al tipo y la serie, descuenta el stock de cada producto —descomponiendo los productos compuestos en sus componentes—, registra el movimiento de salida con el stock anterior y el nuevo e incrementa el contador de ventas del producto, crea el documento de venta con los ítems, los importes, el cliente, la forma de pago, el monto recibido y el vuelto, y acumula en el turno los importes por bolsillo. Si el comprobante no es una nota de venta, deja registrado el bloque fiscal en estado pendiente.</li>
+      <li>El sistema actualiza la fecha de la última compra y los acumulados del cliente cuando el documento corresponde a un cliente registrado, registra la acción en la auditoría y muestra el aviso de venta registrada con el número del comprobante y el total.</li>
+      <li>El cajero puede imprimir el comprobante. El sistema relee el documento emitido y genera el formato portable con los datos del emisor, el importe en letras, el detalle de los ítems, el descuento declarado y las personas que intervinieron. Luego el cajero inicia una nueva venta o cierra el aviso; el carrito, el cliente, el envío y los descuentos quedan reiniciados.</li>
+    </ol>
+    <p><strong>Flujos alternativos</strong></p>
+    <ul>
+      <li><strong>3.a Stock insuficiente al agregar.</strong> Si el cajero intenta agregar más unidades que las disponibles en la presentación elegida, el sistema rechaza la acción con el aviso de que no hay stock disponible y no modifica el carrito.</li>
+      <li><strong>2.a Código de barras no reconocido.</strong> Si el código leído no corresponde a ningún producto, o el producto está inactivo o sin existencias, el sistema informa el motivo y no agrega nada al carrito.</li>
+      <li><strong>5.a Cliente no encontrado.</strong> Si el documento no está en el padrón y el servicio de consulta no devuelve datos o no hay conexión, el sistema habilita el ingreso manual del nombre, deja constancia de la situación y continúa la venta.</li>
+      <li><strong>7.a Los medios electrónicos superan el total.</strong> El sistema rechaza el cobro indicando el excedente, porque sólo el efectivo puede dar vuelto. El cajero corrige el importe y continúa.</li>
+      <li><strong>7.b El pago no cubre el total.</strong> El sistema indica el importe faltante y mantiene el cobro deshabilitado hasta que el cajero complete la diferencia o agregue otro medio.</li>
+      <li><strong>8.a Descuento manual por encima del tope.</strong> El sistema muestra el porcentaje máximo admisible y el valor con el que se ajustaría, y mantiene deshabilitados los botones de cobro y de envío a caja hasta que el descuento se reduzca o el administrador eleve el tope en la configuración.</li>
+      <li><strong>9.a Precio bajo el mínimo.</strong> Si el precio aplicado quedó por debajo del precio mínimo del producto y el producto no está próximo a vencer, el sistema bloquea la venta y enumera los productos afectados con su mínimo y su precio actual.</li>
+      <li><strong>9.b Venta por debajo del costo.</strong> Si el precio quedó por debajo del costo, el sistema solicita confirmación expresa antes de continuar.</li>
+      <li><strong>9.c Sin turno abierto.</strong> Si no existe turno abierto, el sistema rechaza la venta e indica abrir un turno antes de vender.</li>
+      <li><strong>9.d Se agota el stock durante la transacción.</strong> Si entre la carga de la venta y la confirmación otro usuario consumió las existencias, la transacción falla con el detalle del producto y las cantidades, y no se emite comprobante ni se altera el inventario.</li>
+      <li><strong>9.e La venta queda incompleta.</strong> El cajero puede pausar la venta para atender otra operación; el sistema conserva el carrito, el comprobante, los pagos y el cliente, y permite recuperarla cuando el carrito esté vacío. También puede vaciar la venta por completo, lo que descarta el carrito, los ítems manuales y la forma de pago.</li>
+      <li><strong>10.a Falla la escritura del comprobante.</strong> La transacción no produce efecto alguno: ni el contador avanza, ni el stock se descuenta, ni el documento se crea. El sistema informa el error y el cajero puede reintentar.</li>
+    </ul>
+    <p><strong>Requisitos cubiertos</strong></p>
+    <p>RF-01 a RF-25, RF-33, RF-34, RF-35, RF-45 a RF-48, RF-54, RF-55, RF-60, RNF-04, RNF-05, RNF-17, RNF-18, RNF-25.</p>
+
+    <div class="salto"></div>
+    <h4>CU-03 · Cobrar un pedido eligiendo comprobante y forma de pago</h4>
+    <table class="compacta">
+      <tbody>
+        <tr><td style="width:22%"><strong>Actor primario</strong></td><td>Cajero.</td></tr>
+        <tr><td><strong>Actores de apoyo</strong></td><td>Vendedor, que originó el pedido; cliente; servicio de emisión electrónica.</td></tr>
+        <tr><td><strong>Precondiciones</strong></td><td>Sesión iniciada con el permiso de cobro de ventas pendientes; turno abierto; existe al menos un pedido en estado pendiente; el carrito del punto de venta está vacío.</td></tr>
+        <tr><td><strong>Postcondiciones</strong></td><td>El pedido queda pagado y numerado como comprobante del tipo elegido; el stock quedó descontado con su movimiento registrado; el turno del cajero acumula el importe en los bolsillos del pago real; el documento identifica al vendedor que armó la venta y al cajero que la cobró; el pedido desaparece de la lista de pendientes.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Flujo normal</strong></p>
+    <ol class="pasos">
+      <li>El cajero abre el módulo de punto de venta. Sobre el carrito, y sólo si tiene el permiso correspondiente, el sistema muestra el panel de ventas pendientes con los pedidos en estado pendiente y su antigüedad. El panel se refresca automáticamente cada treinta segundos y también cuando se cobra un pedido.</li>
+      <li>El sistema reparte los pedidos según la caja del cajero: muestra los de su caja y los que no tienen caja en la lista principal, y los de otra caja en un bloque aparte con la advertencia de que el comprobante se emitirá con las series de la caja que cobra. Si el usuario no tiene caja asignada, se le muestran todos los pedidos y se le indica que conviene asignarle una.</li>
+      <li>El cajero pulsa «Cobrar pedido». El sistema verifica que el carrito esté vacío, construye la vista del pedido con su código, su vendedor, su cliente, sus ítems, su descuento y su envío, y lo carga en modo pedido: el carrito pasa a mostrar los ítems en modo lectura y el total toma el importe cotizado por el vendedor. El comprobante arranca en nota de venta.</li>
+      <li>Si el pedido proviene de otra caja, el sistema advierte que se emitirá con la serie de la caja del cajero y solicita confirmación. Si el cajero ya estaba cobrando otro pedido, el sistema advierte que se descartará la forma de pago cargada y solicita confirmación.</li>
+      <li>El cajero elige el tipo de comprobante entre nota de venta, boleta y factura. En modo pedido no se muestran el envío, los descuentos, el cliente, el crédito ni las acciones del carrito, porque el pedido ya los trae definidos.</li>
+      <li>El cajero elige la forma de pago con la misma interfaz del carrito: efectivo, uno o varios medios electrónicos, o una combinación de ellos. El crédito no se ofrece en modo pedido: un pedido se cobra al contado. El sistema valida que los montos cubran el total y muestra lo que falta o el vuelto.</li>
+      <li>El cajero pulsa cobrar. El sistema verifica el permiso de cobro, la existencia de un turno abierto, el documento exigido por el tipo de comprobante —registro único de contribuyentes de once dígitos para factura, documento de identidad de ocho si la boleta supera el tope configurado— y que el pago cubra el total.</li>
+      <li>El sistema ejecuta el cobro dentro de una sola transacción. Primero completa todas las lecturas —el documento del pedido, el turno, el contador del tipo y la serie elegidos, y el stock de cada producto o componente— y luego escribe: asigna al pedido la serie y el correlativo del tipo elegido, descuenta el stock de cada producto y de cada componente con su movimiento de salida en el formato del kardex, incrementa el contador de ventas del producto, acumula en el turno los importes según los bolsillos del pago real, y actualiza el documento del pedido con el estado pagado, el cajero, el comprobante final, el código del pedido original, los datos de pago y el bloque fiscal en estado pendiente si el comprobante no es una nota de venta.</li>
+      <li>La venta queda registrada con las dos personas identificadas: el vendedor que armó el pedido y el cajero que lo cobró. La caja que emitió el comprobante queda registrada como la del cajero.</li>
+      <li>El sistema registra la acción en la auditoría, relee el documento cobrado, informa el número del comprobante emitido y ofrece su impresión. El panel de pendientes se recarga y el pedido deja de figurar en la lista.</li>
+    </ol>
+    <p><strong>Flujos alternativos</strong></p>
+    <ul>
+      <li><strong>1.a Sin pedidos pendientes.</strong> El sistema muestra la lista vacía con el aviso de que no hay ventas pendientes, precisando la caja cuando el usuario tiene una asignada.</li>
+      <li><strong>3.a El carrito tiene contenido.</strong> El sistema rechaza la acción e indica terminar o vaciar la venta actual antes de cobrar un pedido.</li>
+      <li><strong>3.b Cambio de pedido durante el cobro.</strong> Si el cajero elige otro pedido mientras cobra uno, el sistema advierte que se descartará la forma de pago cargada y exige confirmación.</li>
+      <li><strong>5.a El cajero suelta el pedido.</strong> El cajero puede cancelar el modo pedido: el pedido vuelve a la lista de pendientes sin haber sido alterado y la forma de pago cargada se descarta.</li>
+      <li><strong>7.a El documento no cumple la validación.</strong> Si la factura no tiene registro único de contribuyentes de once dígitos, o la boleta supera el tope y no tiene documento de identidad válido, el sistema rechaza el cobro con el mensaje correspondiente.</li>
+      <li><strong>7.b No hay turno abierto.</strong> El sistema rechaza el cobro e indica abrir un turno antes de cobrar.</li>
+      <li><strong>7.c El pago no cubre el total.</strong> El sistema muestra el motivo y mantiene el cobro deshabilitado hasta completar la diferencia.</li>
+      <li><strong>8.a El stock se agotó durante la espera.</strong> Si el pedido esperó en caja y otro vendedor vendió esas unidades, el sistema aborta el cobro con un mensaje que indica el producto, el disponible y lo pedido. Ninguna escritura se confirma: ni el comprobante, ni el contador, ni el stock, ni el turno.</li>
+      <li><strong>8.b La transacción falla.</strong> El pedido permanece en estado pendiente y puede reintentarse; el correlativo no se consume porque la asignación ocurre dentro de la misma transacción que el cobro.</li>
+      <li><strong>6.a El cajero necesita cobrar al crédito.</strong> Como el crédito no se ofrece en modo pedido, el cajero libera el pedido y arma la venta como una operación directa, en la que sí dispone de la opción de crédito con su validación de saldo y límite.</li>
+    </ul>
+    <p><strong>Requisitos cubiertos</strong></p>
+    <p>RF-15 a RF-21, RF-36 a RF-45, RF-60, RF-88, RNF-04, RNF-05, RNF-17, RNF-18, RNF-19.</p>
+
+    <div class="salto"></div>
+    <h4>CU-04 · Consolidar notas de venta en una boleta y enviarla al servicio de emisión</h4>
+    <table class="compacta">
+      <tbody>
+        <tr><td style="width:22%"><strong>Actor primario</strong></td><td>Administrador o usuario con el acceso especial de supervisión.</td></tr>
+        <tr><td><strong>Actores de apoyo</strong></td><td>Servicio de emisión electrónica.</td></tr>
+        <tr><td><strong>Precondiciones</strong></td><td>Sesión iniciada con el permiso de consolidación; existen notas de venta del día no consolidadas ni anuladas; la serie de boletas está configurada; la dirección del servicio de emisión está configurada para el envío.</td></tr>
+        <tr><td><strong>Postcondiciones</strong></td><td>Existe una boleta que agrupa las notas de venta del día, con las líneas consolidadas por producto, precio y unidad, el total igual a la suma de los totales de las notas y el descuento declarado; cada nota de venta agrupada quedó marcada como consolidada y vinculada al documento que la agrupó; la boleta quedó registrada con su bloque fiscal; el resultado del envío quedó guardado en el documento con el código y la descripción de la respuesta, el archivo devuelto y el resumen digital.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Flujo normal</strong></p>
+    <ol class="pasos">
+      <li>El usuario abre el módulo de reportes y selecciona la pestaña de notas de venta. El sistema lista las notas del mes con sus importes y su estado.</li>
+      <li>El sistema determina qué notas del día están pendientes de consolidar —no anuladas, no consolidadas y visibles según el alcance del usuario— y muestra la acción de consolidar con la cantidad de notas alcanzadas.</li>
+      <li>El usuario pulsa consolidar. El sistema solicita confirmación indicando cuántas notas se agruparán.</li>
+      <li>Confirmada la acción, el sistema obtiene el correlativo siguiente del espacio de numeración de boletas, tomando la serie de la caja del usuario y, para un supervisor que ve las notas de todos, la serie de la configuración de la empresa.</li>
+      <li>El sistema calcula el total de la boleta como la suma de los totales de cada nota —importes ya netos de descuento— y el descuento que la boleta debe declarar como la suma de los descuentos de cada nota, leídos con la función única que acepta tanto el nombre actual del campo como el heredado.</li>
+      <li>El sistema consolida las líneas agrupando por producto, precio y unidad: dos notas que vendieron el mismo producto al mismo precio y en la misma unidad suman sus cantidades, mientras que dos notas con precios distintos conservan líneas separadas, para que el precio unitario declarado explique el subtotal.</li>
+      <li>El sistema crea el documento de la boleta consolidada con su serie, su número, el resumen de venta —líneas a precio de lista, total y descuento declarado—, la marca de consolidada, la lista de notas agrupadas y el bloque fiscal en estado pendiente.</li>
+      <li>El sistema marca cada nota de venta agrupada como consolidada, con la fecha y el identificador del documento que la agrupó. A partir de ese momento esas notas quedan excluidas de los listados de pendientes y no admiten anulación ni corrección del medio de pago.</li>
+      <li>El usuario envía la boleta al servicio de emisión. El sistema exige que la dirección del servicio esté configurada y advierte que la acción envía un comprobante real.</li>
+      <li>El sistema marca el documento como en envío, construye la solicitud con las líneas y los totales y la remite al servicio dentro de un plazo máximo de espera.</li>
+      <li>El sistema interpreta la respuesta. Si el comprobante fue aceptado, lo marca como aceptado y guarda el código, la descripción, el archivo de respuesta y el resumen digital, que obtiene del archivo firmado. Si la respuesta indica que el comprobante ya estaba registrado, lo marca como aceptado con esa observación.</li>
+      <li>El sistema informa el resultado al usuario y actualiza los listados del registro fiscal y de notas de venta.</li>
+    </ol>
+    <p><strong>Flujos alternativos</strong></p>
+    <ul>
+      <li><strong>2.a No hay notas pendientes.</strong> El sistema no ofrece la acción de consolidar y, si se invoca con una lista vacía, rechaza la operación indicando que no hay notas de venta pendientes de consolidación.</li>
+      <li><strong>4.a No se obtiene correlativo.</strong> Si el sistema no puede obtener el correlativo de la serie de boletas, aborta la consolidación con el mensaje correspondiente y no marca ninguna nota como consolidada.</li>
+      <li><strong>10.a El servicio rechaza el comprobante.</strong> El sistema marca el documento como rechazado, guarda el código y la descripción del rechazo y muestra el mensaje al usuario, que puede corregir el origen del problema y reenviar.</li>
+      <li><strong>10.b La respuesta no tiene el formato esperado.</strong> Si el servicio devuelve el archivo de respuesta en lugar de un objeto, el sistema lo interpreta como documento de respuesta y extrae de él el código, la descripción y el resumen digital.</li>
+      <li><strong>10.c Faltan campos en la respuesta.</strong> El sistema normaliza los campos ausentes a un valor nulo antes de escribir el resultado, para que el registro no falle y el usuario reciba el mensaje del envío y no un error de escritura.</li>
+      <li><strong>10.d El servicio no responde a tiempo.</strong> El sistema marca el documento con estado de error, informa que el comprobante pudo haber sido aceptado y sugiere reintentar. Si se reintenta y el servicio responde que ya estaba registrado, el documento se marca como aceptado.</li>
+      <li><strong>10.e El comprobante ya estaba aceptado.</strong> El sistema informa esa condición y no lo envía de nuevo.</li>
+      <li><strong>11.a El documento ya fue anulado o consolidado.</strong> El sistema impide la anulación de una nota consolidada e indica emitir una nota de crédito si el comprobante ya fue aceptado.</li>
+    </ul>
+    <p><strong>Requisitos cubiertos</strong></p>
+    <p>RF-45, RF-46, RF-49, RF-51, RF-52, RF-53, RF-57, RF-58, RF-59, RNF-18, RNF-20, RNF-25.</p>
+
+    <div class="salto"></div>
+    <h4>CU-05 · Abrir turno, operar y cerrar caja con arqueo</h4>
+    <table class="compacta">
+      <tbody>
+        <tr><td style="width:22%"><strong>Actor primario</strong></td><td>Cajero.</td></tr>
+        <tr><td><strong>Actores de apoyo</strong></td><td>Supervisor, que ve los turnos de todos los usuarios y puede rectificar un turno cerrado.</td></tr>
+        <tr><td><strong>Precondiciones</strong></td><td>Sesión iniciada; el usuario tiene el permiso de apertura de turno y, para el cierre, el permiso correspondiente; el usuario no tiene otro turno abierto.</td></tr>
+        <tr><td><strong>Postcondiciones</strong></td><td>El turno quedó cerrado con el efectivo contado, el efectivo esperado y la diferencia; existe un registro de cierre con la copia de las ventas y los gastos del turno, el análisis de causas y recomendaciones, las observaciones y la conciliación por billetera cuando se declaró; el consolidado del día incorpora los importes de este turno; la operación quedó registrada en la auditoría.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Flujo normal</strong></p>
+    <ol class="pasos">
+      <li>El cajero abre el módulo de turnos y solicita apertura. El sistema verifica que no exista ya un turno abierto del mismo usuario; si existe, lo rechaza e informa el tipo de turno y la fecha de apertura del turno vigente.</li>
+      <li>El cajero informa el tipo de turno y el monto inicial. El sistema crea el turno con estado abierto, registra el usuario, la caja y la fecha de apertura, e inicializa en cero los acumulados de ventas, efectivo y transferencia. La apertura queda registrada en la auditoría.</li>
+      <li>El cajero opera con normalidad: registra ventas, cobra pedidos pendientes y cobros de crédito, y registra gastos. Cada venta o cobro acumula su importe en el bolsillo que corresponde al medio de pago utilizado, y cada gasto pagado en efectivo descuenta del efectivo esperado. Las ventas a crédito no ingresan a ningún bolsillo.</li>
+      <li>Durante la operación, el cajero puede ajustar el monto inicial mientras el turno permanezca abierto; el sistema registra el cambio en la auditoría.</li>
+      <li>Al terminar el turno, el cajero solicita el cierre. El sistema calcula el efectivo esperado con la fórmula única —monto inicial más efectivo cobrado, menos gastos pagados en efectivo, menos el vuelto entregado por transferencia— y muestra el detalle de la composición del turno.</li>
+      <li>Si el conteo a ciegas está habilitado, el cajero ingresa el efectivo contado sin ver el efectivo esperado. En caso contrario el sistema muestra el esperado junto al campo de conteo. Si están involucrados medios electrónicos, el cajero puede declarar la conciliación por billetera, comparando lo que el sistema registró por cada medio con lo que efectivamente llegó; la declaración es opcional y no bloquea el cierre.</li>
+      <li>El cajero puede analizar la diferencia antes de confirmar. El sistema muestra las causas probables y las recomendaciones.</li>
+      <li>El cajero confirma el cierre indicando sus observaciones. El sistema, dentro de una sola transacción, verifica que el turno exista y que el usuario sea su titular o un supervisor, calcula el efectivo esperado y la diferencia con el monto contado, genera el análisis de cierre, actualiza el turno con el estado cerrado, el monto contado, el esperado, la diferencia y la conciliación, y crea el registro de cierre con la copia de las ventas, los gastos y el análisis.</li>
+      <li>El sistema registra el cierre en la auditoría e informa el resultado, incluyendo la diferencia cuando exista.</li>
+      <li>El cajero o el supervisor consulta el arqueo del día en el módulo correspondiente. El sistema agrupa los turnos por fecha de apertura, muestra los totales del día, el desglose de cada bolsillo por origen del dinero y el detalle de cada turno con su estado, sus comprobantes y sus gastos. Si un turno permanece abierto, permite cargar un conteo de vista previa y muestra la diferencia y los diagnósticos sin registrarla.</li>
+      <li>El sistema consolida el cierre del día sumando únicamente los turnos cerrados —monto inicial, efectivo esperado, efectivo contado y diferencia— e informa cuántos turnos quedaron abiertos. El usuario puede imprimir el arqueo del día y el acta de cierre, con los datos de la empresa y las firmas del cajero y del supervisor.</li>
+    </ol>
+    <p><strong>Flujos alternativos</strong></p>
+    <ul>
+      <li><strong>1.a Turno ya abierto.</strong> El sistema rechaza la apertura e informa desde cuándo está abierto el turno vigente, con su tipo.</li>
+      <li><strong>3.a Gasto superior al efectivo disponible.</strong> Si el cajero intenta registrar un gasto pagado con dinero de caja por un importe mayor al efectivo disponible, el sistema rechaza la operación indicando el disponible.</li>
+      <li><strong>5.a Diferencia en el conteo.</strong> Si el efectivo contado no coincide con el esperado, el sistema muestra la diferencia con su signo, presenta los diagnósticos automáticos que proponen pistas —coincidencia con el importe de una venta, posible confusión entre medios, gastos no registrados, sobrantes significativos, diferencias exactas asociadas al monto inicial— y permite cerrar igualmente dejando constancia en las observaciones.</li>
+      <li><strong>8.a El usuario no es el titular del turno.</strong> El sistema rechaza el cierre indicando que sólo puede cerrarse el turno propio, salvo que el usuario tenga el acceso especial de supervisión.</li>
+      <li><strong>8.b El turno ya no existe.</strong> La transacción falla con el aviso de que el turno activo ya no existe y no se crea ningún registro de cierre.</li>
+      <li><strong>11.a Se necesita corregir un turno cerrado.</strong> Un usuario con el permiso de rectificación puede rectificar el monto inicial de un turno cerrado informando el motivo. El sistema conserva el monto original, el real, el ajuste, el motivo, el usuario y la fecha; recalcula el efectivo esperado y la diferencia; y registra la acción en la auditoría.</li>
+      <li><strong>12.a El arqueo de un turno ya cerrado recibe una anulación posterior.</strong> Los totales del turno cerrado no se descuentan; los importes anulados se acumulan por separado y el reporte multi-turno los resta, para no alterar un registro de caja ya conciliado.</li>
+    </ul>
+    <p><strong>Requisitos cubiertos</strong></p>
+    <p>RF-60, RF-74 a RF-87, RF-88, RNF-03, RNF-04, RNF-13, RNF-17, RNF-19, RNF-21.</p>
+
+    <div class="salto"></div>
+    <h4>CU-06 · Anular un comprobante emitiendo una nota de crédito</h4>
+    <table class="compacta">
+      <tbody>
+        <tr><td style="width:22%"><strong>Actor primario</strong></td><td>Cajero o usuario con permiso de emisión de notas.</td></tr>
+        <tr><td><strong>Actores de apoyo</strong></td><td>Servicio de emisión electrónica.</td></tr>
+        <tr><td><strong>Precondiciones</strong></td><td>Sesión iniciada con acceso al registro fiscal; el comprobante original está aceptado por el servicio de emisión; existe un turno abierto; el motivo de la nota se elige del catálogo tributario; la serie del tipo de nota está configurada.</td></tr>
+        <tr><td><strong>Postcondiciones</strong></td><td>Existe una nota de crédito numerada en la serie correspondiente al tipo del comprobante original y a la caja que la emite; la nota declara el motivo y el documento de referencia; el turno registra la devolución con signo negativo repartida entre los bolsillos en la proporción en que se cobró el comprobante original; el stock quedó repuesto cuando la nota se emitió con afectación de mercadería; la nota quedó registrada con su bloque fiscal en estado pendiente, lista para su envío.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Flujo normal</strong></p>
+    <ol class="pasos">
+      <li>El usuario abre el registro fiscal y ubica el comprobante que debe anularse. El sistema muestra su número, su fecha, su cliente, su importe y su estado fiscal.</li>
+      <li>El usuario verifica si el comprobante puede anularse directamente. Si fue aceptado por el servicio de emisión, el sistema no ofrece la anulación directa y remite a la emisión de una nota de crédito; para una nota de venta no consolidada y para un comprobante electrónico aún pendiente, ofrece la anulación directa.</li>
+      <li>El usuario elige emitir una nota de crédito sobre el comprobante. El sistema abre el formulario con el tipo de nota, la lista de motivos del catálogo tributario y la indicación de si la nota afecta mercadería.</li>
+      <li>El usuario selecciona el motivo y define si la operación repone existencias. El sistema exige un turno abierto, porque la nota afecta la caja.</li>
+      <li>El usuario confirma la emisión. El sistema verifica que el comprobante original esté aceptado; si no lo está, rechaza la operación e indica que se requiere la respuesta de aceptación.</li>
+      <li>El sistema resuelve la serie de la nota según el tipo del documento original —boleta o factura— y según se trate de una nota de crédito o de débito, tomando la serie de la caja del usuario cuando la tiene asignada y la de la configuración de la empresa en caso contrario. Luego obtiene el correlativo siguiente del espacio de numeración correspondiente.</li>
+      <li>El sistema calcula el importe de la modificación como la suma de los subtotales de los ítems del comprobante original y toma los valores en valor absoluto. Si se trata de una nota de crédito, verifica que el importe no supere el total del comprobante original; de lo contrario rechaza la operación indicando ambos importes.</li>
+      <li>El usuario confirma. El sistema, dentro de una sola transacción, repone el stock de los ítems cuando la nota afecta mercadería, registrando el movimiento de devolución con el stock anterior y el nuevo; crea el documento de la nota con su serie, su número, el motivo, el código de motivo, el documento de referencia y el bloque fiscal en estado pendiente; y registra la devolución en el turno.</li>
+      <li>Para registrar la devolución en el turno, el sistema resuelve el reparto del comprobante original a partir de sus pagos —no de su tipo de pago— y devuelve la mercadería en la misma proporción en que se cobró: si el comprobante original fue pagado de forma mixta, la devolución sale de los dos bolsillos. Guarda además el medio del comprobante original, para que la conciliación por billetera siga siendo exacta ante una devolución, y resta los importes de los totales del turno.</li>
+      <li>El sistema informa el número de la nota emitida y advierte que la nota no se envía automáticamente. La nota queda en el registro fiscal pendiente de envío.</li>
+      <li>El usuario envía la nota al servicio de emisión. El sistema confirma la operación, advirtiendo que se trata de un documento real, y remite la solicitud al servicio. El resultado se registra igual que en el caso de una boleta o una factura.</li>
+    </ol>
+    <p><strong>Flujos alternativos</strong></p>
+    <ul>
+      <li><strong>2.a El comprobante todavía puede anularse directamente.</strong> Si el comprobante es una nota de venta del día no consolidada, o un comprobante electrónico aún no aceptado, el sistema ofrece la anulación directa: repone el stock, marca el documento como anulado conservando su contenido y su motivo, y ajusta los totales del turno —o acumula los importes anulados si el turno ya estaba cerrado—. No se emite nota de crédito.</li>
+      <li><strong>2.b El comprobante ya fue anulado.</strong> El sistema rechaza cualquier nueva anulación indicando que el documento ya fue anulado.</li>
+      <li><strong>2.c El comprobante está fuera de la fecha.</strong> Para la anulación directa, el sistema rechaza la operación si el documento no corresponde al día actual e indica emitir una nota de crédito.</li>
+      <li><strong>5.a El comprobante no está aceptado.</strong> El sistema rechaza la emisión de la nota con el mensaje de que el comprobante original debe tener respuesta de aceptación.</li>
+      <li><strong>6.a No se obtiene correlativo.</strong> El sistema aborta la emisión con el mensaje correspondiente y no crea el documento ni repone stock.</li>
+      <li><strong>7.a El importe de la nota supera el original.</strong> Si el importe de la nota de crédito supera el total del comprobante original, el sistema rechaza la operación indicando ambos importes, para evitar devoluciones mayores a lo cobrado.</li>
+      <li><strong>8.a No hay turno abierto.</strong> El sistema rechaza la emisión de la nota e indica abrir un turno antes de emitirla.</li>
+      <li><strong>8.b Falla la transacción.</strong> La nota no se crea, el stock no se repone y el turno no se altera; ninguna parte de la operación queda aplicada.</li>
+      <li><strong>11.a El servicio rechaza la nota.</strong> El sistema marca la nota como rechazada, guarda el código y la descripción del rechazo y permite corregir el origen del problema y reenviar.</li>
+      <li><strong>11.b El servicio no responde a tiempo.</strong> El sistema advierte que la nota pudo haber sido aceptada y sugiere reintentar; un reintento con respuesta de comprobante ya registrado deja la nota como aceptada.</li>
+    </ul>
+    <p><strong>Requisitos cubiertos</strong></p>
+    <p>RF-18, RF-45, RF-46, RF-50 a RF-53, RF-56, RF-57, RF-60, RF-80, RF-88, RNF-17, RNF-19, RNF-25.</p>
+
+    <div class="salto"></div>
+    <h2 id="s6">6. Historias de usuario</h2>
+
+    <p>Se enumeran veinte historias de usuario con su criterio de aceptación verificable. Todas se apoyan en
+    funcionalidad existente en el sistema.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr><th style="width:6%">Código</th><th style="width:38%">Historia</th><th style="width:44%">Criterio de aceptación verificable</th><th>Requisitos</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>HU-01</td>
+          <td>Como <em>cajero</em>, quiero buscar un producto por su nombre o su código, para agregarlo al carrito sin recorrer el catálogo completo.</td>
+          <td>Al escribir texto en el buscador, la lista se reduce a los productos cuyo nombre, código o alias de voz contiene el texto, sin distinguir mayúsculas. Si no hay coincidencias, la vista muestra el aviso de que no hay resultados.</td>
+          <td>RF-01, RF-02</td>
+        </tr>
+        <tr>
+          <td>HU-02</td>
+          <td>Como <em>cajero</em>, quiero leer el código de barras con la cámara, para cobrar más rápido los productos que ya tienen código impreso.</td>
+          <td>Al detectar un código, el sistema lo normaliza, busca el producto y lo agrega al carrito. Si el producto no existe, está inactivo o no tiene existencias, muestra el motivo y no modifica el carrito.</td>
+          <td>RF-03</td>
+        </tr>
+        <tr>
+          <td>HU-03</td>
+          <td>Como <em>cajero</em>, quiero tener a la vista los productos de venta más frecuente, para cobrar sin buscar en el catálogo.</td>
+          <td>El bloque de venta rápida muestra hasta doce productos con existencias: los marcados como favoritos por el administrador o, si no hay ninguno, los más vendidos. Al pulsar uno se agrega una unidad al carrito y el bloque se oculta si no hay productos que mostrar.</td>
+          <td>RF-04</td>
+        </tr>
+        <tr>
+          <td>HU-04</td>
+          <td>Como <em>cajero</em>, quiero vender un producto por presentaciones distintas de la unidad base, para no tener que calcular la conversión a mano.</td>
+          <td>Al seleccionar una presentación en la línea del carrito, el precio mostrado es el precio unitario multiplicado por el factor de la presentación y el stock disponible se recalcula dividiendo el stock base por ese factor. La línea con presentación mayor no se puede agregar si el stock convertido es insuficiente.</td>
+          <td>RF-05, RF-10</td>
+        </tr>
+        <tr>
+          <td>HU-05</td>
+          <td>Como <em>cajero</em>, quiero cobrar un producto que no está en el catálogo, como un embalaje, para no perder la venta.</td>
+          <td>El modal «Embalaje y Otros» ofrece las plantillas configuradas con su nombre y su precio; al elegir una, el ítem se agrega al carrito, no descuenta stock, se identifica como ítem manual y permite ajustar su afectación tributaria. Si no hay plantillas, el sistema lo informa y remite a la configuración.</td>
+          <td>RF-07, RF-54</td>
+        </tr>
+        <tr>
+          <td>HU-06</td>
+          <td>Como <em>cajero</em>, quiero identificar al cliente con su documento para que el comprobante salga a su nombre.</td>
+          <td>Al ingresar un documento de ocho u once dígitos y pulsar consultar, el sistema busca primero en el padrón y luego en el servicio externo, y completa la razón social y la dirección. Si no encuentra datos o no hay conexión, habilita el ingreso manual e informa el motivo.</td>
+          <td>RF-13, RF-14, RF-89</td>
+        </tr>
+        <tr>
+          <td>HU-07</td>
+          <td>Como <em>cajero</em>, quiero que el sistema me impida emitir una factura sin el registro único de contribuyentes, para no generar un comprobante inválido.</td>
+          <td>Al pulsar cobrar con el comprobante en factura y un documento que no tiene once dígitos, el sistema rechaza la operación con el mensaje correspondiente y no emite el comprobante. Con once dígitos pero sin consulta previa, exige consultar el documento; y si falta la razón social, la exige.</td>
+          <td>RF-15, RF-16</td>
+        </tr>
+        <tr>
+          <td>HU-08</td>
+          <td>Como <em>cajero</em>, quiero cobrar una boleta de importe alto exigiendo el documento del cliente, para cumplir con el tope configurado por el negocio.</td>
+          <td>Con un total superior al tope configurado and el comprobante en boleta, el sistema exige un documento de identidad de ocho dígitos validado por consulta; si no lo hay, rechaza el cobro indicando el tope aplicado.</td>
+          <td>RF-17</td>
+        </tr>
+        <tr>
+          <td>HU-09</td>
+          <td>Como <em>cajero</em>, quiero combinar efectivo con un medio electrónico en la misma venta, para atender al cliente que paga una parte en efectivo.</td>
+          <td>El sistema admite varias filas de forma de pago, precarga el importe faltante en cada nueva fila, muestra lo pagado, lo que falta y el vuelto, y sólo habilita el cobro cuando los montos cubren el total. Si los medios electrónicos superan el total, rechaza el cobro con el importe excedente.</td>
+          <td>RF-18, RF-19, RF-21</td>
+        </tr>
+        <tr>
+          <td>HU-10</td>
+          <td>Como <em>cajero</em>, quiero cargar un descuento manual dentro del límite que fija el negocio, para atender una negociación de mostrador sin exceder mi autoridad.</td>
+          <td>Con el permiso de descuento manual el sistema muestra la tarjeta de descuentos y acepta un valor en porcentaje o en monto. Si el descuento supera el tope configurado, muestra el porcentaje máximo, indica el valor admisible y deshabilita los botones de cobro y de envío a caja. El valor cero en la configuración significa que no hay tope.</td>
+          <td>RF-30, RF-31, RF-32</td>
+        </tr>
+        <tr>
+          <td>HU-11</td>
+          <td>Como <em>administrador</em>, quiero que el tope del descuento manual se verifique también al crear el pedido, para que nadie lo evada desde otro cliente del sistema.</td>
+          <td>Al crear un pedido con un descuento global superior al tope, el servicio que lo crea lo rechaza con el mensaje del tope, aun cuando la validación de la interfaz no haya actuado.</td>
+          <td>RF-32, RNF-15</td>
+        </tr>
+        <tr>
+          <td>HU-12</td>
+          <td>Como <em>vendedor</em>, quiero armar la venta y enviarla a caja, para que el cajero se ocupe del cobro.</td>
+          <td>El vendedor ve el catálogo y el carrito, sin la selección de comprobante ni las formas de pago, y su botón principal es «Enviar a caja». Al confirmar, el sistema crea un pedido con código propio, sin serie ni correlativo fiscal, sin forma de pago y sin descontar stock, e informa el código del pedido.</td>
+          <td>RF-36, RF-31</td>
+        </tr>
+        <tr>
+          <td>HU-13</td>
+          <td>Como <em>cajero</em>, quiero ver los pedidos que esperan cobro y cobrarlos eligiendo el comprobante, para atender a los clientes que llegan a la caja.</td>
+          <td>El panel lista los pedidos pendientes con su código, su importe, su vendedor y su antigüedad, y se actualiza solo cada treinta segundos. Al pulsar «Cobrar pedido» el pedido se carga en el carrito con el importe cotizado, y el cajero elige comprobante y forma de pago en la interfaz del carrito antes de cobrar.</td>
+          <td>RF-37, RF-39, RF-40</td>
+        </tr>
+        <tr>
+          <td>HU-14</td>
+          <td>Como <em>cajero</em>, quiero que el pedido no descuente stock hasta que lo cobre, para que un pedido olvidado no retenga mercadería.</td>
+          <td>Al enviar un pedido a caja, el stock de los productos permanece sin cambios y no se registra ningún movimiento de inventario. Al cobrarlo, el sistema descuenta el stock y registra el movimiento. Si al cobrar ya no alcanza el stock, el cobro falla con el detalle del producto, el disponible y lo pedido, y el pedido permanece pendiente.</td>
+          <td>RF-36, RF-41</td>
+        </tr>
+        <tr>
+          <td>HU-15</td>
+          <td>Como <em>cajero</em>, quiero que el pedido conserve el precio que le cotizó el vendedor, para no cobrarle al cliente un importe distinto al pactado.</td>
+          <td>En modo pedido el resumen muestra el total cotizado, el carrito no recalcula promociones ni descuentos, y el aviso indica el descuento aplicado por el vendedor cuando lo hay. Las secciones de envío, descuento, cliente y crédito no se muestran en ese modo.</td>
+          <td>RF-39, RF-35</td>
+        </tr>
+        <tr>
+          <td>HU-16</td>
+          <td>Como <em>administrador</em>, quiero poder transferir los pedidos de una caja a otra cuando una caja deja de operar, para que ninguna venta quede sin cobrar.</td>
+          <td>La configuración de cajas ofrece transferir los pedidos abiertos indicando la caja de origen y la de destino, rechaza el caso de cajas iguales e informa la cantidad de pedidos efectivamente movidos. La operación queda registrada en la auditoría.</td>
+          <td>RF-43, RF-120</td>
+        </tr>
+        <tr>
+          <td>HU-17</td>
+          <td>Como <em>cajero</em>, quiero abrir y cerrar mi turno dejando constancia del efectivo contado, para responder por el dinero de mi caja.</td>
+          <td>La apertura exige tipo de turno y monto inicial, y se rechaza si el usuario ya tiene un turno abierto. El cierre muestra el efectivo esperado calculado con la fórmula única, permite ingresar el efectivo contado, muestra la diferencia con su signo y, ante una diferencia, ofrece diagnósticos con posibles causas. El turno queda cerrado con el contado, el esperado, la diferencia y las observaciones, y se crea el registro de cierre.</td>
+          <td>RF-74 a RF-76, RF-82</td>
+        </tr>
+        <tr>
+          <td>HU-18</td>
+          <td>Como <em>cajero</em>, quiero ingresar el efectivo contado sin ver lo que el sistema espera, para que el conteo sea real y no un ajuste al número del sistema.</td>
+          <td>Con el conteo a ciegas habilitado en la configuración, el paso de conteo del cierre no muestra el efectivo esperado y la diferencia aparece recién en el paso de análisis. Con el parámetro desactivado, el esperado se muestra junto al campo de conteo.</td>
+          <td>RF-78</td>
+        </tr>
+        <tr>
+          <td>HU-19</td>
+          <td>Como <em>administrador</em>, quiero que el consolidado del día no invente diferencias cuando hay turnos abiertos, para leer un cierre de caja confiable.</td>
+          <td>El bloque «Caja del día» acumula monto inicial, efectivo esperado, efectivo contado y diferencia únicamente de los turnos cerrados, informa cuántos turnos quedaron abiertos y aclara que la caja cuadra sólo el efectivo.</td>
+          <td>RF-85, RF-76</td>
+        </tr>
+        <tr>
+          <td>HU-20</td>
+          <td>Como <em>administrador</em>, quiero agrupar las notas de venta del día en una boleta y enviarla, para declarar las ventas menores sin emitir una boleta por cada una.</td>
+          <td>La acción de consolidar informa cuántas notas agrupará y exige confirmación. La boleta resultante suma los totales netos, declara la suma de los descuentos de las notas agrupadas, agrupa las líneas por producto, precio y unidad, y deja cada nota marcada como consolidada y vinculada al documento. Una nota consolidada no admite anulación ni corrección del medio de pago.</td>
+          <td>RF-49, RF-57, RF-25</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="salto"></div>
+    <h2 id="s7">7. Matriz de trazabilidad</h2>
+
+    <p>La matriz relaciona cada módulo con sus requerimientos funcionales, los casos de uso que los realizan y los
+    archivos donde reside la implementación.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr><th style="width:16%">Módulo</th><th style="width:14%">Requerimientos</th><th style="width:18%">Casos de uso</th><th>Páginas y archivos</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Punto de venta — catálogo y carrito</td>
+          <td>RF-01 a RF-12</td>
+          <td>CU-01, CU-02, CU-07</td>
+          <td><code>src/pages/Pdv.tsx</code>; <code>src/components/EscanearCodigo.tsx</code>; <code>src/lib/ventas-pausadas.ts</code>; <code>src/lib/ui-utils.ts</code>; <code>src/hooks/use-productos.ts</code>; <code>src/services/categorias.ts</code></td>
+        </tr>
+        <tr>
+          <td>Punto de venta — cliente y cobro</td>
+          <td>RF-13 a RF-25</td>
+          <td>CU-01, CU-03, CU-12</td>
+          <td><code>src/pages/Pdv.tsx</code>; <code>src/lib/pagos.ts</code>; <code>src/lib/credito.ts</code>; <code>src/lib/consultaSunat.ts</code>; <code>src/components/CreditoPanel.tsx</code>; <code>src/lib/customer-display.ts</code>; <code>src/pages/PantallaCliente.tsx</code>; <code>src/services/envios.ts</code></td>
+        </tr>
+        <tr>
+          <td>Descuentos y promociones</td>
+          <td>RF-26 a RF-35</td>
+          <td>CU-01, CU-07, CU-08</td>
+          <td><code>src/lib/descuentos.ts</code>; <code>src/services/promociones-volumen.ts</code>; <code>src/pages/Configuracion.tsx</code>; <code>src/pages/Pdv.tsx</code>; <code>src/lib/sunat-importes.ts</code></td>
+        </tr>
+        <tr>
+          <td>Ventas pendientes y pedidos</td>
+          <td>RF-36 a RF-44</td>
+          <td>CU-02, CU-03</td>
+          <td><code>src/services/ventas.ts</code>; <code>src/components/PanelVentasPendientes.tsx</code>; <code>src/lib/pedidos.ts</code>; <code>src/lib/personal.ts</code>; <code>src/lib/contadores.ts</code>; <code>src/pages/Pdv.tsx</code></td>
+        </tr>
+        <tr>
+          <td>Facturación electrónica</td>
+          <td>RF-45 a RF-60</td>
+          <td>CU-04, CU-06, CU-14</td>
+          <td><code>src/services/ventas.ts</code>; <code>src/services/consolidado.ts</code>; <code>src/services/notas.ts</code>; <code>src/services/sunat.ts</code>; <code>src/lib/contadores.ts</code>; <code>src/lib/consolidado.ts</code>; <code>src/lib/sunat.ts</code>; <code>src/lib/sunat-importes.ts</code>; <code>src/lib/series.ts</code>; <code>src/lib/pdf.ts</code>; <code>src/constants/tributario.ts</code>; <code>src/pages/Reportes.tsx</code>; <code>src/pages/ReporteSire.tsx</code></td>
+        </tr>
+        <tr>
+          <td>Inventario, kardex y rotación</td>
+          <td>RF-61 a RF-73</td>
+          <td>CU-09, CU-10</td>
+          <td><code>src/pages/Inventario.tsx</code>; <code>src/pages/Kardex.tsx</code>; <code>src/pages/RotacionInventario.tsx</code>; <code>src/services/kardex.ts</code>; <code>src/lib/inventario-reportes.ts</code>; <code>src/components/ModalCategorias.tsx</code>; <code>src/components/ModalReportes.tsx</code>; <code>src/services/historial-precios.ts</code></td>
+        </tr>
+        <tr>
+          <td>Caja, turnos y arqueo</td>
+          <td>RF-74 a RF-88</td>
+          <td>CU-05, CU-12</td>
+          <td><code>src/pages/ArqueoCaja.tsx</code>; <code>src/pages/Turnos.tsx</code>; <code>src/pages/Egresos.tsx</code>; <code>src/pages/AuditoriaCaja.tsx</code>; <code>src/components/CierreCaja.tsx</code>; <code>src/services/turnos.ts</code>; <code>src/lib/arqueo.ts</code>; <code>src/lib/diagnosticos.ts</code>; <code>src/services/egresos.ts</code>; <code>src/services/reportes.ts</code>; <code>src/lib/auditoria-caja.ts</code></td>
+        </tr>
+        <tr>
+          <td>Clientes y crédito</td>
+          <td>RF-89 a RF-94</td>
+          <td>CU-12</td>
+          <td><code>src/pages/Clientes.tsx</code>; <code>src/pages/ClienteDetalle.tsx</code>; <code>src/services/clientes.ts</code>; <code>src/lib/credito.ts</code>; <code>src/services/rfm.ts</code>; <code>src/components/RankingClientes.tsx</code></td>
+        </tr>
+        <tr>
+          <td>Proveedores, compras y pagos</td>
+          <td>RF-95 a RF-101</td>
+          <td>CU-11</td>
+          <td><code>src/pages/Proveedores.tsx</code>; <code>src/pages/ProveedorDetalle.tsx</code>; <code>src/pages/Compras.tsx</code>; <code>src/services/proveedores.ts</code>; <code>src/services/compras.ts</code>; <code>src/services/pagos-proveedores.ts</code>; <code>src/components/ModalCompra.tsx</code>; <code>src/components/ProveedorHistorial.tsx</code>; <code>src/components/CompararPrecios.tsx</code>; <code>src/components/SugerenciaCompra.tsx</code>; <code>src/components/reportes/</code></td>
+        </tr>
+        <tr>
+          <td>Reportes, tableros y auditoría</td>
+          <td>RF-102 a RF-112</td>
+          <td>CU-15, CU-16</td>
+          <td><code>src/pages/Reportes.tsx</code>; <code>src/pages/ReporteFechas.tsx</code>; <code>src/pages/ReporteTurnos.tsx</code>; <code>src/pages/VentasPorEmpleado.tsx</code>; <code>src/pages/Analisis.tsx</code>; <code>src/pages/Dashboard.tsx</code>; <code>src/pages/DashboardOperaciones.tsx</code>; <code>src/pages/Auditoria.tsx</code>; <code>src/services/reportes.ts</code>; <code>src/services/analisis.ts</code>; <code>src/services/dashboard.ts</code>; <code>src/lib/audit.ts</code>; <code>src/lib/errores.ts</code>; <code>src/services/errores.ts</code>; <code>src/lib/excel.ts</code>; <code>src/components/dashboard/</code>; <code>src/components/auditoria/ErroresPanel.tsx</code>; <code>src/components/ModalDetalleVenta.tsx</code></td>
+        </tr>
+        <tr>
+          <td>Usuarios, permisos y configuración</td>
+          <td>RF-113 a RF-121</td>
+          <td>CU-13, CU-14</td>
+          <td><code>src/pages/Usuarios.tsx</code>; <code>src/pages/UsuarioDetalle.tsx</code>; <code>src/pages/Configuracion.tsx</code>; <code>src/pages/Login.tsx</code>; <code>src/services/usuarios.ts</code>; <code>src/services/cajas.ts</code>; <code>src/lib/series.ts</code>; <code>src/constants/permisos.ts</code>; <code>src/context/permisos.tsx</code>; <code>src/context/auth.tsx</code></td>
+        </tr>
+        <tr>
+          <td>Atributos de calidad transversales</td>
+          <td>RNF-01 a RNF-25</td>
+          <td>Todos los casos de uso</td>
+          <td><code>src/App.tsx</code>; <code>src/main.tsx</code>; <code>src/lib/firebase.ts</code>; <code>src/lib/limpio.ts</code>; <code>src/lib/errores.ts</code>; <code>src/lib/pdf.ts</code>; <code>public/sw.js</code>; <code>public/manifest.json</code>; <code>firebase.json</code>; <code>firestore.rules</code>; <code>tsconfig.app.json</code>; <code>vite.config.ts</code>; <code>package.json</code>; <code>src/lib/*.test.ts</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="nota">
+      <strong>Continuidad documental.</strong> El detalle de las pruebas automatizadas, su descripción caso por caso y su
+      trazabilidad con los requerimientos de este anexo se desarrollan en el <strong>Anexo 4</strong>. La ejecución de
+      la batería de pruebas con el corredor nativo del entorno de ejecución, el análisis estático y la comprobación de
+      tipos forman parte de la evidencia de verificación que se documenta en ese anexo.
+    </div>
+
+    <div class="pie">Anexo 3 — Requerimientos y casos de uso · documento técnico de apoyo al TAP</div>
+  </div>
+</body>
+</html>

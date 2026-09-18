@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>TAP — Modelo de datos</title>
+  <link rel="stylesheet" href="tap.css">
+</head>
+<body>
+  <div class="page">
+    <div class="portada">
+      <div class="institucion">Trabajo de Aplicación Profesional</div>
+      <h1>Modelo de datos del sistema</h1>
+      <div class="filete"></div>
+      <p class="subtitulo">Anexo 2 — Estructura de la base de datos NoSQL (Cloud Firestore)</p>
+      <p class="meta">Sistema de punto de venta, inventario y facturación electrónica<br/>Anexo técnico · Documento generado a partir del código fuente</p>
+    </div>
+    <div class="salto"></div>
+
+    <!-- ═══════════════ 1. INTRODUCCIÓN ═══════════════ -->
+    <h2 id="s1">1. Introducción</h2>
+
+    <h3>1.1 Contexto del sistema</h3>
+    <p>El sistema objeto de este trabajo es una aplicación de punto de venta, control de inventario y
+    facturación electrónica que opera de forma continua en un establecimiento comercial. La interfaz de
+    administración y venta es una <em>single page application</em> desarrollada en React con TypeScript,
+    que no utiliza enrutador ni servidor de aplicación propio: toda la lógica de acceso a datos se ejecuta
+    en el navegador y se comunica de manera directa con <strong>Cloud Firestore</strong>, el servicio de
+    base de datos documental de Firebase. La autenticación se resuelve con Firebase Authentication y la
+    emisión de comprobantes ante la Superintendencia Nacional de Aduanas y de Administración Tributaria
+    (SUNAT) se delega en un servicio externo consumido por HTTP.</p>
+
+    <h3>1.2 Elección de una base de datos NoSQL documental</h3>
+    <p>La naturaleza operativa del negocio justifica el modelo documental por cuatro razones concretas,
+    todas ellas verificables en la estructura de datos descrita en este anexo:</p>
+    <ol>
+      <li><strong>El agregado natural es el documento, no la fila.</strong> Una venta es una unidad
+      indivisible de información: su cabecera, sus líneas de detalle, la forma de pago, el bloque de
+      estado tributario y los datos del receptor se leen y se escriben siempre juntos. En el modelo
+      implementado, todo ello vive en un único documento de la colección <code>tblDocumentos</code>, de
+      modo que registrar una venta es una sola operación atómica y no una transacción sobre varias tablas
+      relacionadas.</li>
+      <li><strong>El esquema de las líneas varía entre productos.</strong> Una línea de venta puede
+      corresponder a un producto con presentaciones y factor de conversión, a un componente de un
+      <em>kit</em> o a un ítem manual de embalaje que no existe en el catálogo. La línea conserva los
+      campos que le corresponden sin obligar a columnas nulas ni a tablas auxiliares.</li>
+      <li><strong>Sincronización en tiempo real y operación sin conexión.</strong> El punto de venta
+      necesita reflejar en pantalla los cambios de stock, los pedidos enviados a caja y el estado de los
+      comprobantes en el momento en que ocurren. La biblioteca cliente de Firestore ofrece escuchas en
+      vivo y una caché local persistente, que permite seguir operando de forma intermitente y
+      sincronizar después.</li>
+      <li><strong>Ausencia de servidor propio.</strong> Al no existir una capa de <em>backend</em>
+      propia para el negocio, el modelo documental con reglas de seguridad declarativas evita
+      administrar un motor relacional, sus migraciones y su dimensionamiento.</li>
+    </ol>
+
+    <h3>1.3 El prefijo <code>tbl</code> y la compatibilidad con la aplicación móvil</h3>
+    <p>Los nombres de todas las colecciones del sistema comienzan con el prefijo <code>tbl</code>. El
+    registro central de dichos nombres es el módulo <code>src/constants/colecciones.ts</code>, que
+    constituye la fuente de verdad del sistema y declara dieciséis constantes de colección agrupadas en
+    un único objeto congelado. La primera línea de ese archivo documenta explícitamente el motivo del
+    prefijo: son las mismas colecciones que declara el módulo <code>constants/Colecciones.js</code> de la
+    aplicación móvil.</p>
+    <p>El sistema no es una aplicación aislada. Existe una aplicación móvil desarrollada con Expo y React
+    Native, y un servicio de facturación electrónica, que comparten la misma base de datos. El nombre de
+    una colección es, en Firestore, la totalidad del contrato de acceso: no hay esquema central ni
+    catálogo que valide una discrepancia. Mantener una denominación única y estable —con el prefijo
+    <code>tbl</code> heredado de la versión móvil original— es la condición que permite que una venta
+    registrada desde el teléfono sea leída, cobrada, reportada y enviada a SUNAT desde la aplicación
+    web, y a la inversa. Renombrar una colección en una sola de las dos aplicaciones no produciría un
+    error de compilación: produciría una base de datos aparentemente vacía en una de ellas. Por esa
+    razón los nombres se consumen siempre a través de las constantes de <code>colecciones.ts</code> y
+    nunca como literales dispersos en el código, y por esa misma razón este anexo documenta los nombres
+    exactos tal como están declarados.</p>
+
+    <div class="aviso">
+      <strong>Alcance del documento.</strong> Todos los nombres de colección, de campo y los valores
+      enumerados que aparecen en este anexo fueron verificados por lectura directa del código fuente del
+      sistema. No se incluyen métricas de producción ni estimaciones: cuando un dato no es derivable del
+      código, el anexo lo declara expresamente en lugar de suponerlo.
+    </div>
+
+    <!-- ═══════════════ 2. COLECCIONES ═══════════════ -->
+    <div class="salto"></div>
+    <h2 id="s2">2. Inventario de colecciones</h2>
+
+    <p>La Tabla 2.1 enumera las 16 colecciones declaradas en <code>src/constants/colecciones.ts</code>,
+    su propósito funcional, el criterio de identificación del documento y el número de campos clave
+    documentados. La sección 3 detalla por separado la colección <code>tblDocumentos</code>, que es el
+    núcleo del sistema; por ese motivo su columna de recuento consigna únicamente los campos de cabecera.</p>
+
+    <table class="evitar-corte">
+      <thead>
+        <tr>
+          <th style="width:20%">Colección</th>
+          <th style="width:30%">Propósito</th>
+          <th style="width:34%">Documento que guarda</th>
+          <th class="num" style="width:8%">Campos</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>tblProductos</code></td>
+          <td>Catálogo de artículos con precios, existencias, presentaciones y datos tributarios.</td>
+          <td>Un documento por producto; identificador igual al código de barras o al código interno, o bien <code>P-&lt;marca de tiempo&gt;</code> cuando el código se deja vacío.</td>
+          <td class="num">25</td>
+        </tr>
+        <tr>
+          <td><code>tblMovimientos</code></td>
+          <td>Kardex: todo movimiento de existencias (venta, compra, ajuste, anulación, nota de crédito).</td>
+          <td>Un documento por movimiento; identificador automático generado por Firestore.</td>
+          <td class="num">20</td>
+        </tr>
+        <tr>
+          <td><code>tblDocumentos</code></td>
+          <td>Documentos de venta: notas de venta, boletas, facturas, notas de crédito y débito, y pedidos enviados a caja.</td>
+          <td>Un documento por comprobante o pedido; identificador compuesto por período y número (sección 3).</td>
+          <td class="num">27<a href="#nota-doc" style="text-decoration:none">*</a></td>
+        </tr>
+        <tr>
+          <td><code>tblContadores</code></td>
+          <td>Secuencias de numeración de comprobantes y de pedidos.</td>
+          <td>Un documento por espacio de numeración, con identificador normalizado (sección 5).</td>
+          <td class="num">3</td>
+        </tr>
+        <tr>
+          <td><code>tblTurnos</code></td>
+          <td>Turnos de caja: apertura, acumulados, ventas y gastos del turno, cierre y arqueo.</td>
+          <td>Un documento por turno; identificador automático generado por Firestore.</td>
+          <td class="num">26</td>
+        </tr>
+        <tr>
+          <td><code>tblCierresCaja</code></td>
+          <td>Registro histórico e inmutable del cierre de cada turno, con su análisis de diferencias.</td>
+          <td>Un documento por cierre; identificador automático, distinto del documento del turno.</td>
+          <td class="num">22</td>
+        </tr>
+        <tr>
+          <td><code>tblClientes</code></td>
+          <td>Fichas de clientes, con datos fiscales, lista de precios, descuento y línea de crédito.</td>
+          <td>Un documento por cliente; identificador igual al número de documento (DNI o RUC).</td>
+          <td class="num">24</td>
+        </tr>
+        <tr>
+          <td><code>tblUsuarios</code></td>
+          <td>Usuarios del sistema con rol, funciones habilitadas, caja asignada y series de comprobante.</td>
+          <td>Un documento por usuario; identificador igual al <em>uid</em> de Firebase Authentication.</td>
+          <td class="num">17</td>
+        </tr>
+        <tr>
+          <td><code>tblProveedores</code></td>
+          <td>Fichas de proveedores, con datos de contacto y personas de referencia.</td>
+          <td>Un documento por proveedor; identificador igual al número de documento o al nombre normalizado.</td>
+          <td class="num">11</td>
+        </tr>
+        <tr>
+          <td><code>tblEgresos</code></td>
+          <td>Egresos de caja y gastos del negocio, con su categoría y su vínculo con el turno.</td>
+          <td>Un documento por egreso; identificador automático generado por Firestore.</td>
+          <td class="num">13</td>
+        </tr>
+        <tr>
+          <td><code>tblHistorialPrecios</code></td>
+          <td>Bitácora de cambios de precio de compra y de precio de venta.</td>
+          <td>Un documento por cambio registrado; se escribe solo cuando el valor cambia efectivamente.</td>
+          <td class="num">8</td>
+        </tr>
+        <tr>
+          <td><code>tblPromocionesVolumen</code></td>
+          <td>Reglas de promoción automática por volumen sobre un conjunto de productos.</td>
+          <td>Un documento por promoción; identificador automático o el de la promoción editada.</td>
+          <td class="num">10</td>
+        </tr>
+        <tr>
+          <td><code>tblConfiguracion</code></td>
+          <td>Parámetros del negocio, series de comprobante, datos tributarios y preferencias de operación.</td>
+          <td>Un único documento de configuración, <code>empresa</code>, dentro de la colección.</td>
+          <td class="num">31</td>
+        </tr>
+        <tr>
+          <td><code>tblCategorias</code></td>
+          <td>Categorías de producto administradas, con su orden de presentación e icono.</td>
+          <td>Un documento por categoría; identificador igual al nombre normalizado a <em>slug</em>.</td>
+          <td class="num">6</td>
+        </tr>
+        <tr>
+          <td><code>tblErrores</code></td>
+          <td>Registro de errores de la aplicación web, consultable desde el módulo de auditoría.</td>
+          <td>Un documento por error registrado; identificador automático generado por Firestore.</td>
+          <td class="num">9</td>
+        </tr>
+        <tr>
+          <td><code>tblCajas</code></td>
+          <td>Puntos de emisión: cada caja declara las series con las que se numeran sus comprobantes.</td>
+          <td>Un documento por caja; identificador derivado del nombre (minúsculas, guiones bajos).</td>
+          <td class="num">11</td>
+        </tr>
+      </tbody>
+    </table>
+    <p id="nota-doc" style="font-size:11.5px;color:#64748b">* Campos de cabecera del documento de venta.
+    A ellos se suman los 32 campos del bloque <code>venta</code> y los 16 de la forma del ítem, detallados
+    en la sección 3. Total documentado para esta colección: 75 campos.</p>
+
+    <h3>2.1 Campos clave por colección</h3>
+    <p>La Tabla 2.2 enumera los campos de cada colección. Los nombres se transcriben exactamente como se
+    escriben en el código; cuando un campo solo se escribe en un flujo particular, se indica entre
+    paréntesis.</p>
+
+    <table class="compacta evitar-corte">
+      <thead>
+        <tr>
+          <th style="width:21%">Colección</th>
+          <th>Campos documentados</th>
+          <th class="num" style="width:7%">N.º</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>tblProductos</code></td>
+          <td><code>nombre</code>, <code>codigo</code>, <code>categoria</code>, <code>precioVenta</code>,
+          <code>precioCompra</code>, <code>precioEspecial</code>, <code>precioMinimo</code>,
+          <code>preciosPorLista</code>, <code>descuentoPorcentaje</code>, <code>stock</code>,
+          <code>minStock</code>, <code>unidadBase</code>, <code>tipoAfectacion</code>,
+          <code>presentaciones</code>, <code>esFavorito</code>, <code>vecesVendido</code>,
+          <code>activo</code>, <code>imagen</code>, <code>fechaVencimiento</code>, <code>isKit</code>,
+          <code>kitItems</code>, <code>proveedorId</code>, <code>proveedorNombre</code>,
+          <code>ultimaActualizacion</code>, <code>updatedAt</code></td>
+          <td class="num">25</td>
+        </tr>
+        <tr>
+          <td><code>tblMovimientos</code></td>
+          <td><code>productoId</code>, <code>productoCodigo</code>, <code>productoNombre</code>,
+          <code>categoria</code> (compras), <code>tipoMovimiento</code>, <code>cantidad</code>,
+          <code>motivo</code>, <code>nota</code> (ajustes), <code>stockAnterior</code>,
+          <code>stockNuevo</code>, <code>usuario</code>, <code>fecha</code>, <code>timestamp</code>,
+          <code>presentacionUsada</code>, <code>presentacionId</code>, <code>cantidadPresentacion</code>,
+          <code>factorConversion</code>, <code>metadata</code>, <code>documentoRef</code> (cobro de
+          pedido), <code>serieNumero</code> (cobro de pedido)</td>
+          <td class="num">20</td>
+        </tr>
+        <tr>
+          <td><code>tblContadores</code></td>
+          <td><code>ultimoCorrelativo</code>, <code>serie</code>, <code>updatedAt</code></td>
+          <td class="num">3</td>
+        </tr>
+        <tr>
+          <td><code>tblTurnos</code></td>
+          <td><code>usuarioId</code>, <code>usuarioNombre</code>, <code>cajaId</code>,
+          <code>tipoTurno</code>, <code>fechaApertura</code>, <code>fechaCierre</code>,
+          <code>estado</code>, <code>montoInicial</code>, <code>montoFinalEfectivo</code>,
+          <code>efectivoEsperado</code>, <code>diferencia</code>, <code>ventasDelTurno</code>,
+          <code>gastosDelTurno</code>, <code>totalVentas</code>, <code>totalEfectivo</code>,
+          <code>totalTransferencia</code>, <code>totalGastos</code>, <code>totalGastosEfectivo</code>,
+          <code>totalGastosTransferencia</code>, <code>vueltoTransferencia</code>,
+          <code>totalAnulado</code>, <code>totalAnuladoEfectivo</code>,
+          <code>totalAnuladoTransferencia</code>, <code>conciliacion</code>, <code>rectificacion</code>,
+          <code>createdAt</code></td>
+          <td class="num">26</td>
+        </tr>
+        <tr>
+          <td><code>tblCierresCaja</code></td>
+          <td><code>turnoId</code>, <code>usuarioId</code>, <code>usuarioNombre</code>,
+          <code>tipoTurno</code>, <code>fechaApertura</code>, <code>fechaCierre</code>,
+          <code>montoInicial</code>, <code>totalVentas</code>, <code>totalEfectivo</code>,
+          <code>totalTransferencia</code>, <code>totalGastos</code>, <code>totalGastosEfectivo</code>,
+          <code>totalGastosTransferencia</code>, <code>efectivoEsperado</code>,
+          <code>montoFinalEfectivo</code>, <code>diferencia</code>, <code>analisis</code>,
+          <code>observaciones</code>, <code>conciliacion</code>, <code>ventas</code>, <code>gastos</code>,
+          <code>createdAt</code></td>
+          <td class="num">22</td>
+        </tr>
+        <tr>
+          <td><code>tblClientes</code></td>
+          <td><code>tipoDoc</code>, <code>numeroDoc</code>, <code>razonSocial</code>,
+          <code>razonSocialLower</code>, <code>direccion</code>, <code>email</code>,
+          <code>telefono</code>, <code>fechaRegistro</code>, <code>ultimaCompra</code>,
+          <code>totalCompras</code>, <code>montoTotal</code>, <code>frecuencia</code>,
+          <code>tipoDocDefecto</code>, <code>listaPrecio</code>, <code>creditoActivo</code>,
+          <code>limiteCredito</code>, <code>diasCredito</code>, <code>saldoPendiente</code>,
+          <code>bloqueado</code>, <code>notas</code>, <code>sunatValido</code>,
+          <code>sunatEstado</code>, <code>descuentoPorcentaje</code>, <code>updatedAt</code></td>
+          <td class="num">24</td>
+        </tr>
+        <tr>
+          <td><code>tblUsuarios</code></td>
+          <td><code>email</code>, <code>nombre</code>, <code>rol</code>, <code>activo</code>,
+          <code>permisos</code>, <code>cajaId</code>, <code>serieBoleta</code>,
+          <code>serieFactura</code>, <code>seriePrefijo</code>, <code>serieBoletaNC</code>,
+          <code>serieBoletaND</code>, <code>serieFacturaNC</code>, <code>serieFacturaND</code>,
+          <code>activeSession</code>, <code>dashboardWidgets</code>, <code>createdAt</code>,
+          <code>updatedAt</code></td>
+          <td class="num">17</td>
+        </tr>
+        <tr>
+          <td><code>tblProveedores</code></td>
+          <td><code>nombre</code>, <code>documento</code>, <code>tipoDocumento</code>,
+          <code>direccion</code>, <code>telefono</code>, <code>correo</code>, <code>contactos</code>,
+          <code>notas</code>, <code>activo</code>, <code>fechaRegistro</code>, <code>updatedAt</code></td>
+          <td class="num">11</td>
+        </tr>
+        <tr>
+          <td><code>tblEgresos</code></td>
+          <td><code>monto</code>, <code>descripcion</code>, <code>categoria</code>, <code>fecha</code>,
+          <code>tipoPago</code>, <code>rucProveedor</code>, <code>proveedorNombre</code>,
+          <code>proveedorId</code>, <code>comprobante</code>, <code>usuarioId</code>,
+          <code>usuarioNombre</code>, <code>turnoId</code>, <code>createdAt</code></td>
+          <td class="num">13</td>
+        </tr>
+        <tr>
+          <td><code>tblHistorialPrecios</code></td>
+          <td><code>productoId</code>, <code>productoNombre</code>, <code>campo</code>,
+          <code>valorAnterior</code>, <code>valorNuevo</code>, <code>usuario</code>, <code>fecha</code>,
+          <code>timestamp</code></td>
+          <td class="num">8</td>
+        </tr>
+        <tr>
+          <td><code>tblPromocionesVolumen</code></td>
+          <td><code>nombre</code>, <code>tipo</code>, <code>valor</code>, <code>descuento</code>,
+          <code>productoIds</code>, <code>activo</code>, <code>fechaInicio</code>, <code>fechaFin</code>,
+          <code>notas</code>, <code>creadoEn</code></td>
+          <td class="num">10</td>
+        </tr>
+        <tr>
+          <td><code>tblConfiguracion</code></td>
+          <td><code>nombre</code>, <code>ruc</code>, <code>direccion</code>, <code>correo</code>,
+          <code>telefono</code>, <code>sucursal</code>, <code>mensaje</code>, <code>serie_prefijo</code>,
+          <code>serieBoleta</code>, <code>serieFactura</code>, <code>logo_url</code>,
+          <code>tipoRegimen</code>, <code>regionExonerada</code>, <code>conteoCiego</code>,
+          <code>sunatApiUrlProd</code>, <code>sunatApiUrlTest</code>, <code>consultaApiBase</code>,
+          <code>serieBoletaNC</code>, <code>serieBoletaND</code>, <code>serieFacturaNC</code>,
+          <code>serieFacturaND</code>, <code>tipoAfectacionManual</code>, <code>puntoEmision</code>,
+          <code>topeBoletaDni</code>, <code>descuentoMaximoPorcentaje</code>, <code>servidor</code>,
+          <code>envioHabilitado</code>, <code>zonasEnvio</code>, <code>plantillasManuales</code>,
+          <code>listasPrecios</code>, <code>updatedAt</code></td>
+          <td class="num">31</td>
+        </tr>
+        <tr>
+          <td><code>tblCategorias</code></td>
+          <td><code>nombre</code>, <code>orden</code>, <code>activo</code>, <code>icono</code>,
+          <code>createdAt</code>, <code>updatedAt</code></td>
+          <td class="num">6</td>
+        </tr>
+        <tr>
+          <td><code>tblErrores</code></td>
+          <td><code>mensaje</code>, <code>contexto</code>, <code>fecha</code>, <code>usuario</code>,
+          <code>usuarioId</code>, <code>ruta</code>, <code>dispositivo</code>, <code>stack</code>,
+          <code>detalle</code></td>
+          <td class="num">9</td>
+        </tr>
+        <tr>
+          <td><code>tblCajas</code></td>
+          <td><code>nombre</code>, <code>activo</code>, <code>serieBoleta</code>,
+          <code>serieFactura</code>, <code>seriePrefijo</code>, <code>serieNC</code>,
+          <code>serieND</code>, <code>serieNCB</code>, <code>serieNDB</code>, <code>createdAt</code>,
+          <code>updatedAt</code></td>
+          <td class="num">11</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>2.2 Estructuras anidadas de uso frecuente</h3>
+    <p>Cuatro campos de las colecciones anteriores almacenan, a su vez, estructuras con forma propia. Se
+    describen por separado para no repetirlas en cada fila de las tablas previas.</p>
+
+    <table class="compacta evitar-corte">
+      <thead>
+        <tr><th style="width:26%">Campo</th><th>Contenido</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>pagos</code> (en <code>venta</code>)</td>
+          <td>Lista de pagos aplicados. Cada elemento tiene <code>tipo</code> (bolsillo:
+          <code>'efectivo'</code>, <code>'transferencia'</code> o <code>'credito'</code>),
+          <code>medio</code> (detalle: <code>'efectivo'</code>, <code>'yape'</code>, <code>'plin'</code>,
+          <code>'transferencia'</code> o <code>'tarjeta'</code>), <code>monto</code> y
+          <code>operacion</code> (número de operación, solo en medios electrónicos).</td>
+        </tr>
+        <tr>
+          <td><code>presentaciones</code> (en producto)</td>
+          <td>Lista de presentaciones de venta o compra. Cada elemento tiene <code>id</code> (nombre
+          normalizado), <code>nombre</code>, <code>factor</code> (unidades base por presentación),
+          <code>esVenta</code> y <code>esCompra</code>.</td>
+        </tr>
+        <tr>
+          <td><code>kitItems</code> (en producto y en la línea de venta)</td>
+          <td>Lista de componentes. Cada elemento tiene <code>productoId</code> y
+          <code>cantidad</code>; el descuento de existencias se aplica sobre los componentes, no sobre el
+          <em>kit</em>.</td>
+        </tr>
+        <tr>
+          <td><code>activeSession</code> (en usuario)</td>
+          <td>Objeto con <code>deviceId</code> y <code>at</code>. El sistema lo escribe en cada inicio de
+          sesión y lo vigila: si el identificador de dispositivo difiere del actual, la sesión anterior
+          se cierra.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>2.3 Colecciones declaradas fuera del registro central</h3>
+    <p>Además de las 16 colecciones de <code>src/constants/colecciones.ts</code>, el código
+    declara dos colecciones cuyo nombre no vive en ese registro sino en el módulo que las usa. Se
+    consignan aquí por completitud, dado que forman parte de la base de datos:</p>
+    <ul>
+      <li><code>tblAuditLog</code> — declarada en <code>src/lib/audit.ts</code>. Registra la actividad
+      relevante del sistema con los campos <code>usuario</code>, <code>usuarioId</code>,
+      <code>accion</code>, <code>entidad</code>, <code>entidadId</code>, <code>detalle</code> y
+      <code>timestamp</code>. Es el destino de los registros de auditoría invocados desde los servicios
+      de venta, turnos, egresos, compras, inventario y cajas.</li>
+      <li><code>tblDisplaySessions</code> — declarada en <code>src/lib/customer-display.ts</code>.
+      Sostiene la sincronización entre el punto de venta y la pantalla orientada al cliente, que se abre
+      en otro dispositivo mediante un parámetro de consulta.</li>
+    </ul>
+    <p>Ambas se rigen por los mismos criterios de acceso que el resto del modelo; el prefijo
+    <code>tbl</code> se conserva también en ellas.</p>
+
+    <div class="nota">
+      <strong>Campos declarados pero no escritos por la interfaz web.</strong> El tipo
+      <code>Producto</code> declara <code>descuentoPorcentaje</code>: ninguna pantalla de la aplicación
+      web lo escribe, pero sí lo consume el motor de descuentos a partir del producto del catálogo. El
+      tipo <code>Proveedor</code> declara <code>saldoPendiente</code>, <code>creditoActivo</code>,
+      <code>limiteCredito</code> y <code>diasCredito</code>: las vistas que los leen caen a cero cuando
+      el campo falta y ninguna pantalla del web los persiste. Se documentan como parte del modelo
+      declarado, no como datos escritos por esta aplicación.
+    </div>
+
+    <!-- ═══════════════ 3. tblDocumentos ═══════════════ -->
+    <div class="salto"></div>
+    <h2 id="s3">3. El documento de venta (<code>tblDocumentos</code>) en detalle</h2>
+
+    <p><code>tblDocumentos</code> es el núcleo del modelo. En ella no conviven únicamente los comprobantes
+    de venta: la misma colección aloja las notas de venta, las boletas, las facturas, las notas de
+    crédito y débito, las boletas consolidadas y los <strong>pedidos</strong> que un vendedor envía a
+    caja antes de que exista un comprobante. Lo que distingue a cada clase de documento es el valor del
+    campo <code>tipo</code> y <code>tipoDoc</code>, junto con la presencia o ausencia del bloque
+    <code>sunat</code>.</p>
+
+    <h3>3.1 Identificador del documento</h3>
+    <p>El identificador se compone de forma determinista, con el período y el número, para que un
+    comprobante sea localizable sin una consulta previa:</p>
+    <ul>
+      <li>Comprobante emitido en el punto de venta: <code>&lt;año&gt;-&lt;mes&gt;_&lt;tipo&gt;-&lt;serie&gt;-&lt;correlativo&gt;</code>,
+      por ejemplo <code>2026-9_BOLETA-B001-000123</code>. El mes se compone sin relleno de ceros.</li>
+      <li>Pedido enviado a caja: <code>&lt;año&gt;-&lt;mes&gt;_PED-000123</code>.</li>
+      <li>Nota de crédito o débito: <code>&lt;año&gt;-&lt;mes&gt;_NC-&lt;serie&gt;-&lt;correlativo&gt;</code>.</li>
+      <li>Boleta consolidada: <code>&lt;año&gt;-&lt;mes&gt;_BOLETA-&lt;serie&gt;-&lt;correlativo&gt;</code>.</li>
+    </ul>
+
+    <h3>3.2 Campos de cabecera</h3>
+    <table class="compacta evitar-corte">
+      <thead>
+        <tr><th style="width:22%">Campo</th><th style="width:14%">Tipo</th><th>Contenido y origen</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>tipo</code></td><td>texto</td><td>Clase de documento: <code>'NV'</code>, <code>'BOLETA'</code>, <code>'FACTURA'</code>, <code>'NC'</code>, <code>'ND'</code>, o <code>'PENDIENTE'</code> mientras es un pedido sin comprobante.</td></tr>
+        <tr><td><code>tipoDoc</code></td><td>texto</td><td>Espejo del anterior. Se conserva duplicado porque distintos módulos —reportes, consolidación, envío a SUNAT— leen uno u otro según su origen.</td></tr>
+        <tr><td><code>serie</code></td><td>texto</td><td>Serie del comprobante, resuelta desde la caja del usuario que emite o, en su defecto, desde la configuración de la empresa. Cadena vacía en un pedido.</td></tr>
+        <tr><td><code>numero</code></td><td>número</td><td>Correlativo numérico dentro de la serie. Cero en un pedido.</td></tr>
+        <tr><td><code>correlativo</code></td><td>número</td><td>Mismo valor que <code>numero</code> al emitir una venta. Las notas de crédito y débito lo escriben como cadena con relleno de ceros; todos los lectores resuelven el valor con <code>numero ?? correlativo</code>, por lo que la heterogeneidad no afecta las búsquedas.</td></tr>
+        <tr><td><code>serieNumero</code></td><td>texto</td><td>Número completo legible, por ejemplo <code>B001-000123</code>. En un pedido contiene el código <code>PED-000123</code>.</td></tr>
+        <tr><td><code>fecha</code></td><td>texto ISO</td><td>Fecha y hora de emisión, en formato ISO 8601 con zona horaria.</td></tr>
+        <tr><td><code>anio</code></td><td>número</td><td>Año de emisión, como entero.</td></tr>
+        <tr><td><code>mes</code></td><td>número</td><td>Mes de emisión, numerado de 1 a 12.</td></tr>
+        <tr><td><code>anioMes</code></td><td>texto</td><td>Período de emisión en formato <code>año-mes</code>. Es el campo de filtrado mensual de los reportes y, por su condición de igualdad, forma parte de varios índices compuestos.</td></tr>
+        <tr><td><code>createdAt</code></td><td>texto ISO</td><td>Marca de creación del documento, usada como criterio de orden cuando <code>fecha</code> no está disponible.</td></tr>
+        <tr><td><code>estado</code></td><td>texto</td><td>Situación del documento: <code>'pendiente'</code>, <code>'pagado'</code>, <code>'cancelado'</code> o <code>'anulada'</code>. Los comprobantes emitidos directamente en el punto de venta no escriben este campo. La sección 4 desarrolla el ciclo de vida.</td></tr>
+        <tr><td><code>usuarioId</code></td><td>texto</td><td>Identificador del usuario responsable del documento. Los reportes filtran por este campo cuando el usuario no tiene habilitada la vista global; al cobrar un pedido se reescribe con el cajero que lo cobró.</td></tr>
+        <tr><td><code>vendedorId</code></td><td>texto</td><td>Identificador de quien armó la venta. En una venta directa coincide con <code>usuarioId</code>.</td></tr>
+        <tr><td><code>vendedorNombre</code></td><td>texto</td><td>Nombre de quien armó la venta. En una venta directa, el mismo usuario que cobró.</td></tr>
+        <tr><td><code>cajero</code></td><td>texto</td><td>Nombre de quien cobró. Cadena vacía mientras el documento es un pedido.</td></tr>
+        <tr><td><code>cajeroId</code></td><td>texto</td><td>Identificador del cajero que cobró el pedido; se escribe en la transición a <code>'pagado'</code>.</td></tr>
+        <tr><td><code>cajaId</code></td><td>texto</td><td>Caja asociada al documento. En un pedido es la caja de destino (ruteo); al cobrarlo se reescribe con la caja que efectivamente emitió el comprobante.</td></tr>
+        <tr><td><code>turnoId</code></td><td>texto</td><td>Turno de caja en el que se registró la operación. Cadena vacía en un pedido, que aún no afecta a la caja.</td></tr>
+        <tr><td><code>fechaCobro</code></td><td>texto ISO</td><td>Momento en que un pedido se convirtió en comprobante.</td></tr>
+        <tr><td><code>motivoCancelacion</code></td><td>texto</td><td>Motivo obligatorio con el que el cajero descartó un pedido.</td></tr>
+        <tr><td><code>pedido</code></td><td>texto</td><td>Código <code>PED-…</code> con el que el pedido llegó a caja. Se conserva tras el cobro para poder rastrear el pedido original una vez que <code>serieNumero</code> pasa a contener el comprobante real.</td></tr>
+        <tr><td><code>anulacion</code></td><td>objeto</td><td>Bloque de trazabilidad de la anulación o de la cancelación. Contiene <code>fecha</code>, <code>usuario</code> y <code>motivo</code>; al anular un comprobante agrega <code>documentoAnuladoRef</code>, y al cancelar un pedido agrega <code>comprobante: null</code> y <code>tocoStock: false</code>, que declaran de forma explícita que no hubo comprobante que anular ni existencias que reponer.</td></tr>
+        <tr><td><code>sunat</code></td><td>objeto</td><td>Estado tributario del comprobante. Contiene <code>serie</code>, <code>numero</code>, <code>puntoEmision</code> y <code>estado</code> (<code>'pendiente'</code>, <code>'enviando'</code>, <code>'aceptado'</code>, <code>'rechazado'</code> o <code>'error'</code>); tras el envío se agregan <code>ultimoEnvio</code>, <code>cdrCode</code>, <code>cdrDesc</code>, <code>hash</code> y <code>cdr</code>. No existe en las notas de venta ni en los pedidos, porque ninguno de los dos se declara ante la administración tributaria.</td></tr>
+        <tr><td><code>consolidado</code></td><td>booleano</td><td>Presente y verdadero en la boleta que agrupa las notas de venta del día.</td></tr>
+        <tr><td><code>nvsConsolidadas</code></td><td>lista</td><td>Identificadores de las notas de venta agrupadas en una boleta consolidada. Cada nota afectada recibe, además, en su propio bloque <code>sunat</code>, las marcas <code>consolidado</code>, <code>consolidadoAt</code> y <code>documentoConsolidadoId</code>.</td></tr>
+        <tr><td><code>updatedAt</code></td><td>texto ISO</td><td>Marca de la última modificación. Se escribe en las transiciones de estado, en la transferencia de pedidos entre cajas y en la corrección de créditos.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.3 El bloque <code>venta</code></h3>
+    <p>El bloque <code>venta</code> concentra el contenido comercial del documento: qué se vendió, cuánto
+    se cobró, cómo se pagó y a quién. Su forma es deliberadamente idéntica entre una venta directa, un
+    pedido y una boleta consolidada, porque el comprobante impreso y el archivo enviado a la
+    administración tributaria se construyen a partir de él sin distinciones.</p>
+
+    <table class="compacta evitar-corte">
+      <thead>
+        <tr><th style="width:22%">Campo</th><th style="width:14%">Tipo</th><th>Contenido</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>texto</td><td>Identificador de la venta dentro del turno. Es el valor con el que la anulación localiza la fila correspondiente en <code>ventasDelTurno</code>. Una venta directa lo deriva de la marca de tiempo; una boleta consolidada lo prefija con <code>consolidado_</code>.</td></tr>
+        <tr><td><code>fecha</code></td><td>texto ISO</td><td>Fecha y hora de la venta.</td></tr>
+        <tr><td><code>items</code></td><td>lista</td><td>Líneas de detalle. Su forma se describe en el apartado 3.4.</td></tr>
+        <tr><td><code>total</code></td><td>número</td><td>Importe total cobrado, <strong>ya neto de descuentos</strong>. Es el valor que el cobro, el comprobante y el arqueo consideran definitivo.</td></tr>
+        <tr><td><code>importe_total</code></td><td>número</td><td>Mismo importe que <code>total</code>, con el nombre heredado de la aplicación móvil. Se conserva por compatibilidad de lectura.</td></tr>
+        <tr><td><code>descuentoTotal</code></td><td>número</td><td>Descuento total aplicado. Es el nombre que leen el comprobante impreso y el generador del archivo tributario; su lectura está centralizada en una única función que, si el campo falta, recurre al nombre antiguo en notación con guion bajo.</td></tr>
+        <tr><td><code>descuento_total</code></td><td>número</td><td>Nombre antiguo del descuento total. Un pedido escribe <strong>ambos</strong> nombres para que el comprobante generado al cobrarlo declare el descuento que el vendedor había aplicado.</td></tr>
+        <tr><td><code>descuentoGlobalTipo</code></td><td>texto</td><td>Tipo del descuento manual cargado en el punto de venta: <code>'porcentaje'</code> o <code>'monto'</code>. Nulo cuando no se aplicó ninguno.</td></tr>
+        <tr><td><code>descuentoGlobalValor</code></td><td>número</td><td>Valor del descuento manual. Nulo cuando no se aplicó ninguno.</td></tr>
+        <tr><td><code>descuento_global_tipo</code></td><td>texto</td><td>Nombre con guion bajo del tipo de descuento global, escrito únicamente por el flujo de pedidos.</td></tr>
+        <tr><td><code>descuento_global_valor</code></td><td>número</td><td>Nombre con guion bajo del valor del descuento global, escrito únicamente por el flujo de pedidos.</td></tr>
+        <tr><td><code>tipoPago</code></td><td>texto</td><td>Forma de pago resultante: <code>'efectivo'</code>, <code>'transferencia'</code>, <code>'credito'</code> o <code>'mixto'</code> cuando hay más de un pago. En un pedido se escribe como cadena vacía, porque la forma de pago la decide el cajero al cobrar.</td></tr>
+        <tr><td><code>forma_pago</code></td><td>texto</td><td>Rótulo legible derivado de los pagos aplicados, por ejemplo el nombre del medio utilizado o el texto «Crédito». Con pago múltiple se compone a partir de los medios reales, para no rotular como transferencia una venta cobrada con dos medios distintos.</td></tr>
+        <tr><td><code>pagos</code></td><td>lista</td><td>Desglose de los pagos aplicados; la estructura de cada elemento se detalla en el apartado 2.2. Una venta a crédito nace con la lista vacía, porque todavía no se cobró nada.</td></tr>
+        <tr><td><code>efectivo</code></td><td>número</td><td>Importe aplicado que ingresa al cajón. Lo calcula una única función de reparto por bolsillo; una venta a crédito lo deja en cero.</td></tr>
+        <tr><td><code>totalTransferenciaPago</code></td><td>número</td><td>Importe aplicado que ingresa por medios electrónicos, con la misma regla única de reparto.</td></tr>
+        <tr><td><code>montoRecibido</code></td><td>número</td><td>Importe entregado por el cliente en efectivo, que puede superar el total y dar lugar a vuelto.</td></tr>
+        <tr><td><code>cambio</code></td><td>número</td><td>Vuelto entregado. Solo el efectivo puede dar lugar a vuelto.</td></tr>
+        <tr><td><code>cobrado</code></td><td>número</td><td>Importe ya cobrado de una venta a crédito. Una venta a crédito nace con este campo en cero, porque es el valor que alimenta el saldo pendiente del cliente. Se incrementa con cada cobro posterior.</td></tr>
+        <tr><td><code>pagado</code></td><td>booleano</td><td>Verdadero cuando lo cobrado alcanza el total. Solo aparece en los documentos que pasaron por cobros parciales.</td></tr>
+        <tr><td><code>cliente_nombre</code></td><td>texto</td><td>Nombre o razón social del receptor. Adopta el texto «-» cuando no se identifica al cliente.</td></tr>
+        <tr><td><code>cliente_dni</code></td><td>texto</td><td>Documento del receptor. Es el campo por el que se consultan los documentos de un cliente y el que alimenta el cálculo de su saldo.</td></tr>
+        <tr><td><code>cliente_direccion</code></td><td>texto</td><td>Dirección del receptor, obligatoria en la factura y opcional en el resto.</td></tr>
+        <tr><td><code>referencia</code></td><td>texto</td><td>Número de operación o referencia declarada en un pago por transferencia.</td></tr>
+        <tr><td><code>envio</code></td><td>objeto</td><td>Datos de entrega a domicilio: <code>tipo</code>, <code>direccion</code>, <code>referencia</code>, <code>zonaId</code>, <code>costo</code>, <code>notas</code> y <code>estado</code>. Se agrega con propagación condicional, de modo que su ausencia no introduce un valor indefinido.</td></tr>
+        <tr><td><code>vendedor</code></td><td>texto</td><td>Nombre de quien armó la venta. Un pedido lo escribe al crearse; al cobrarlo se conserva, para que el comprobante distinga a las dos personas que intervinieron.</td></tr>
+        <tr><td><code>cajero</code></td><td>texto</td><td>Nombre de quien cobró. En un pedido nace vacío y se completa al cobrarlo, junto con <code>vendedor</code>.</td></tr>
+        <tr><td><code>sucursal</code></td><td>texto</td><td>Nombre de la sucursal o establecimiento, tomado de la configuración.</td></tr>
+        <tr><td><code>mensaje</code></td><td>texto</td><td>Leyenda impresa al pie del comprobante.</td></tr>
+        <tr><td><code>son_letras</code></td><td>texto</td><td>Importe total expresado en letras.</td></tr>
+        <tr><td><code>serie_numero</code></td><td>texto</td><td>Número completo del comprobante dentro del bloque de venta, necesario porque el comprobante se imprime a partir de este bloque. En un pedido contiene el código del pedido y, tras el cobro, se reescribe con el número del comprobante emitido.</td></tr>
+        <tr><td><code>turnoId</code></td><td>texto</td><td>Turno en el que se registró la venta, replicado dentro del bloque.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.4 La forma de un ítem: dos representaciones distintas</h3>
+    <p>Una misma línea de venta adopta dos representaciones diferentes según el momento del flujo. La
+    distinción no es estilística: responden a necesidades opuestas y confundirlas produce comprobantes
+    que declaran importes que nadie cobró.</p>
+
+    <div class="cajas evitar-corte">
+      <div class="caja">
+        <div class="titulo">Forma de carrito</div>
+        <p style="text-align:left;font-size:11.5px">Es el estado interno de la pantalla de venta. Usa
+        <code>quantity</code> como cantidad e interpreta <code>precioVenta</code> como el precio de
+        <strong>una presentación</strong>, no de una unidad base. Conserva
+        <code>presentacionNombre</code>, <code>presentacionId</code>, <code>factorConversion</code>,
+        <code>usarPrecioEspecial</code> y la marca <code>manual</code> de los ítems que no pertenecen al
+        catálogo.</p>
+      </div>
+      <div class="caja">
+        <div class="titulo">Forma de documento</div>
+        <p style="text-align:left;font-size:11.5px">Es la que se persiste en <code>tblDocumentos</code>.
+        Expresa todo en <strong>unidades base</strong>: <code>cantidad</code> y
+        <code>cantidadEnUnidadBase</code> cuentan unidades base, y <code>precioVenta</code> es el precio
+        de una unidad base. Incorpora <code>subtotal</code>, <code>unidad</code>, <code>categoria</code>
+        y <code>tipoAfectacion</code>.</p>
+      </div>
+    </div>
+
+    <table class="compacta evitar-corte">
+      <thead>
+        <tr><th style="width:26%">Campo de la línea</th><th style="width:20%">Forma de carrito</th><th>Forma de documento</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>Sí</td><td>Sí. Identificador del producto, o identificador propio con el prefijo <code>manual-</code> cuando el ítem no pertenece al catálogo.</td></tr>
+        <tr><td><code>nombre</code></td><td>Sí</td><td>Sí.</td></tr>
+        <tr><td><code>quantity</code></td><td>Sí: cantidad de presentaciones</td><td>Solo en los pedidos, donde se escribe igual a la cantidad en unidades base.</td></tr>
+        <tr><td><code>cantidad</code></td><td>No</td><td>Sí: cantidad en unidades base.</td></tr>
+        <tr><td><code>cantidadEnUnidadBase</code></td><td>No</td><td>Sí: cantidad en unidades base, usada al revertir existencias en una anulación.</td></tr>
+        <tr><td><code>precioVenta</code></td><td>Sí: por presentación</td><td>Sí: por unidad base.</td></tr>
+        <tr><td><code>subtotal</code></td><td>No</td><td>Sí: importe de la línea, calculado como precio unitario por cantidad.</td></tr>
+        <tr><td><code>unidad</code></td><td>No</td><td>Sí: rótulo de la unidad vendida, por defecto «Un».</td></tr>
+        <tr><td><code>presentacionNombre</code></td><td>Sí</td><td>Solo en los pedidos, donde replica el rótulo de la unidad.</td></tr>
+        <tr><td><code>presentacionId</code></td><td>Sí</td><td>Sí. Adopta el valor <code>unidad</code> cuando no hay presentación.</td></tr>
+        <tr><td><code>factorConversion</code></td><td>Sí</td><td>Sí: unidades base contenidas en la presentación vendida.</td></tr>
+        <tr><td><code>categoria</code></td><td>Sí</td><td>Sí. Los ítems manuales se agrupan en la categoría reservada para «Varios», de modo que no recaigan en «Sin categoría» en los reportes, que leen este campo como dato histórico.</td></tr>
+        <tr><td><code>tipoAfectacion</code></td><td>Sí</td><td>Sí: código de afectación al impuesto general a las ventas de la línea. Es el campo decisivo del comprobante.</td></tr>
+        <tr><td><code>usarPrecioEspecial</code></td><td>Sí</td><td>No.</td></tr>
+        <tr><td><code>manual</code></td><td>Sí</td><td>No. La condición de ítem manual se reconoce por el prefijo de su identificador.</td></tr>
+        <tr><td><code>kitItems</code></td><td>Sí</td><td>Solo en los pedidos, para que el cobro descuente las existencias de los componentes.</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Por qué la distinción es obligatoria</h4>
+    <p>El motivo es tributario y de inventario a la vez, y está documentado en el propio código como
+    consecuencia de un defecto detectado y corregido:</p>
+    <ul>
+      <li><strong>La afectación al impuesto vive en la línea del documento.</strong> El comprobante
+      decide si una línea está gravada, exonerada o inafecta leyendo <code>tipoAfectacion</code>. Si ese
+      campo falta, el sistema aplica el valor por defecto del negocio y, en una región declarada
+      exonerada, una línea sin dato pasaría a declararse gravada, agregando un 18 % que nadie cobró.
+      Por ese motivo la conversión de carrito a documento —tanto en la venta directa como en el envío
+      de un pedido a caja— debe copiar el formato del documento, incluida la afectación de cada
+      producto.</li>
+      <li><strong>El precio debe referirse a una unidad inequívoca.</strong> Un producto con
+      presentaciones tiene un precio por presentación y un factor de conversión mayor que uno. Si la
+      línea del documento conservara el precio de la presentación junto con una cantidad expresada en
+      unidades base, el <code>subtotal</code> quedaría multiplicado por el factor: una compra de dos
+      cajas de doce unidades declararía veinticuatro veces el importe de una caja.</li>
+    </ul>
+
+    <div class="aviso">
+      <strong>Caso verificado en el código.</strong> El flujo de envío de un pedido a caja llegó a
+      persistir las líneas con la forma del carrito, sin <code>tipoAfectacion</code>. Al cobrar el
+      pedido, el comprobante declaraba gravado un producto exonerado y sumaba 18 % de impuesto que nadie
+      había cobrado; con una venta por presentación, el <code>subtotal</code> además resultaba inflado
+      por el factor de conversión. La corrección consistió en que el envío a caja construya las líneas
+      con la forma del documento, escribiendo de manera simultánea la cantidad, la cantidad en unidad
+      base, el precio por unidad base, el subtotal, la categoría y la afectación.
+    </div>
+
+    <p>Un defecto de la misma familia afecta al descuento: cuando las líneas se declaran a precio de
+    lista, el total debe acompañarse de la fila de descuento que explique la diferencia. El caso
+    documentado en el código es una venta con una promoción de volumen —dos unidades de un producto a
+    precio promocional y dos unidades de otro, con líneas que suman 2,20 y un total de 2,00—: si el
+    descuento se pierde, el comprobante muestra líneas que suman más que el total sin ninguna fila que
+    lo justifique, y el archivo enviado a la administración tributaria declararía 2,20. Por eso la
+    lectura del descuento de una venta está centralizada en una única función que acepta tanto el
+    nombre en notación de camello como el nombre antiguo en notación con guion bajo.</p>
+
+    <p>Finalmente, debe señalarse que la forma de carrito <strong>no se persiste en la base de datos</strong>:
+    vive en el estado de la pantalla de venta y, cuando el cajero pausa una venta, en el almacenamiento
+    local del navegador. Ninguna de las dos representaciones se escribe nunca en
+    <code>tblDocumentos</code>.</p>
+
+    <!-- ═══════════════ 4. CICLO DE VIDA ═══════════════ -->
+    <div class="salto"></div>
+    <h2 id="s4">4. Ciclo de vida del documento</h2>
+
+    <p>El ciclo de vida describe cómo un documento de <code>tblDocumentos</code> cambia de estado desde
+    que un vendedor lo envía a caja hasta que se convierte en comprobante, se descarta o se anula. La
+    lectura del estado es estricta: cada transición verifica el estado previo dentro de una transacción
+    de base de datos y rechaza la operación si el documento ya no se encuentra en el estado esperado.</p>
+
+    <div class="diagrama">
+      <div class="cajas">
+        <div class="caja" style="flex:1 1 100%;background:#fff7ed;border-color:#fdba74">
+          <div class="titulo">PENDIENTE — pedido enviado a caja</div>
+          <div style="font-size:11.5px">
+            <code>tipo: 'PENDIENTE'</code> · <code>tipoDoc: 'PENDIENTE'</code> · <code>serie: ''</code> ·
+            <code>numero: 0</code> · <code>correlativo: 0</code> ·
+            <code>serieNumero: 'PED-000123'</code> · <code>estado: 'pendiente'</code> ·
+            <code>cajaId</code> (ruteo) · <code>vendedorId</code> · <code>vendedorNombre</code> · sin
+            bloque <code>sunat</code> · sin forma de pago.
+          </div>
+        </div>
+      </div>
+      <div class="flecha">▼</div>
+      <div class="cajas">
+        <div class="caja" style="background:#f0fdf4;border-color:#86efac">
+          <div class="titulo">pagado</div>
+          <div style="font-size:11.5px">
+            El cajero cobra el pedido y elige el comprobante. Se asignan serie y correlativo una sola vez,
+            se fija la forma de pago real, se descuenta el inventario y se registra la venta en el turno.
+          </div>
+        </div>
+        <div class="caja" style="background:#f1f5f9;border-color:#cbd5e1">
+          <div class="titulo">cancelado</div>
+          <div style="font-size:11.5px">
+            Pedido descartado antes de cobrar, con motivo obligatorio. No existe comprobante que anular ni
+            existencias que reponer.
+          </div>
+        </div>
+        <div class="caja" style="background:#fef2f2;border-color:#fca5a5">
+          <div class="titulo">anulada</div>
+          <div style="font-size:11.5px">
+            Comprobante emitido y luego anulado. Cuando la anulación se formaliza ante la administración
+            tributaria, se emite una nota de crédito o de débito vinculada al comprobante original.
+          </div>
+        </div>
+      </div>
+      <div class="flecha">▼</div>
+      <div class="cajas">
+        <div class="caja" style="flex:1 1 100%;background:#eff6ff;border-color:#93c5fd">
+          <div class="titulo">Estados terminales</div>
+          <div style="font-size:11.5px">
+            Si el pedido se cobra, el documento pasa a <code>'pagado'</code> y su <code>tipoDoc</code>
+            adopta el comprobante elegido: <code>'NV'</code> o <code>'BOLETA'</code> o
+            <code>'FACTURA'</code>. Los pedidos descartados quedan en <code>'cancelado'</code> y los
+            comprobantes anulados en <code>'anulada'</code>. Un documento cancelado o anulado no vuelve a
+            ningún otro estado, y las consultas de pedidos pendientes solo consideran los documentos cuyo
+            estado es <code>'pendiente'</code>.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3>4.1 Transiciones y campos afectados</h3>
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th style="width:17%">Transición</th>
+          <th style="width:24%">Disparador</th>
+          <th>Campos que cambian</th>
+          <th style="width:24%">Qué no se toca</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Creación del pedido</td>
+          <td>El vendedor envía la venta a caja desde el punto de venta.</td>
+          <td>Se crea el documento con <code>tipo</code> y <code>tipoDoc</code> en <code>'PENDIENTE'</code>,
+          <code>serie</code> vacía, <code>numero</code> y <code>correlativo</code> en cero,
+          <code>serieNumero</code> con el código <code>PED-…</code>, <code>estado: 'pendiente'</code>,
+          <code>vendedorId</code>, <code>vendedorNombre</code> y <code>cajaId</code> de ruteo. El bloque
+          <code>venta</code> nace sin forma de pago, con pagos vacíos y con el importe total ya neto de
+          descuentos.</td>
+          <td>El inventario, que no se descuenta. Las series y los correlativos, que no se consumen. El
+          turno de caja, que no registra la operación.</td>
+        </tr>
+        <tr>
+          <td>Pedido &#8594; <code>pagado</code></td>
+          <td>El cajero cobra el pedido y elige comprobante y forma de pago.</td>
+          <td><code>estado</code> pasa a <code>'pagado'</code>; <code>tipo</code>, <code>tipoDoc</code>,
+          <code>serie</code>, <code>numero</code>, <code>correlativo</code> y <code>serieNumero</code>
+          adoptan el comprobante emitido; <code>pedido</code> conserva el código <code>PED-…</code>;
+          <code>cajero</code>, <code>cajeroId</code>, <code>fechaCobro</code> y <code>turnoId</code> se
+          completan; <code>usuarioId</code> pasa a ser el del cajero y <code>vendedorNombre</code>
+          permanece; se incorpora o actualiza el bloque <code>sunat</code> —o se anula de forma explícita
+          cuando el comprobante es una nota de venta—; dentro de <code>venta</code> se escriben
+          <code>tipoPago</code>, <code>forma_pago</code>, <code>pagos</code>, <code>montoRecibido</code>,
+          <code>cambio</code>, <code>efectivo</code>, <code>totalTransferenciaPago</code>,
+          <code>serie_numero</code> y las dos personas intervinientes.</td>
+          <td>El importe total, que es el cotizado por el vendedor y no se recalcula. La afectación y el
+          descuento ya declarados en las líneas.</td>
+        </tr>
+        <tr>
+          <td>Pedido &#8594; <code>cancelado</code></td>
+          <td>El cajero descarta el pedido, con motivo obligatorio.</td>
+          <td><code>estado</code> pasa a <code>'cancelado'</code>; se escriben
+          <code>motivoCancelacion</code>, <code>updatedAt</code> y el bloque
+          <code>anulacion</code> con <code>fecha</code>, <code>usuario</code>, <code>motivo</code>,
+          <code>comprobante: null</code> y <code>tocoStock: false</code>. La operación se registra en la
+          bitácora de auditoría.</td>
+          <td><strong>El inventario</strong>: no hay existencias que reponer, porque el pedido nunca las
+          descontó. <strong>Las series y los correlativos</strong>: el pedido nunca consumió un número,
+          de modo que descartarlo no deja huecos en la numeración. El documento tampoco se elimina: queda
+          persistido como registro histórico.</td>
+        </tr>
+        <tr>
+          <td>Comprobante &#8594; <code>anulada</code></td>
+          <td>Anulación de una nota de venta del día o de un comprobante electrónico que todavía no fue
+          aceptado por la administración tributaria. Un comprobante ya aceptado no se anula: se emite una
+          nota de crédito.</td>
+          <td><code>estado</code> pasa a <code>'anulada'</code>; se escriben <code>anulacion</code> —con
+          <code>fecha</code>, <code>usuario</code>, <code>motivo</code> y
+          <code>documentoAnuladoRef</code>— y <code>updatedAt</code>. Se crean movimientos de inventario
+          de tipo <code>'anulacion_venta'</code>, que devuelven las existencias, y se ajusta el turno: si
+          sigue abierto se descuentan los importes de sus acumulados, y si ya está cerrado se acumulan en
+          los totales de anulación.</td>
+          <td><strong>El correlativo no se reutiliza</strong>: el número emitido queda consumido y
+          anularlo no devuelve la secuencia. El documento no se elimina.</td>
+        </tr>
+        <tr>
+          <td>Comprobante &#8594; nota de crédito o débito</td>
+          <td>Anulación formal de un comprobante ya aceptado, o devolución de mercadería.</td>
+          <td>Se crea un <strong>documento nuevo</strong> con <code>tipo</code> y <code>tipoDoc</code> en
+          <code>'NC'</code> o <code>'ND'</code>, su propio <code>serie</code>, <code>numero</code>,
+          <code>correlativo</code> y <code>serieNumero</code>, y un bloque <code>venta</code> que
+          referencia el comprobante original mediante los campos de documento de referencia y de tipo de
+          documento original. La nota de crédito resta del total del día y devuelve el importe en la
+          misma proporción de bolsillos en que se cobró el comprobante original; la nota de débito no
+          mueve la caja.</td>
+          <td>El documento original no se modifica. Su correlativo tampoco se libera.</td>
+        </tr>
+        <tr>
+          <td>Nota de venta &#8594; boleta consolidada</td>
+          <td>Consolidación de las notas de venta del día para declararlas ante la administración
+          tributaria.</td>
+          <td>Se crea una boleta con <code>consolidado: true</code> y <code>nvsConsolidadas</code> con los
+          identificadores de las notas agrupadas; cada nota recibe en su bloque <code>sunat</code> las
+          marcas <code>consolidado</code>, <code>consolidadoAt</code> y
+          <code>documentoConsolidadoId</code>.</td>
+          <td>El estado de las notas de venta, que no cambia, y su numeración, que queda consumida. Una
+          nota ya consolidada no admite modificación ni anulación.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="nota">
+      <strong>Efecto de los estados sobre los reportes.</strong> Los reportes fiscales filtran los
+      documentos por su tipo contra el conjunto de comprobantes válidos —nota de venta, boleta, factura,
+      nota de crédito y nota de débito—, de modo que los pedidos y los documentos cancelados quedan
+      excluidos por construcción, sin necesidad de una regla adicional. Los documentos anulados se
+      excluyen por su estado, y las notas de crédito restan del total mientras las notas de débito
+      suman.
+    </div>
+
+    <!-- ═══════════════ 5. CONTADORES ═══════════════ -->
+    <div class="salto"></div>
+    <h2 id="s5">5. Contadores de correlativos (<code>tblContadores</code>)</h2>
+
+    <p>La colección <code>tblContadores</code> no guarda documentos de negocio sino secuencias de
+    numeración. Su estructura es mínima y deliberadamente uniforme: un documento por espacio de
+    numeración, con el campo <code>ultimoCorrelativo</code> como único valor relevante.</p>
+
+    <h3>5.1 Dos espacios de numeración</h3>
+    <p>La numeración de comprobantes se reparte en dos espacios independientes, porque una nota de venta
+    y un comprobante electrónico son documentos de naturaleza distinta y no pueden compartir secuencia
+    aunque su serie se llame igual:</p>
+    <ul>
+      <li><strong>Espacio de notas de venta</strong>, con la clave <code>notaVenta_{serie}</code>. Agrupa
+      las notas de venta, que no se declaran ante la administración tributaria.</li>
+      <li><strong>Espacio de comprobantes electrónicos</strong>, con la clave <code>sunat_{serie}</code>.
+      Agrupa las boletas, las facturas y las notas de crédito y débito.</li>
+    </ul>
+    <p>La clave nunca se compone a mano. El identificador se obtiene siempre de la función
+    <code>claveContador(tipoDoc, serie)</code>, declarada en <code>src/lib/contadores.ts</code>, que
+    resuelve el espacio a partir del tipo de documento —solo la nota de venta queda fuera del espacio de
+    comprobantes electrónicos— y concatena la serie ya resuelta. El nombre del campo también está
+    declarado como constante en el mismo módulo, de modo que ningún punto del sistema escriba un
+    contador con un nombre alternativo.</p>
+
+    <table class="evitar-corte">
+      <thead>
+        <tr><th style="width:26%">Identificador del documento</th><th style="width:20%">Espacio</th><th>Numeración que gobierna</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>notaVenta_NV01</code></td><td>Notas de venta</td><td>Notas de venta de la serie <code>NV01</code>.</td></tr>
+        <tr><td><code>sunat_B001</code></td><td>Comprobantes electrónicos</td><td>Boletas de la serie <code>B001</code>, incluidas las boletas consolidadas emitidas con esa serie.</td></tr>
+        <tr><td><code>sunat_F001</code></td><td>Comprobantes electrónicos</td><td>Facturas de la serie <code>F001</code>.</td></tr>
+        <tr><td><code>sunat_BC01</code></td><td>Comprobantes electrónicos</td><td>Notas de crédito de boletas.</td></tr>
+        <tr><td><code>sunat_BD01</code></td><td>Comprobantes electrónicos</td><td>Notas de débito de boletas.</td></tr>
+        <tr><td><code>sunat_FC01</code></td><td>Comprobantes electrónicos</td><td>Notas de crédito de facturas.</td></tr>
+        <tr><td><code>sunat_FD01</code></td><td>Comprobantes electrónicos</td><td>Notas de débito de facturas.</td></tr>
+        <tr><td><code>pedido</code></td><td>Pedidos</td><td>Códigos de pedido <code>PED-000123</code>, en un espacio propio y separado de toda serie fiscal.</td></tr>
+      </tbody>
+    </table>
+    <p>Cada identificador de la tabla anterior es el resultado de aplicar la función de composición de
+    clave al tipo de documento y a la serie correspondiente: no son cadenas literales escritas en el
+    código. Las series que aparecen son los valores por defecto declarados en el sistema; en operación
+    provienen de la caja del usuario que emite o, en su defecto, de la configuración de la empresa. Los
+    ejemplos de notas de crédito y débito corresponden a los valores por defecto de esas cuatro series.</p>
+
+    <h3>5.2 El campo <code>ultimoCorrelativo</code> y la asignación atómica</h3>
+    <p>El campo <code>ultimoCorrelativo</code> contiene el último número emitido en ese espacio. La
+    asignación del siguiente número se realiza siempre dentro de una transacción de base de datos, junto
+    con el documento que lo consume, de modo que no puede ocurrir que un contador avance sin que exista
+    el comprobante que lo justifica, ni que dos emisiones simultáneas obtengan el mismo número. El
+    contador se escribe con <code>ultimoCorrelativo</code> y una marca de actualización; en los flujos
+    de pedidos y de notas se escribe además el campo <code>serie</code>, que documenta a qué serie
+    corresponde el documento contador.</p>
+    <p>Si el documento contador no existe —por una restauración de la base, por un contador eliminado o
+    porque la serie fue numerada por otra aplicación—, el sistema no reinicia la secuencia en uno. Antes
+    de la transacción realiza una <strong>lectura de solo lectura</strong> sobre los documentos ya
+    emitidos para determinar el máximo correlativo existente de esa serie y con ese tipo, y siembra el
+    contador desde ese máximo dentro de la misma transacción que crea el comprobante. El objetivo es
+    evitar que una nota vuelva a numerarse como la primera de la serie y sea rechazada por duplicada.</p>
+
+    <h3>5.3 El contador aparte de pedidos</h3>
+    <p>Los pedidos no consumen correlativos fiscales. Su código se obtiene de un contador propio, cuya
+    clave es la constante <code>pedido</code>, y se formatea con la función
+    <code>codigoPedido(numero)</code>, que produce una cadena con el prefijo <code>PED-</code> y el
+    número rellenado con ceros a la izquierda hasta seis dígitos: <code>PED-000123</code>.</p>
+    <p>Esta separación es la que garantiza que un pedido descartado no deje huecos en las series
+    fiscales. El número de comprobante se asigna <strong>una sola vez, al cobrar</strong>, a partir del
+    contador del espacio que corresponde al tipo elegido por el cajero; mientras el pedido espera en
+    caja, solo tiene un código de pedido y ningún número fiscal.</p>
+
+    <div class="aviso">
+      <strong>Riesgo documentado en el código.</strong> El módulo de contadores consigna un defecto real
+      del flujo de pedidos: al utilizar para todas las clases de documento la clave del espacio de
+      comprobantes electrónicos y al escribir el campo del contador con un nombre distinto del
+      declarado, se creó un contador paralelo que arrancaba en uno mientras las notas de venta vivas
+      seguían numeradas en un rango muy superior. La consecuencia habría sido que la siguiente nota de
+      venta pendiente repitiera un número ya emitido. La regla que se desprende —usar siempre la función
+      de composición de clave y la constante del campo, y nunca escribir ninguno de los dos a mano— está
+      verificada en el código actual como un único punto de definición.
+    </div>
+
+    <!-- ═══════════════ 6. ÍNDICES ═══════════════ -->
+    <div class="salto"></div>
+    <h2 id="s6">6. Índices compuestos</h2>
+
+    <h3>6.1 Por qué se necesitan</h3>
+    <p>Cloud Firestore resuelve automáticamente las consultas que filtran o ordenan por un único campo,
+    y también las combinaciones de varios filtros de igualdad. En cambio, una consulta que combine un
+    filtro de igualdad con un rango o un ordenamiento sobre otro campo exige un <strong>índice
+    compuesto</strong> declarado de antemano. Si el índice no existe, la consulta no devuelve resultados
+    parciales ni una lista vacía: falla con el mensaje <em>«The query requires an index»</em>. Se trata,
+    por lo tanto, de un requisito de despliegue y no de una optimización opcional.</p>
+    <p>El sistema declara sus índices en el archivo <code>firestore.indexes.json</code>, que la
+    configuración de despliegue de Firebase (<code>firebase.json</code>) asocia al proyecto. Todos los
+    índices declarados son de ámbito de colección. En la Tabla 6.1 se transcriben los quince índices
+    declarados, con el patrón de consulta que cada uno habilita y el punto del código donde se verificó.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th style="width:18%">Colección</th>
+          <th style="width:30%">Campos y orden</th>
+          <th>Consulta que lo requiere</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>tblDocumentos</code></td><td><code>usuarioId</code> asc · <code>fecha</code> desc</td><td>Listado de documentos de un usuario en un rango de fechas, ordenado del más reciente al más antiguo. El módulo de reportes lo consulta cuando el usuario tiene restringida la vista a sus propias ventas.</td></tr>
+        <tr><td><code>tblDocumentos</code></td><td><code>tipoDoc</code> asc · <code>anioMes</code> asc · <code>fecha</code> desc</td><td>Documentos de un tipo dentro de un período, del más reciente al más antiguo: es la consulta del listado de comprobantes del mes.</td></tr>
+        <tr><td><code>tblDocumentos</code></td><td><code>tipoDoc</code> asc · <code>anioMes</code> asc · <code>fecha</code> asc</td><td>La misma consulta en orden cronológico ascendente, que es la que requieren los reportes tributarios y el reporte por empleado, donde el orden de presentación es el de emisión.</td></tr>
+        <tr><td><code>tblDocumentos</code></td><td><code>tipoDoc</code> asc · <code>anioMes</code> asc · <code>usuarioId</code> asc · <code>fecha</code> asc</td><td>Documentos de un tipo, de un período y de un usuario, en orden cronológico. Es la variante restringida de la consulta anterior para el usuario sin vista global.</td></tr>
+        <tr><td><code>tblDocumentos</code></td><td><code>tipoDoc</code> asc · <code>fecha</code> desc</td><td>Documentos de un tipo a partir de una fecha, del más reciente al más antiguo. Se utiliza en la consulta de las últimas ventas y en la rotación de inventario.</td></tr>
+        <tr><td><code>tblDocumentos</code></td><td><code>tipoDoc</code> asc · <code>fecha</code> asc</td><td>La misma consulta en orden cronológico ascendente.</td></tr>
+        <tr><td><code>tblDocumentos</code></td><td><code>tipoDoc</code> asc · <code>usuarioId</code> asc · <code>fecha</code> desc</td><td>Documentos de un tipo y de un usuario desde una fecha determinada, del más reciente al más antiguo.</td></tr>
+        <tr><td><code>tblDocumentos</code></td><td><code>venta.cliente_dni</code> asc · <code>usuarioId</code> asc</td><td>Documentos de un cliente, y su variante restringida a un usuario. Sobre esta consulta se construyen el historial del cliente y el cálculo de su saldo de crédito.</td></tr>
+        <tr><td><code>tblDocumentos</code></td><td><code>cajaId</code> asc · <code>estado</code> asc · <code>fecha</code> desc</td><td>Documentos de una caja filtrados por estado, del más reciente al más antiguo. En la revisión del código correspondiente a este anexo la lista de pedidos se resuelve con una igualdad simple sobre el estado y el reparto por caja se decidió en memoria; el índice se conserva declarado por corresponder al despliegue vigente.</td></tr>
+        <tr><td><code>tblTurnos</code></td><td><code>estado</code> asc · <code>fechaCierre</code> asc</td><td>Turnos cerrados dentro de un rango de fechas de cierre, para el consolidado de caja del día y el panel de operaciones.</td></tr>
+        <tr><td><code>tblTurnos</code></td><td><code>usuarioId</code> asc · <code>fechaApertura</code> asc</td><td>Turnos de un usuario dentro de un rango de fechas de apertura, para el arqueo del día restringido a un cajero.</td></tr>
+        <tr><td><code>tblMovimientos</code></td><td><code>tipoMovimiento</code> asc · <code>fecha</code> asc</td><td>Movimientos de un tipo dentro de un rango de fechas: compras del período y su análisis por proveedor.</td></tr>
+        <tr><td><code>tblMovimientos</code></td><td><code>productoId</code> asc · <code>fecha</code> asc</td><td>Kardex de un producto dentro de un rango de fechas, ordenado cronológicamente para reconstruir el saldo corriente.</td></tr>
+        <tr><td><code>tblEgresos</code></td><td><code>proveedorId</code> asc · <code>categoria</code> asc</td><td>Pagos registrados a un proveedor, identificados por su categoría.</td></tr>
+        <tr><td><code>tblHistorialPrecios</code></td><td><code>productoId</code> asc · <code>fecha</code> desc</td><td>Historial de precios de un producto, del cambio más reciente al más antiguo.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>6.2 Despliegue de los índices</h3>
+    <p>Los índices se despliegan con el comando
+    <code>npx firebase deploy --only firestore:indexes</code>, que publica exactamente el contenido del
+    archivo de declaración. Al agregar una consulta que combine igualdad con rango u ordenamiento, la
+    práctica establecida en el proyecto es declarar el índice en el archivo y desplegarlo en el mismo
+    cambio; de lo contrario la consulta falla en producción con el mensaje de índice faltante.</p>
+    <div class="aviso">
+      <strong>Advertencia sobre la opción de forzado.</strong> No debe utilizarse el despliegue forzado
+      de índices. La operación con forzado elimina los índices del proyecto que no estén declarados en
+      el archivo de declaración, y el proyecto mantiene un índice creado de forma manual cuyo borrado
+      provocaría la caída de la consulta que lo utiliza. La instrucción vigente es desplegar
+      exclusivamente con el alcance de índices y sin la opción de forzado.
+    </div>
+
+    <h3>6.3 Ordenamiento en el cliente como alternativa</h3>
+    <p>Existe un comportamiento del motor que condiciona el diseño de varias consultas y que conviene
+    consignar: un ordenamiento por un campo <strong>descarta los documentos que no contienen ese
+    campo</strong>. Un documento antiguo, o escrito por un flujo que no lo completaba, desaparecería
+    silenciosamente del listado en lugar de aparecer al final. Por ese motivo, cuando el campo de orden
+    puede faltar, la consulta se resuelve sin ordenamiento y la lista se ordena en memoria. Este
+    criterio está aplicado, de manera verificada, en el listado de categorías —cuyo campo de orden es
+    opcional—, en la lista de pedidos pendientes y en el ordenamiento de turnos del arqueo diario.</p>
+
+    <!-- ═══════════════ 7. INTEGRIDAD ═══════════════ -->
+    <div class="salto"></div>
+    <h2 id="s7">7. Reglas de integridad que impone la aplicación</h2>
+
+    <p>Cloud Firestore no aplica restricciones de esquema, de tipo ni de integridad referencial. En un
+    modelo documental, las garantías que en un motor relacional aportarían las restricciones declarativas
+    deben ser impuestas por la aplicación. Las reglas que se enumeran a continuación son las que el
+    sistema verifica efectivamente en su código y se presentan con la justificación de cada una; varias
+    de ellas surgieron de defectos reales detectados en operación, que se consignan porque explican el
+    motivo de la regla.</p>
+
+    <ol class="pasos">
+      <li>
+        <strong>Las escrituras relacionadas se agrupan en una transacción o en un lote.</strong>
+        Registrar una venta no es una escritura sino varias: el correlativo, las existencias de cada
+        producto, los movimientos de kardex, el documento y los acumulados del turno. Todas se ejecutan
+        dentro de una transacción de base de datos, de modo que el resultado sea «o todo, o nada». El
+        motivo es doble: una interrupción a mitad del proceso dejaría un correlativo consumido sin
+        comprobante, o existencias descontadas sin la venta que las explique. Como contrapartida, el
+        motor exige que <em>todas las lecturas se realicen antes de la primera escritura</em>; el código
+        respeta esa disciplina de forma explícita, separando cada transacción en una fase de lecturas y
+        una fase de escrituras. Los procesos masivos —el renombrado de una categoría, la transferencia de
+        pedidos entre cajas y la limpieza del registro de errores— se ejecutan por lotes cuyo tamaño no
+        supera el límite de quinientas operaciones que admite el motor, y devuelven la cantidad realmente
+        afectada, para no informar un éxito parcial como si fuera total.
+      </li>
+      <li>
+        <strong>Ningún campo puede escribirse con un valor indefinido.</strong>
+        Firestore no ignora el valor indefinido: rechaza la escritura completa con un error de valor de
+        campo no admitido. Y el compilador de TypeScript no advierte el problema, porque un campo
+        opcional declarado como «texto o indefinido» satisface la verificación de tipos y falla recién al
+        ejecutarse, en producción y frente al usuario. El sistema aplica tres capas de defensa: los
+        campos opcionales se agregan con propagación condicional o se normalizan a nulo; en el borde de
+        escritura, todo objeto que se persiste se envuelve en una función de limpieza que elimina
+        recursivamente las propiedades indefinidas, descarta los valores indefinidos sueltos dentro de
+        listas y respeta los valores nulos, las fechas y los centinelas del motor; y existe además una
+        función de diagnóstico que devuelve la ruta del primer campo indefinido de un objeto, para
+        localizar el origen antes de intentar la escritura.
+        <div class="aviso" style="margin:2mm 0">
+          <strong>Caso real documentado.</strong> El flujo de envío de una venta a caja
+          <strong>fallaba siempre</strong>: el objeto enviado incluía dos campos con valor indefinido y
+          el motor rechazaba la transacción completa con el mensaje relativo a un valor de campo no
+          admitido. La verificación de tipos estaba en verde y el defecto no se advertía en desarrollo.
+          La consecuencia operativa fue que el flujo nunca había funcionado y no existía un solo pedido
+          registrado. La corrección combinó las tres capas descritas. Un defecto análogo se produjo en
+          el guardado del estado de un comprobante ante la administración tributaria, donde la respuesta
+          del servicio no incluye siempre todos los campos: el fallo al guardar el estado ocultaba el
+          resultado real del envío, que ya había sido aceptado. La conclusión que el código documenta es
+          que la limpieza evita que la operación <em>falle</em>, pero no sustituye la corrección del
+          origen: un campo que no debería faltar sigue siendo un defecto de datos.
+        </div>
+      </li>
+      <li>
+        <strong>Cuando el campo de ordenamiento puede faltar, el orden se resuelve en el cliente.</strong>
+        Un ordenamiento por un campo descarta los documentos que no lo contienen, tal como se explicó en
+        el apartado 6.3. La regla es no ordenar en la consulta cuando el campo es opcional, y ordenar la
+        lista en memoria una vez recuperada, aun cuando ello implique traer la colección completa. Se
+        aplica a colecciones pequeñas y de escritura poco frecuente, donde el costo es despreciable
+        frente al riesgo de perder documentos del listado de forma silenciosa.
+      </li>
+      <li>
+        <strong>El arqueo se guarda como registro histórico y no se reescribe.</strong>
+        Al cerrar un turno, la transacción escribe un documento nuevo en <code>tblCierresCaja</code> con
+        la fotografía completa del turno —apertura, cierre, acumulados, el detalle de las ventas y de los
+        gastos, el efectivo esperado, el efectivo contado, la diferencia y el análisis de las causas— y
+        actualiza el turno únicamente con el estado de cierre y sus totales de cuadre. El cierre, por lo
+        tanto, no se recalcula después: queda como registro de lo que efectivamente ocurrió, y su
+        resultado es auditable. La corrección de un turno histórico sigue una regla restrictiva: se
+        modifica únicamente el campo necesario, se deja constancia escrita en el campo de observaciones y
+        se registra la operación en la bitácora de auditoría.
+      </li>
+    </ol>
+
+    <h3>7.1 Reglas de negocio sostenidas por el modelo</h3>
+    <p>A las reglas anteriores se suman cuatro decisiones de diseño que el propio modelo de datos
+    materializa y que conviene consignar porque explican por qué los campos están dispuestos como están:</p>
+    <ol>
+      <li><strong>El precio del producto es un precio final al público</strong>, con el impuesto
+      general a las ventas incluido. El modelo no almacena un precio sin impuesto que se recargue al
+      cobrar. La desagregación del impuesto se realiza al construir el comprobante y solo en las líneas
+      cuya afectación es gravada.</li>
+      <li><strong>El comprobante declara lo que se cobra.</strong> El descuento se reparte entre las
+      líneas antes de despejar el impuesto, y las líneas conservan su precio de lista. El modelo
+      tributario peruano contempla el descuento como una fila propia del comprobante y no como un precio
+      unitario ya rebajado; por eso el importe descontado se declara de forma explícita y las líneas no
+      se reescriben a un precio distinto del de lista.</li>
+      <li><strong>La afectación al impuesto es un atributo de cada producto</strong> y prevalece sobre
+      cualquier parámetro general del negocio. La marca de región exonerada de la configuración no actúa
+      como una anulación de la afectación declarada: es únicamente el valor por defecto de las líneas que
+      no traen dato propio. La consecuencia práctica es que en una región exonerada un comprobante no
+      debe mostrar líneas de operaciones gravadas, y esa comprobación se realiza sobre el documento
+      impreso.</li>
+      <li><strong>El crédito y la cancelación de un pedido tienen consecuencias distintas sobre el
+      inventario.</strong> Una venta a crédito no ingresa dinero a ningún bolsillo de caja, porque queda
+      pendiente de cobro; su cobro posterior sí lo hace, en el bolsillo del medio con que se cobró. Un
+      pedido descartado no repone existencias, porque nunca las descontó. Ambas reglas se apoyan en la
+      misma premisa: cada efecto sobre la caja y sobre el inventario tiene un único lugar en el código
+      que lo produce.</li>
+    </ol>
+
+    <!-- ═══════════════ 8. VOLUMEN ═══════════════ -->
+    <div class="salto"></div>
+    <h2 id="s8">8. Volumen y operación real</h2>
+
+    <p>El sistema se encuentra en operación efectiva en un establecimiento comercial, con uso diario del
+    punto de venta, del control de existencias, de la gestión de caja y de la emisión de comprobantes
+    electrónicos. Esa condición de operación es la que da sentido a las reglas de integridad de la
+    sección anterior: la mayor parte de ellas no proviene de un ejercicio de diseño teórico, sino de
+    defectos observados sobre datos reales y corregidos en el propio modelo, tal como se documenta en los
+    apartados correspondientes.</p>
+
+    <h3>8.1 Tamaño del modelo documentado</h3>
+    <div class="kpis">
+      <div class="kpi"><div class="valor">16</div><div class="rotulo">Colecciones<br/>declaradas</div></div>
+      <div class="kpi"><div class="valor">2</div><div class="rotulo">Colecciones<br/>auxiliares</div></div>
+      <div class="kpi"><div class="valor">311</div><div class="rotulo">Campos<br/>documentados</div></div>
+      <div class="kpi"><div class="valor">15</div><div class="rotulo">Índices<br/>compuestos</div></div>
+    </div>
+    <p>El recuento de campos se compone de 236 campos correspondientes a las quince colecciones distintas
+    de <code>tblDocumentos</code> —incluidos los tres campos del contador—, 27 campos de cabecera de
+    <code>tblDocumentos</code>, 32 campos del bloque <code>venta</code> y 16 campos de la forma del ítem
+    del documento. El total asciende a 311 campos distintos. Cada cifra coincide con el recuento de las
+    tablas de este anexo: la Tabla 2.2 suma 236 campos en sus quince filas y la sección 3 documenta los
+    75 restantes de la colección de documentos.</p>
+
+    <h3>8.2 Sobre las métricas de producción</h3>
+    <p>Este anexo no incluye cifras de producción —cantidad de comprobantes emitidos, de turnos cerrados,
+    de productos en catálogo ni de movimientos registrados—. La razón es metodológica: esas cifras no son
+    deducibles de la lectura del código fuente, y el proyecto tiene establecido que la consulta de datos
+    de producción se realiza únicamente en modo de solo lectura, de forma acotada y con propósitos de
+    diagnóstico, sin dejar credenciales activas ni datos extraídos. Consignar una cifra de esta clase sin
+    haberla obtenido por ese procedimiento equivaldría a presentar una estimación como una medición.</p>
+    <p>Lo que sí puede afirmarse con respaldo en el código es la <strong>forma</strong> que tienen los
+    datos en operación, y las secciones anteriores la documentan: la colección de contadores demuestra
+    que la numeración de notas de venta y la de comprobantes electrónicos avanzan por espacios separados;
+    la existencia de una función de limpieza de valores indefinidos en el borde de escritura, con su caso
+    documentado, demuestra que el flujo de pedidos fue corregido y quedó operativo; la presencia de la
+    conciliación por billetera en el cierre de turno demuestra que la operación distingue efectivo de
+    medios electrónicos; y el registro de turnos cerrados con su análisis de diferencias demuestra que el
+    control de caja es una rutina efectiva y no una previsión del diseño.</p>
+
+    <h3>8.3 Advertencia sobre la lectura de este anexo</h3>
+    <p>Un modelo documental no se valida únicamente por la coherencia de sus nombres, sino por la
+    disciplina con que la aplicación los escribe. La tercera capa de este anexo —la sección 7— es, por
+    ese motivo, tan relevante como el inventario de colecciones: enumera las restricciones que el motor
+    no impone y que la aplicación debe imponer por sí misma. La conclusión que se desprende del análisis
+    es que, en ausencia de un esquema validado por el motor, la integridad del modelo depende de dos
+    prácticas sostenidas en el tiempo: la existencia de un único punto de definición para cada nombre y
+    para cada cálculo, y la verificación de los efectos de cada escritura sobre las colecciones
+    relacionadas.</p>
+
+    <!-- ═══════════════ 9. FUENTES ═══════════════ -->
+    <div class="salto"></div>
+    <h2 id="s9">9. Trazabilidad de las fuentes</h2>
+
+    <p>Todos los nombres de colección, campos, valores enumerados, índices y comportamientos descritos en
+    este anexo provienen de la lectura directa de los siguientes archivos del repositorio del sistema.
+    Se consignan para permitir la verificación de cada afirmación del documento.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr><th style="width:34%">Archivo</th><th>Información que aporta a este anexo</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>src/constants/colecciones.ts</code></td><td>Registro central de los nombres de las dieciséis colecciones y nota sobre la compatibilidad con la aplicación móvil.</td></tr>
+        <tr><td><code>src/services/ventas.ts</code></td><td>Alta de venta, anulación, creación y cobro de pedidos y cancelación de pedidos: cabecera del documento, bloque de venta, forma del ítem, movimientos de existencias y ajuste del turno.</td></tr>
+        <tr><td><code>src/services/notas.ts</code></td><td>Emisión de notas de crédito y débito, contador del espacio de comprobantes electrónicos, campos de referencia al documento original y efecto en caja.</td></tr>
+        <tr><td><code>src/services/consolidado.ts</code></td><td>Boleta consolidada, campos de consolidación e identificadores de las notas agrupadas.</td></tr>
+        <tr><td><code>src/services/clientes.ts</code></td><td>Ficha de cliente, campos de crédito, cálculo del saldo y registro de cobros.</td></tr>
+        <tr><td><code>src/services/turnos.ts</code></td><td>Turnos de caja, acumulados, cierre con el documento histórico de cierre y transiciones de estado.</td></tr>
+        <tr><td><code>src/services/egresos.ts</code></td><td>Egresos, categorías, tipos de pago y registro dentro del turno.</td></tr>
+        <tr><td><code>src/services/compras.ts</code></td><td>Movimientos de entrada por compra y acumulados de gastos del turno.</td></tr>
+        <tr><td><code>src/services/kardex.ts</code></td><td>Clasificación de movimientos de entrada y salida y formato del kardex.</td></tr>
+        <tr><td><code>src/services/cajas.ts</code></td><td>Campos de la caja y sus siete series de comprobante.</td></tr>
+        <tr><td><code>src/services/usuarios.ts</code></td><td>Campos del usuario, series heredadas del contrato de series y validación de conflictos entre cajas.</td></tr>
+        <tr><td><code>src/services/categorias.ts</code></td><td>Campos de la categoría, siembra inicial, renombrado en lote y criterio de ordenamiento en memoria.</td></tr>
+        <tr><td><code>src/services/errores.ts</code></td><td>Campos del registro de errores y borrado por lotes.</td></tr>
+        <tr><td><code>src/services/historial-precios.ts</code></td><td>Campos de la bitácora de precios y su condición de escritura.</td></tr>
+        <tr><td><code>src/services/promociones-volumen.ts</code></td><td>Campos y tipos de las promociones por volumen.</td></tr>
+        <tr><td><code>src/services/proveedores.ts</code></td><td>Campos del proveedor, contactos y bloque de crédito declarado.</td></tr>
+        <tr><td><code>src/services/sunat.ts</code></td><td>Estructura y valores del bloque de estado tributario y uso de la limpieza de valores indefinidos en el borde de escritura.</td></tr>
+        <tr><td><code>src/services/reportes.ts</code></td><td>Consultas del arqueo y de los reportes, filtros por tipo de documento y ordenamiento en memoria.</td></tr>
+        <tr><td><code>src/lib/contadores.ts</code></td><td>Espacios de numeración, función de composición de clave, campo del contador y formato del código de pedido.</td></tr>
+        <tr><td><code>src/lib/limpio.ts</code></td><td>Función de limpieza de valores indefinidos, su alcance y su justificación.</td></tr>
+        <tr><td><code>src/lib/sunat-importes.ts</code></td><td>Reparto del descuento por línea, resolución de la afectación y lectura unificada del descuento de una venta.</td></tr>
+        <tr><td><code>src/lib/pagos.ts</code></td><td>Modelo de bolsillo y medio, reparto por bolsillo y composición del rótulo de la forma de pago.</td></tr>
+        <tr><td><code>src/lib/arqueo.ts</code></td><td>Fórmula única del efectivo esperado, desglose por origen y conciliación por billetera.</td></tr>
+        <tr><td><code>src/lib/pedidos.ts</code></td><td>Reparto de pedidos por caja y adaptación de un pedido al carrito del punto de venta.</td></tr>
+        <tr><td><code>src/lib/series.ts</code></td><td>Campos de serie de usuario y de empresa y espacio de numeración de cada uno.</td></tr>
+        <tr><td><code>src/lib/audit.ts</code></td><td>Colección de bitácora de auditoría y sus campos.</td></tr>
+        <tr><td><code>src/lib/ventas-pausadas.ts</code></td><td>Confirmación de que la venta pausada se almacena en el navegador y no en la base de datos.</td></tr>
+        <tr><td><code>src/lib/customer-display.ts</code></td><td>Colección auxiliar de sesiones de pantalla al cliente.</td></tr>
+        <tr><td><code>src/constants/tributario.ts</code></td><td>Catálogo de códigos de afectación, tipos de nota y valores por defecto de la configuración del negocio.</td></tr>
+        <tr><td><code>src/hooks/use-productos.ts</code></td><td>Tipo del producto y forma de las presentaciones y de los componentes de un conjunto.</td></tr>
+        <tr><td><code>src/hooks/use-configuracion.ts</code></td><td>Documento único de configuración y escritura de parámetros.</td></tr>
+        <tr><td><code>src/pages/Inventario.tsx</code></td><td>Alta y edición de productos, ajustes de existencias y toma de inventario con sus movimientos.</td></tr>
+        <tr><td><code>src/pages/Pdv.tsx</code></td><td>Construcción de las líneas en forma de documento al enviar un pedido a caja y armado del cobro.</td></tr>
+        <tr><td><code>src/pages/Reportes.tsx</code></td><td>Consultas de documentos por tipo y período y su variante restringida por usuario.</td></tr>
+        <tr><td><code>src/pages/ReporteSire.tsx</code></td><td>Consulta de documentos por tipo y período en orden cronológico ascendente.</td></tr>
+        <tr><td><code>src/pages/VentasPorEmpleado.tsx</code></td><td>Consulta de documentos por empleado con el mismo patrón de ordenamiento.</td></tr>
+        <tr><td><code>src/pages/RotacionInventario.tsx</code></td><td>Consulta de documentos por tipo a partir de una fecha.</td></tr>
+        <tr><td><code>src/pages/Compras.tsx</code>, <code>src/pages/DashboardOperaciones.tsx</code>, <code>src/pages/ProveedorDetalle.tsx</code></td><td>Consultas de movimientos por tipo y fecha y de turnos cerrados por fecha de cierre.</td></tr>
+        <tr><td><code>src/components/reportes/</code></td><td>Consultas de movimientos de compra y lectura del bloque de crédito del proveedor.</td></tr>
+        <tr><td><code>firestore.indexes.json</code></td><td>Declaración de los quince índices compuestos.</td></tr>
+        <tr><td><code>firebase.json</code></td><td>Asociación del archivo de índices al proyecto de Firebase.</td></tr>
+        <tr><td><code>AGENTS.md</code></td><td>Invariantes del proyecto, criterios de acceso a datos de producción y advertencia sobre el despliegue forzado de índices.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="ok">
+      <strong>Alcance de la verificación.</strong> Los recuentos de colecciones, campos e índices fueron
+      contrastados contra las tablas de este mismo documento: la Tabla 2.2 suma 236 campos en quince
+      filas, la sección 3 documenta 75 campos de la colección de documentos —27 de cabecera, 32 del bloque
+      de venta y 16 de la forma del ítem—, y ambos totales componen los 311 campos del apartado 8.1. La
+      Tabla 6.1 enumera quince índices, coincidentes con los quince declarados en el archivo de índices.
+      No se incluye ninguna afirmación sobre el estado de la base de datos en producción que no sea
+      deducible del código fuente.
+    </div>
+
+    <div class="pie">Anexo 2 — Modelo de datos · documento técnico de apoyo al TAP</div>
+  </div>
+</body>
+</html>

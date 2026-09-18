@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>TAP — Arquitectura del sistema</title>
+  <link rel="stylesheet" href="tap.css">
+</head>
+<body>
+  <div class="page">
+    <div class="portada">
+      <div class="institucion">Trabajo de Aplicación Profesional</div>
+      <h1>Arquitectura del sistema</h1>
+      <div class="filete"></div>
+      <p class="subtitulo">Anexo 1 — Arquitectura de software, componentes y flujo de facturación electrónica</p>
+      <p class="meta">Sistema de punto de venta, inventario y facturación electrónica<br/>Anexo técnico · Documento generado a partir del código fuente</p>
+    </div>
+
+    <div class="salto"></div>
+    <h2>1. Introducción</h2>
+    <p>
+      El sistema es una solución de gestión comercial para un negocio de venta al público que integra, en una sola
+      aplicación, el punto de venta, el control de inventario, la administración de caja y turnos, la cartera de
+      clientes y proveedores, los reportes de gestión y la <strong>emisión de comprobantes electrónicos ante la
+      SUNAT</strong>. Está construido sobre una arquitectura de <strong>tres componentes</strong> que se comunican
+      a través de una base de datos documental compartida y de un servicio especializado de facturación:
+    </p>
+    <ul>
+      <li><strong>Aplicación web progresiva (SPA)</strong>: es la interfaz principal de operación (punto de venta,
+        inventario, caja, reportes, administración). Se ejecuta en el navegador y se instala como aplicación.</li>
+      <li><strong>Servicio de facturación electrónica</strong>: servicio back-end propio que custodia el certificado
+        digital, construye y firma el comprobante en formato UBL 2.1 y lo envía a la SUNAT. Es un componente separado
+        por una razón de seguridad: <em>el certificado digital y las claves nunca deben residir en el navegador</em>.</li>
+      <li><strong>Base de datos documental (Cloud Firestore)</strong>: almacén único de la información operativa
+        (productos, documentos, turnos, clientes). Es la capa que comparten la aplicación web y la aplicación móvil
+        complementaria, de modo que ambas operan sobre los mismos datos.</li>
+    </ul>
+    <div class="nota">
+      <strong>Criterio de diseño general.</strong> Toda la lógica que puede verificarse sin interfaz gráfica ni base de
+      datos se aísla en una capa de módulos puros y se prueba de forma automatizada. Esa decisión es la que permite
+      afirmar que las reglas del negocio (cálculo del IGV, distribución de descuentos, arqueo de caja, numeración de
+      comprobantes) están verificadas por pruebas y no por inspección visual.
+    </div>
+
+    <h2>2. Vista general de componentes</h2>
+    <div class="diagrama">
+      <div class="cajas">
+        <div class="caja">
+          <div class="titulo">Cliente 1 — Aplicación web (PWA)</div>
+          React 19 + TypeScript 6 · empaquetado con Vite · interfaz en español · 27 páginas · carga diferida por módulo ·
+          instalable y con funcionamiento sin conexión.
+        </div>
+        <div class="caja">
+          <div class="titulo">Cliente 2 — Aplicación móvil</div>
+          React Native (Expo). Mismo dominio y mismas colecciones. Se documenta como trabajo relacionado; el alcance de
+          este informe es la aplicación web y el servicio de facturación.
+        </div>
+        <div class="caja">
+          <div class="titulo">Servicio de facturación electrónica</div>
+          API REST propia (FastAPI + Pydantic) que construye el XML UBL 2.1, lo firma digitalmente y lo envía a la SUNAT.
+          Se ejecuta en la red local del negocio, en contenedor.
+        </div>
+      </div>
+      <div class="flecha">▼ &nbsp; acceso a datos &nbsp; ▼</div>
+      <div class="capas">
+        <div class="capa capa-3">
+          <div class="titulo">Cloud Firestore — base de datos documental compartida</div>
+          <div class="detalle">16 colecciones con prefijo <code>tbl</code>: documentos de venta, productos, movimientos de
+            stock (kardex), turnos y cierres de caja, clientes, proveedores, contadores de numeración, configuración,
+            usuarios, auditoría y registro de errores. Acceso autenticado y con reglas de seguridad.</div>
+        </div>
+        <div class="capa capa-4">
+          <div class="titulo">Servicios externos</div>
+          <div class="detalle">SUNAT (recepción SOAP de comprobantes electrónicos y devolución del CDR) y servicio de
+            consulta de documento de identidad y RUC para el registro de clientes.</div>
+        </div>
+      </div>
+    </div>
+
+    <h2>3. Arquitectura en capas de la aplicación web</h2>
+    <p>
+      La aplicación web está organizada en tres capas con una regla de dependencia estricta: <strong>cada capa sólo
+      conoce a la que está inmediatamente debajo</strong>. Esto permite probar las reglas del negocio sin navegador y sin
+      base de datos, y evita que la interfaz decida cálculos que deben ser únicos.
+    </p>
+    <div class="diagrama">
+      <div class="capas">
+        <div class="capa capa-1">
+          <div class="titulo">Capa de presentación — <code>src/pages/</code> y <code>src/components/</code></div>
+          <div class="detalle">27 páginas y 42 archivos de componentes de interfaz (34 propios y 8 de la librería de
+            interfaz). Maneja el estado de pantalla, los formularios y la navegación (por estado, sin enrutador). Cada
+            página se carga de forma diferida según el módulo que el usuario abre.</div>
+        </div>
+        <div class="flecha">▼</div>
+        <div class="capa capa-2">
+          <div class="titulo">Capa de servicios — <code>src/services/</code></div>
+          <div class="detalle">22 módulos, uno por dominio (ventas, inventario, turnos, notas, consolidación, reportes,
+            usuarios, cajas, compras, proveedores, egresos, kardex…). Es la única capa que habla con Firestore y donde
+            viven las transacciones y los lotes de escritura.</div>
+        </div>
+        <div class="flecha">▼</div>
+        <div class="capa capa-3">
+          <div class="titulo">Capa de reglas del negocio — <code>src/lib/</code> (módulos puros)</div>
+          <div class="detalle">29 módulos sin dependencias de Firebase ni de React: cálculo de dinero y redondeo, motor
+            de descuentos y promociones, importes e IGV del comprobante, arqueo de caja y bolsillos de pago, contadores
+            y claves de numeración, armado del comprobante impreso, credibilidad de crédito, reglas de pedidos entre
+            cajero y vendedor, saneamiento de datos antes de escribir. <strong>Cubiertos por 195 pruebas
+            automatizadas.</strong></div>
+        </div>
+      </div>
+    </div>
+    <div class="aviso">
+      <strong>Regla de una sola implementación.</strong> Cuando un cálculo lo usan dos pantallas —o el alta y la
+      anulación de una venta—, vive en <code>src/lib/</code>. Ejemplos concretos y verificables: la fórmula del efectivo
+      esperado de un turno (<code>efectivoEsperadoDe</code>) estaba escrita a mano en seis lugares, dos de ellos con una
+      variante distinta, y se unificó en una sola función; la lectura del descuento de una venta
+      (<code>descuentoDeVenta</code>) y el armado de los importes del comprobante (<code>itemsParaSunat</code>) también
+      son funciones únicas, compartidas por la impresión del comprobante y por el envío a la SUNAT. Si lo que se ve y lo
+      que se permite salen del mismo cálculo, no pueden contradecirse.
+    </div>
+
+    <h2>4. Módulos funcionales</h2>
+    <table class="compacta evitar-corte">
+      <thead><tr><th>Módulo</th><th>Páginas principales</th><th>Responsabilidad</th></tr></thead>
+      <tbody>
+        <tr><td>Punto de venta</td><td><code>Pdv</code>, <code>PantallaCliente</code>, <code>EscanearCodigo</code></td><td>Registro de la venta, búsqueda y lectura de productos, presentaciones, listas de precio, descuentos, envío a domicilio, formas de pago y emisión del comprobante.</td></tr>
+        <tr><td>Pedidos y caja</td><td><code>Pdv</code> (panel de ventas pendientes), <code>Turnos</code>, <code>ArqueoCaja</code>, <code>AuditoriaCaja</code></td><td>Envío de la venta a caja por parte del vendedor, cobro por el cajero, apertura y cierre de turno, arqueo, conciliación por medio de pago y gastos de caja.</td></tr>
+        <tr><td>Inventario</td><td><code>Inventario</code>, <code>Kardex</code>, <code>RotacionInventario</code></td><td>Catálogo de productos y kits, afectación tributaria por producto, stock mínimo, vencimientos, precios, ajustes y trazabilidad de movimientos.</td></tr>
+        <tr><td>Fiscal y ventas</td><td><code>Reportes</code>, <code>ReporteSire</code>, <code>ReporteFechas</code>, <code>ReporteTurnos</code>, <code>VentasPorEmpleado</code>, <code>Analisis</code></td><td>Notas de venta, consolidación a boleta, notas de crédito y débito, envío a la SUNAT, registro de ventas, reportes por fecha, turno, empleado y categoría.</td></tr>
+        <tr><td>Clientes y proveedores</td><td><code>Clientes</code>, <code>ClienteDetalle</code>, <code>Proveedores</code>, <code>ProveedorDetalle</code>, <code>Compras</code>, <code>Egresos</code></td><td>Cartera de clientes con crédito y saldo, compras que actualizan stock y pagos a proveedores, registro de egresos.</td></tr>
+        <tr><td>Administración</td><td><code>Configuracion</code>, <code>Usuarios</code>, <code>UsuarioDetalle</code>, <code>Auditoria</code>, <code>Dashboard</code>, <code>DashboardOperaciones</code></td><td>Parámetros de la empresa, series y puntos de emisión, listas de precio, plantillas de venta rápida, usuarios con roles y permisos, auditoría de acciones, panel de indicadores.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="salto"></div>
+    <h2>5. Flujo de emisión de un comprobante electrónico</h2>
+    <p>
+      Es el flujo de mayor criticidad del sistema, porque de él depende el cumplimiento tributario. Se describe en el
+      orden real de ejecución, indicando el componente responsable de cada paso.
+    </p>
+    <ol class="pasos">
+      <li><strong>Selección del comprobante y cobro (aplicación web).</strong> El cajero elige tipo de comprobante
+        (nota de venta, boleta o factura) y forma de pago. Sólo en este momento se asigna la <strong>serie y el
+        correlativo</strong>, leídos de la colección de contadores; antes del cobro no existe numeración. La venta se
+        registra en una transacción que descuenta el stock, escribe el movimiento de kardex y actualiza el turno.</li>
+      <li><strong>Construcción de la carga útil (aplicación web).</strong> La función <code>construirPayloadComprobante</code>
+        (<code>src/lib/sunat.ts</code>) arma el objeto que se enviará al servicio: emisor, receptor, líneas del
+        comprobante y totales. Los importes se calculan <strong>a partir de lo cobrado</strong> —el descuento aplicado se
+        distribuye entre las líneas antes de despejar el IGV— y cada línea se expresa con dos decimales, que es lo que el
+        servicio valida.</li>
+      <li><strong>Validación de la estructura (servicio de facturación).</strong> El <em>router</em>
+        <code>POST /v1/invoices/emitir</code> valida la carga útil con modelos Pydantic
+        (<code>app/schemas/invoice.py</code>): tipo de documento del receptor, longitud del número de documento, serie de
+        cuatro caracteres, correlativo mayor que cero, cantidades y precios unitarios con dos decimales y totales
+        coherentes. Si algo no cumple, la respuesta indica el motivo y el comprobante no se emite.</li>
+      <li><strong>Construcción del XML UBL 2.1 (servicio de facturación).</strong> El servicio arma la factura o boleta
+        con la librería <code>sunat_py</code> (<code>build_invoice_xml</code>) y a continuación aplica un conjunto de
+        ajustes verificables sobre el XML generado: hora de emisión, totales de IGV reconstruidos desde las líneas,
+        <strong>importes exactos</strong> (de modo que base más IGV sea exactamente lo cobrado), correlativos y
+        <strong>punto de emisión</strong> (código de establecimiento anexo, que forma parte del hash del comprobante).</li>
+      <li><strong>Firma digital.</strong> El XML se firma con el certificado digital del contribuyente
+        (<code>sign_invoice_xml</code>). El certificado reside únicamente en el servicio; el navegador nunca lo recibe.</li>
+      <li><strong>Empaquetado y envío.</strong> El XML firmado se comprime en un archivo ZIP con la nomenclatura
+        exigida (RUC, tipo de documento, serie y correlativo) y se envía por SOAP a la SUNAT.</li>
+      <li><strong>Respuesta de la SUNAT y constancia.</strong> El servicio interpreta la constancia de recepción (CDR):
+        si el comprobante fue aceptado devuelve el código de respuesta, la descripción y el XML firmado; si fue rechazado,
+        devuelve el motivo. También contempla el código de respuesta que indica que el comprobante ya había sido
+        registrado, para no duplicarlo.</li>
+      <li><strong>Registro del resultado (aplicación web).</strong> La aplicación guarda en el documento de venta el
+        bloque <code>sunat</code> con el estado (aceptado, rechazado, error), el código y la descripción del CDR, el
+        <em>hash</em> y el XML y CDR recibidos. Ese estado es el que se consulta después desde el registro de ventas y
+        los reportes fiscales.</li>
+    </ol>
+    <table class="compacta evitar-corte">
+      <thead><tr><th>Paso</th><th>Componente</th><th>Archivo o punto de entrada</th></tr></thead>
+      <tbody>
+        <tr><td>Numeración y cobro</td><td>Aplicación web</td><td><code>src/services/ventas.ts</code>, <code>src/lib/contadores.ts</code></td></tr>
+        <tr><td>Cálculo de importes y descuentos</td><td>Aplicación web</td><td><code>src/lib/sunat-importes.ts</code>, <code>src/lib/descuentos.ts</code></td></tr>
+        <tr><td>Armado de la carga útil</td><td>Aplicación web</td><td><code>src/lib/sunat.ts</code> (<code>construirPayloadComprobante</code>)</td></tr>
+        <tr><td>Validación y orquestación</td><td>Servicio de facturación</td><td><code>app/routers/invoices.py</code>, <code>app/services/invoice_service.py</code></td></tr>
+        <tr><td>Estructura del comprobante</td><td>Servicio de facturación</td><td><code>app/schemas/invoice.py</code> (modelos Pydantic)</td></tr>
+        <tr><td>XML, ajustes y firma</td><td>Servicio de facturación</td><td><code>app/xml_utils.py</code>, librería <code>sunat_py</code> (UBL 2.1)</td></tr>
+        <tr><td>Registro del CDR</td><td>Aplicación web</td><td><code>src/services/sunat.ts</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2>6. Arquitectura del servicio de facturación electrónica</h2>
+    <p>El servicio sigue el mismo criterio de capas que la aplicación web, con responsabilidades separadas:</p>
+    <div class="diagrama">
+      <div class="capas">
+        <div class="capa capa-1">
+          <div class="titulo">Capa de exposición (API REST) — <code>app/routers/</code></div>
+          <div class="detalle"><code>POST /v1/invoices/emitir</code> y <code>GET /v1/invoices/status</code> (comprobantes) ·
+            <code>POST /v1/notes/emitir</code> (notas de crédito y débito) · <code>GET /v1/ruc</code> y
+            <code>GET /v1/dni</code> (consultas de documento).</div>
+        </div>
+        <div class="flecha">▼</div>
+        <div class="capa capa-2">
+          <div class="titulo">Capa de servicios — <code>app/services/</code></div>
+          <div class="detalle"><code>invoice_service.py</code> y <code>note_service.py</code>: orquestan la emisión
+            completa (armado, ajustes, firma, empaquetado, envío y respuesta) y la conservación de los archivos
+            generados. <code>apis_client.py</code> atiende las consultas de documento de identidad y RUC.</div>
+        </div>
+        <div class="flecha">▼</div>
+        <div class="capa capa-3">
+          <div class="titulo">Capa de integración — <code>app/xml_utils.py</code> y librería <code>sunat_py</code></div>
+          <div class="detalle">Generación y ajuste del XML UBL 2.1, firma digital, empaquetado y comunicación SOAP con la
+            SUNAT. <code>app/sunat_runtime.py</code> mantiene en memoria —una sola vez por proceso— el certificado y el
+            cliente de servicios web, y <code>app/config.py</code> centraliza la configuración leída de variables de
+            entorno.</div>
+        </div>
+        <div class="flecha">▼</div>
+        <div class="capa capa-4">
+          <div class="titulo">Capa de persistencia — <code>app/storage/firebase_adapter.py</code></div>
+          <div class="detalle">Acceso a Firestore desde el servicio cuando corresponde dejar constancia del envío; la
+            configuración y las credenciales se leen de variables de entorno (<code>app/config.py</code>).</div>
+        </div>
+      </div>
+    </div>
+    <p>
+      El servicio se empaqueta como contenedor (<code>Dockerfile</code> y <code>lambda.Dockerfile</code>), de modo que
+      puede ejecutarse tanto en un equipo de la red local del negocio como en un entorno sin servidor. La dirección del
+      servicio es un parámetro de configuración de la aplicación web, lo que permite apuntar al ambiente de pruebas o al
+      de producción sin recompilar la aplicación.
+    </p>
+
+    <div class="salto"></div>
+    <h2>7. Despliegue y operación</h2>
+    <table class="compacta evitar-corte">
+      <thead><tr><th>Elemento</th><th>Cómo se despliega</th><th>Observación técnica</th></tr></thead>
+      <tbody>
+        <tr><td>Aplicación web</td><td>Compilación del proyecto y publicación del contenido estático en el servicio de alojamiento de Firebase.</td><td>El despliegue se realiza con un comando único; la aplicación se sirve como sitio estático con cabeceras de seguridad.</td></tr>
+        <tr><td>Funcionamiento sin conexión</td><td>Service worker y persistencia local de la base de datos.</td><td>El service worker conserva hojas de estilo, imágenes y tipografías, aplica estrategia de red primero para las llamadas a datos y avisa al usuario cuando no hay conexión; Firestore mantiene una caché local que permite seguir consultando lo ya cargado y sincroniza las escrituras al recuperar la conexión. ⚠️ El <strong>envío a la SUNAT sí requiere conexión</strong>: si no hay red, el comprobante queda emitido y el envío se reintenta.</td></tr>
+        <tr><td>Servicio de facturación</td><td>Contenedor en la red local del negocio; se reinicia al actualizarlo.</td><td>Un cambio en el servicio no surte efecto hasta reiniciarlo, por eso el procedimiento de actualización se documenta como parte de la operación.</td></tr>
+        <tr><td>Base de datos</td><td>Servicio administrado, con reglas de acceso e índices declarados en el repositorio.</td><td>Los índices compuestos se declaran en un archivo versionado y se despliegan con el comando correspondiente; un índice creado manualmente fuera del archivo se perdería al forzar la publicación, de ahí la prohibición de usar el modo forzado.</td></tr>
+        <tr><td>Seguridad de contenido</td><td>Cabeceras HTTP configuradas en el alojamiento.</td><td>Política de seguridad de contenido (orígenes permitidos explícitos), protección contra inclusión en marcos, tipo de contenido declarado y política de referencia.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>8. Decisiones de arquitectura y su justificación</h2>
+    <table class="compacta evitar-corte">
+      <thead><tr><th>Problema</th><th>Decisión adoptada</th><th>Justificación</th></tr></thead>
+      <tbody>
+        <tr><td>El certificado digital no puede estar en el navegador</td><td>Servicio de facturación separado que custodia el certificado y firma del lado del servidor</td><td>Evita exponer credenciales fiscales en el cliente; permite actualizar la lógica tributaria sin volver a publicar la aplicación web</td></tr>
+        <tr><td>La interfaz repetía cálculos críticos</td><td>Extraer toda regla a módulos puros (<code>src/lib/</code>) y probarlos automáticamente</td><td>Una sola fuente de verdad por regla; las pruebas se ejecutan sin navegador ni base de datos</td></tr>
+        <tr><td>Comprobantes numerados antes de cobrarse</td><td>La numeración se asigna únicamente al cobrar</td><td>Evita quemar correlativos y huecos en las series fiscales cuando una venta no se concreta; el pedido sólo tiene un código interno propio</td></tr>
+        <tr><td>Riesgo de descuadre de caja</td><td>Una única fórmula del efectivo esperado, usada por todas las pantallas</td><td>Antes estaba escrita en seis lugares y dos de ellos calculaban distinto: el cajero podía comparar contra un número diferente al registrado</td></tr>
+        <tr><td>Datos incompletos en las escrituras</td><td>Saneamiento obligatorio de los datos antes de escribir en la base</td><td>La base documental rechaza valores indefinidos y el compilador no lo detecta: el saneamiento previo convierte un fallo silencioso en un dato consistente</td></tr>
+        <tr><td>Operación con internet inestable</td><td>Aplicación web progresiva con caché local y sincronización</td><td>El negocio no puede detener la venta por una caída de conexión; el comprobante electrónico se emite al recuperar el enlace</td></tr>
+        <tr><td>Crecimiento a más de un punto de emisión</td><td>Las cajas se modelan como puntos de emisión con sus propias series</td><td>Permite emitir con la serie correcta por caja y transferir pedidos si una caja deja de operar</td></tr>
+        <tr><td>Necesidad de auditar quién hizo qué</td><td>Registro de acciones en una colección de auditoría y registro de errores de la aplicación</td><td>Sustenta el control interno del negocio y permite reconstruir incidentes</td></tr>
+      </tbody>
+    </table>
+
+    <h2>9. Tecnologías y estándares</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="valor">25 373</div><div class="rotulo">Líneas de código</div></div>
+      <div class="kpi"><div class="valor">195</div><div class="rotulo">Pruebas automatizadas</div></div>
+      <div class="kpi"><div class="valor">16</div><div class="rotulo">Colecciones</div></div>
+      <div class="kpi"><div class="valor">UBL 2.1</div><div class="rotulo">Estándar del comprobante</div></div>
+    </div>
+    <table class="compacta evitar-corte">
+      <thead><tr><th>Capa</th><th>Tecnología</th><th>Uso en el sistema</th></tr></thead>
+      <tbody>
+        <tr><td>Interfaz</td><td>React 19, TypeScript 6, Tailwind CSS 3, Vite 8</td><td>Componentes de interfaz, tipado estático estricto, estilos y empaquetado con carga diferida por módulo</td></tr>
+        <tr><td>Datos</td><td>Cloud Firestore (Firebase 12), Firebase Authentication</td><td>Base documental con transacciones, lotes, persistencia local y autenticación de usuarios</td></tr>
+        <tr><td>Documentos y códigos</td><td><code>qrcode</code>, <code>html5-qrcode</code>, <code>recharts</code></td><td>Representación del código QR del comprobante, lectura de códigos de barras con la cámara y gráficos de los paneles de indicadores</td></tr>
+        <tr><td>Reglas del negocio</td><td>Módulos TypeScript puros, runner de pruebas nativo de Node</td><td>195 pruebas automatizadas sobre dinero, descuentos, IGV, arqueo, contadores, pedidos y comprobantes</td></tr>
+        <tr><td>Servicio fiscal</td><td>FastAPI, Pydantic, <code>sunat_py</code>, UBL 2.1, Docker</td><td>Validación de la carga útil, generación y firma del XML, envío SOAP a la SUNAT y lectura del CDR</td></tr>
+        <tr><td>Calidad</td><td>TypeScript en modo estricto, Oxlint, pruebas automatizadas</td><td>Verificación estática de tipos y estilo, y línea base de advertencias que no debe incrementarse</td></tr>
+      </tbody>
+    </table>
+
+    <h2>10. Seguridad y control interno</h2>
+    <ul>
+      <li><strong>Autenticación</strong> contra el servicio de identidad de Firebase, con persistencia de sesión y
+        <strong>sesión única por dispositivo</strong> para los usuarios operativos: si la misma cuenta inicia sesión en
+        otro equipo, la sesión anterior se cierra.</li>
+      <li><strong>Autorización en la aplicación</strong>: el rol define una plantilla de permisos y cada permiso puede
+        ajustarse por usuario. La interfaz oculta lo que el usuario no puede hacer y los servicios <strong>vuelven a
+        validar las reglas críticas antes de escribir</strong> (por ejemplo, el tope del descuento manual al crear un
+        pedido).</li>
+      <li><strong>Alcance real de las reglas de la base de datos</strong> (verificado en <code>firestore.rules</code>):
+        exigen <strong>usuario autenticado</strong> para leer y escribir —y dejan abierta la lectura de la colección de
+        sesiones de la pantalla del cliente—; <strong>no restringen por rol</strong>, decisión documentada en el propio
+        archivo de reglas para no romper flujos de la aplicación móvil. Por lo tanto, quien tenga una cuenta válida
+        puede escribir en la base: <strong>endurecer las reglas por rol es una recomendación de este trabajo, no un
+        control ya implementado</strong>, y así se declara en las limitaciones del informe (Anexo 5).</li>
+      <li><strong>Custodia de credenciales</strong>: el certificado digital, las claves de servicio y los secretos viven
+        en el servicio de facturación y en variables de entorno fuera del control de versiones; nunca viajan al navegador.</li>
+      <li><strong>Integridad de la información</strong>: las operaciones que afectan a varios documentos (venta, stock,
+        kardex y turno; pedido y contador; consolidación y notas de venta) se ejecutan dentro de transacciones o lotes,
+        de modo que no queden estados intermedios.</li>
+      <li><strong>Trazabilidad</strong>: cada acción relevante queda registrada con su responsable, y los errores de la
+        aplicación se registran en una colección propia para su revisión desde el módulo de auditoría.</li>
+      <li><strong>Integridad fiscal</strong>: el comprobante declara los importes efectivamente cobrados, los
+        correlativos no se reutilizan y el resultado del envío a la SUNAT queda almacenado como constancia.</li>
+    </ul>
+
+    <h2>11. Relación con los demás anexos</h2>
+    <table class="compacta evitar-corte">
+      <thead><tr><th>Anexo</th><th>Contenido</th></tr></thead>
+      <tbody>
+        <tr><td>Anexo 2</td><td>Modelo de datos: colecciones, campos, ciclo de vida del documento de venta, contadores e índices.</td></tr>
+        <tr><td>Anexo 3</td><td>Ingeniería de requisitos: actores, requerimientos funcionales y no funcionales, casos de uso e historias de usuario.</td></tr>
+        <tr><td>Anexo 4</td><td>Plan de pruebas: estrategia, inventario de pruebas automatizadas, casos de aceptación, incidencias corregidas y matriz de trazabilidad.</td></tr>
+        <tr><td>Anexo 5</td><td>Informe del trabajo de aplicación profesional por capítulos.</td></tr>
+        <tr><td>Anexo 6</td><td>Diapositivas de sustentación y guion de la defensa.</td></tr>
+        <tr><td>Manual de usuario</td><td><code>docs/manual-usuario.html</code> y su versión en PDF: guía de uso del sistema por módulo.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="pie">Anexo 1 — Arquitectura del sistema · documento técnico de apoyo al Trabajo de Aplicación Profesional</div>
+  </div>
+</body>
+</html>

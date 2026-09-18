@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>TAP — Paquete documental</title>
+  <link rel="stylesheet" href="tap.css">
+</head>
+<body>
+  <div class="page">
+    <div class="portada">
+      <div class="institucion">Trabajo de Aplicación Profesional</div>
+      <h1>Sistema de punto de venta, inventario y facturación electrónica</h1>
+      <div class="filete"></div>
+      <p class="subtitulo">Paquete documental de sustentación — índice de anexos</p>
+      <p class="meta">Anexos técnicos generados a partir del código fuente del sistema<br/>Aplicación web · servicio de facturación electrónica</p>
+    </div>
+
+    <h2>Anexos</h2>
+    <table class="evitar-corte">
+      <thead><tr><th>Anexo</th><th>Documento</th><th>Contenido</th><th>PDF</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><a href="01-arquitectura.html">Arquitectura del sistema</a></td><td>Componentes, capas, módulos, flujo de emisión del comprobante electrónico, despliegue, decisiones de arquitectura y seguridad.</td><td><code>01-arquitectura.pdf</code></td></tr>
+        <tr><td>2</td><td><a href="02-modelo-datos.html">Modelo de datos</a></td><td>Colecciones, campos clave, ciclo de vida del documento de venta, contadores de numeración, índices y reglas de integridad.</td><td><code>02-modelo-datos.pdf</code></td></tr>
+        <tr><td>3</td><td><a href="03-requerimientos.html">Requerimientos y casos de uso</a></td><td>Alcance, actores y roles, requerimientos funcionales y no funcionales, casos de uso detallados e historias de usuario.</td><td><code>03-requerimientos.pdf</code></td></tr>
+        <tr><td>4</td><td><a href="04-pruebas.html">Plan de pruebas y validación</a></td><td>Estrategia de pruebas, inventario de las 195 pruebas automatizadas, casos de aceptación, incidencias detectadas y corregidas, matriz de trazabilidad y limitaciones.</td><td><code>04-pruebas.pdf</code></td></tr>
+        <tr><td>5</td><td><a href="05-informe.html">Informe del trabajo (esqueleto por capítulos)</a></td><td>Estructura completa del informe con el contenido técnico redactado y marcas de lo que debe completar el tesista.</td><td><code>05-informe.pdf</code></td></tr>
+        <tr><td>6</td><td><a href="06-sustentacion.html">Diapositivas de sustentación</a></td><td>Presentación apaisada para la defensa, con el guion en <a href="guion-sustentacion.md">guion-sustentacion.md</a>.</td><td><code>06-sustentacion.pdf</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2>Documentos de producto que ya existían</h2>
+    <table class="evitar-corte">
+      <thead><tr><th>Documento</th><th>Contenido</th></tr></thead>
+      <tbody>
+        <tr><td><a href="../manual-usuario.html">Manual de usuario</a> (<code>manual-usuario.pdf</code>)</td><td>Guía de uso del sistema por módulo, con capturas de la interfaz.</td></tr>
+        <tr><td><a href="../resumen-app.html">Resumen del sistema</a> (<code>resumen-app.pdf</code>)</td><td>Resumen funcional y comercial, útil como anexo de presentación.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Cómo se generan los PDF</h2>
+    <p>Los PDF de este paquete se producen sin abrir el navegador, con Chrome en modo sin interfaz:</p>
+    <p><code>chrome --headless=new --disable-gpu --no-pdf-header-footer --print-to-pdf="archivo.pdf" "archivo.html"</code></p>
+    <p>Desde esta carpeta, cada anexo usa <code>tap.css</code>; las diapositivas del Anexo 6 llevan su propio estilo apaisado (A4 horizontal, una página por diapositiva).</p>
+
+    <div class="aviso">
+      <strong>Alcance de este paquete.</strong> Los anexos describen el sistema tal como está construido y verificado:
+      cada afirmación técnica remite a un archivo del repositorio. El contenido académico que depende de la institución
+      (portada, formato, marco teórico con citas en normas APA, y la redacción final del informe) se marca en el Anexo 5
+      con la etiqueta <code>[COMPLETAR: …]</code> y debe ser desarrollado por el autor del trabajo.
+    </div>
+
+    <div class="pie">Paquete documental del Trabajo de Aplicación Profesional · <code>docs/tap/</code></div>
+  </div>
+</body>
+</html>
