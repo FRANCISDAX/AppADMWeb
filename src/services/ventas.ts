@@ -582,7 +582,6 @@ export async function crearVentaPendiente({
     // aparte, que nunca choca con las series de SUNAT.
     const pedidoRef = doc(db, COL.CONTADORES, CLAVE_PEDIDO)
 
-    const importeTotal = venta.total - (venta.descuentoTotal || 0)
 
     // Contador del pedido + documento, en una transacción (nada queda a medias). El stock **no**
     // se toca: se descuenta al cobrar.
@@ -600,7 +599,11 @@ export async function crearVentaPendiente({
           precioVenta: it.precioVenta ?? 0,
         })),
         total: venta.total,
-        importe_total: importeTotal,
+        // ⚠️ **`venta.total` YA viene neto de descuentos** (es `descuentosCalc.totalFinal` del PDV):
+        // volver a restar `descuentoTotal` acá dejaba el `importe_total` del pedido por debajo del
+        // total real, y el ticket imprimía un TOTAL y un "Son: …" distintos de lo que se cobraba
+        // (el cobro usa `venta.total`). Igual que `registrarVenta`, el importe es el total.
+        importe_total: venta.total,
         descuento_total: venta.descuentoTotal || 0,
         // ⚠️ `undefined` NO es un valor válido para Firestore (tira *"Unsupported field value:
         // undefined"*): los opcionales van en `null` y lo que puede faltar (el envío) se agrega
@@ -625,7 +628,7 @@ export async function crearVentaPendiente({
         serie_numero: codigo,
         sucursal: (config as Record<string, unknown>).sucursal || 'Casa Matriz',
         mensaje: (config as Record<string, unknown>).mensajeLegal || '',
-        son_letras: numeroALetras(importeTotal),
+        son_letras: numeroALetras(venta.total),
         turnoId: '',
         ...(venta.envio ? { envio: venta.envio } : {}),
       }

@@ -1,7 +1,7 @@
 import QRCode from 'qrcode'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { etiquetaPago, formaPagoLabel } from '@/lib/pagos'
-import { afectacionDe, itemsConDescuento } from '@/lib/sunat-importes'
+import { afectacionDe, cantidadDe, importeBrutoDe, itemsConDescuento } from '@/lib/sunat-importes'
 import { esc } from '@/lib/ui-utils'
 import { desglosarTurno, lineasDeOrigen, type ConciliacionMedios, type DesgloseTurno, type ItemTurno } from '@/lib/arqueo'
 import { lineasPersonal, personalDeVenta } from '@/lib/personal'
@@ -106,11 +106,16 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   const itemsRows = venta.items
     .map((it: any) => {
       const desc = it.nombre || it.descripcion || ''
-      const cant = Number(it.cantidad) || 0
-      const und = it.unidad || ''
+      // ⚠️ Un documento puede tener los items con la forma del **carrito** (`quantity`,
+      // `presentacionNombre`) o con la del **documento** (`cantidad`, `unidad`, `subtotal`): los
+      // pedidos cobrados antes del 18/09/2026 se guardaron con la del carrito y el ticket salía con
+      // **Cant. 0.00** y sin unidad. `cantidadDe`/`importeBrutoDe` (`lib/sunat-importes.ts`) leen las
+      // dos formas, así que el PDF imprime bien cualquier documento viejo.
+      const cant = cantidadDe(it)
+      const und = it.unidad || it.presentacionNombre || ''
       const pUnit = Number(it.precioVenta || it.precio_unitario || 0).toFixed(2)
       const descuento = Number(it.descuento || 0)
-      const total = Number(it.subtotal || it.total || 0).toFixed(2)
+      const total = (Number(it.subtotal) > 0 ? Number(it.subtotal) : importeBrutoDe(it)).toFixed(2)
       const descRow = descuento > 0 ? `<div class="item-desc">Descuento: -S/ ${descuento.toFixed(2)}</div>` : ''
       return `<div class="item"><div class="item-nombre">${esc(desc)}</div><table class="item-num"><tr><td></td><td>${cant.toFixed(2)}</td><td>${esc(und || '-')}</td><td>${pUnit}</td><td class="r">${total}</td></tr></table>${descRow}</div>`
     })
