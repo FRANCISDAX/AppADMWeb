@@ -952,6 +952,12 @@ export async function cobrarVentaPendiente({
         estado: 'pagado',
         cajeroId,
         cajero: cajeroNombre,
+        // 🔑 **La venta queda a nombre de quien la COBRÓ**, igual que en una venta directa: los
+        // reportes filtran por `usuarioId` (cada usuario ve lo suyo si no tiene `verTodo`), así que
+        // si el pedido conservaba el `usuarioId` del vendedor, el cajero **no veía en Reportes** la
+        // NV/boleta que acababa de emitir. El vendedor no pierde nada: sigue en `vendedorId` /
+        // `vendedorNombre`, y `VentasPorEmpleado` usa `vendedorId || usuarioId`.
+        usuarioId: cajeroId,
         // La caja que **emitió** el comprobante es la del cajero, no la del pedido: si el pedido
         // se rescató desde otra caja (la suya estaba caída), el dato tiene que decir la verdad.
         ...(cajaId ? { cajaId } : {}),
