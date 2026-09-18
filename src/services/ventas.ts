@@ -6,6 +6,7 @@ import { AFECTACION_POR_DEFECTO } from '@/constants/tributario'
 import { bolsillosDeVenta, formaPagoLabel, type PagoGuardado } from '@/lib/pagos'
 import { CAMPO_CONTADOR, CLAVE_PEDIDO, claveContador, codigoPedido } from '@/lib/contadores'
 import { limpiarUndefined } from '@/lib/limpio'
+import { revisarDescuentoManual } from '@/lib/descuentos'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
@@ -550,6 +551,25 @@ export async function crearVentaPendiente({
   try {
     if (!items.length) return { success: false, error: 'No hay items para vender' }
     if (!venta.usuarioId) return { success: false, error: 'Falta usuarioId' }
+
+    // Tope del **descuento manual** (`config.descuentoMaximoPorcentaje`, 0 = sin tope): segunda
+    // capa de la regla de `lib/descuentos.ts` (la primera es la UI del PDV). No mira las
+    // promociones automáticas, que son configuración del negocio.
+    const tope = Number((config as Record<string, unknown>).descuentoMaximoPorcentaje) || 0
+    const valorDesc = Number(venta.descuentoGlobalValor) || 0
+    if (tope > 0 && valorDesc > 0) {
+      // Base del descuento global: el total (ya neto) más lo que restó el propio descuento.
+      const aplicado = venta.descuentoGlobalTipo === 'porcentaje'
+        ? (venta.total * valorDesc) / Math.max(1, 100 - valorDesc)
+        : valorDesc
+      const revision = revisarDescuentoManual({
+        tipo: venta.descuentoGlobalTipo === 'porcentaje' ? 'porcentaje' : 'monto',
+        valor: valorDesc,
+        subtotal: venta.total + aplicado,
+        topePorcentaje: tope,
+      })
+      if (revision.excede) return { success: false, error: revision.mensaje }
+    }
 
     const f = new Date()
     const anioMes = `${f.getFullYear()}-${f.getMonth() + 1}`

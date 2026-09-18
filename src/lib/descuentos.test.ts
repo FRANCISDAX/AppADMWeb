@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { calcularDescuentos, type DescuentoVolumen } from './descuentos.ts'
+import { calcularDescuentos, revisarDescuentoManual, type DescuentoVolumen } from './descuentos.ts'
 
 /**
  * Caso real del negocio (huevos): precio de lista S/ 0.60 y una promoción de
@@ -86,4 +86,60 @@ test('el descuento por producto y el de volumen se acumulan en orden', () => {
   const r = calcularDescuentos([{ ...item(6), descuentoPorcentaje: 10 }], { reglasVolumen: [PROMO_HUEVOS] })
   // 3.60 − 10% = 3.24; luego la promo del 16.67% sobre 3.24 → 2.70
   assert.equal(r.totalFinal, 2.7)
+})
+
+// ─── Tope del descuento manual (política del negocio) ──────────────────────────
+
+test('sin tope configurado (0) no se recorta nada', () => {
+  const r = revisarDescuentoManual({ tipo: 'porcentaje', valor: 80, subtotal: 100, topePorcentaje: 0 })
+  assert.equal(r.excede, false)
+  assert.equal(r.valorAjustado, 80)
+  assert.equal(r.mensaje, '')
+})
+
+test('un descuento dentro del tope pasa tal cual', () => {
+  const r = revisarDescuentoManual({ tipo: 'porcentaje', valor: 10, subtotal: 200, topePorcentaje: 15 })
+  assert.equal(r.excede, false)
+  assert.equal(r.porcentaje, 10)
+  assert.equal(r.valorAjustado, 10)
+})
+
+test('justo en el tope NO excede (el límite es el límite)', () => {
+  const r = revisarDescuentoManual({ tipo: 'porcentaje', valor: 15, subtotal: 200, topePorcentaje: 15 })
+  assert.equal(r.excede, false)
+})
+
+test('un porcentaje mayor al tope se recorta al tope', () => {
+  const r = revisarDescuentoManual({ tipo: 'porcentaje', valor: 40, subtotal: 200, topePorcentaje: 15 })
+  assert.equal(r.excede, true)
+  assert.equal(r.valorAjustado, 15)
+  assert.match(r.mensaje, /15%/)
+})
+
+test('un descuento EN SOLES se mide en porcentaje contra el subtotal', () => {
+  // S/ 60 sobre S/ 200 = 30% → con tope 15% se recorta a S/ 30.
+  const r = revisarDescuentoManual({ tipo: 'monto', valor: 60, subtotal: 200, topePorcentaje: 15 })
+  assert.equal(r.porcentaje, 30)
+  assert.equal(r.excede, true)
+  assert.equal(r.valorAjustado, 30)
+})
+
+test('un monto chico en una venta grande no excede', () => {
+  // S/ 5 sobre S/ 200 = 2.5% → pasa con tope 10%.
+  const r = revisarDescuentoManual({ tipo: 'monto', valor: 5, subtotal: 200, topePorcentaje: 10 })
+  assert.equal(r.porcentaje, 2.5)
+  assert.equal(r.excede, false)
+  assert.equal(r.valorAjustado, 5)
+})
+
+test('carrito vacío (subtotal 0) no puede exceder nada ni dividir por cero', () => {
+  const r = revisarDescuentoManual({ tipo: 'monto', valor: 50, subtotal: 0, topePorcentaje: 10 })
+  assert.equal(r.porcentaje, 0)
+  assert.equal(r.excede, false)
+})
+
+test('valores raros (negativos, NaN, undefined) no rompen ni descuentan', () => {
+  assert.equal(revisarDescuentoManual({ tipo: 'porcentaje', valor: -10, subtotal: 100, topePorcentaje: 15 }).valorAjustado, 0)
+  assert.equal(revisarDescuentoManual({ tipo: 'porcentaje', valor: NaN, subtotal: 100, topePorcentaje: 15 }).excede, false)
+  assert.equal(revisarDescuentoManual({ tipo: 'monto', valor: 10, subtotal: Number('x'), topePorcentaje: 15 }).excede, false)
 })

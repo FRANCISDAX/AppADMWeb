@@ -50,7 +50,7 @@ import { fmt, useToast, estadoVencimiento } from '@/lib/ui-utils'
 import { listarVentasPausadas, guardarVentaPausada, eliminarVentaPausada, type VentaPausada } from '@/lib/ventas-pausadas'
 import { EscanearCodigo } from '@/components/EscanearCodigo'
 import { broadcastCart, closeSession } from '@/lib/customer-display'
-import { calcularDescuentos } from '@/lib/descuentos'
+import { calcularDescuentos, revisarDescuentoManual } from '@/lib/descuentos'
 import { clienteDelPedido, pedidoParaCarrito, type PedidoEnCarrito } from '@/lib/pedidos'
 import { promocionesAplicables, type PromocionVolumen } from '@/services/promociones-volumen'
 import QRCode from 'qrcode'
@@ -312,6 +312,24 @@ export function Pdv() {
   // Al redefinir `total`, todo lo que ya lo usa (resumen de pagos, validaciones, botones) queda
   // apuntando al monto correcto sin duplicar reglas.
   const total = pedidoActivo ? pedidoActivo.total : totalCarrito
+
+  const puedeDescontar = tienePermiso('aplicarDescuento')
+
+  /**
+   * Tope del **descuento manual** (`config.descuentoMaximoPorcentaje`, 0 = sin tope).
+   * La regla vive en `lib/descuentos.ts` (`revisarDescuentoManual`) y se aplica sobre la base del
+   * descuento global (lo que queda después de producto, volumen y cliente): las promociones
+   * automáticas son configuración del negocio, no una decisión de mostrador.
+   */
+  const revisionDescuento = React.useMemo(() => {
+    const baseParaGlobal = Math.max(0, descuentosCalc.totalBruto - (descuentosCalc.totalDescuento - (descuentosCalc.global?.descuento ?? 0)))
+    return revisarDescuentoManual({
+      tipo: descuentoGlobalTipo,
+      valor: parseFloat(descuentoGlobalValor) || 0,
+      subtotal: baseParaGlobal,
+      topePorcentaje: (cfg as Record<string, unknown>).descuentoMaximoPorcentaje as number | undefined,
+    })
+  }, [descuentoGlobalTipo, descuentoGlobalValor, descuentosCalc, cfg])
 
   // ─── Formas de pago ────────────────────────────────────────────────────────
   // Sin nada en la venta no se elige forma de pago: los botones quedan
@@ -1798,8 +1816,9 @@ export function Pdv() {
             {!esVendedor && pagoCredito && hayProductos && (
               <CreditoPanel dni={clienteDni.trim()} estado={estadoCredito} total={total} cargando={cargandoCredito} />
             )}
-            {/* Descuentos: no aplican en modo pedido (el total ya viene cotizado). */}
-            {!pedidoActivo && <div className="space-y-2 rounded-xl border p-3">
+            {/* Descuentos: no aplican en modo pedido (el total ya viene cotizado) y requieren
+                el permiso `aplicarDescuento` (el dueño lo da o lo quita por usuario). */}
+            {!pedidoActivo && (puedeDescontar ? <div className="space-y-2 rounded-xl border p-3">
               <p className="text-xs font-bold text-muted-foreground">Descuentos</p>
 
               {/* Global */}
@@ -1808,8 +1827,15 @@ export function Pdv() {
                   <option value="monto">S/ </option>
                   <option value="porcentaje">%</option>
                 </select>
-                <Input type="number" inputMode="decimal" placeholder="0" value={descuentoGlobalValor} onChange={(e) => setDescuentoGlobalValor(e.target.value)} className="h-8 flex-1 text-xs" />
+                <Input type="number" inputMode="decimal" placeholder="0" value={descuentoGlobalValor} onChange={(e) => setDescuentoGlobalValor(e.target.value)} className={cn('h-8 flex-1 text-xs', revisionDescuento.excede && 'border-destructive')} />
               </div>
+
+              {/* Tope del negocio: se avisa y se bloquea el cobro hasta que lo bajen */}
+              {revisionDescuento.excede && (
+                <p className="rounded-lg bg-destructive/10 p-2 text-[11px] font-semibold text-destructive">
+                  {revisionDescuento.mensaje} Bajalo a {descuentoGlobalTipo === 'porcentaje' ? `${revisionDescuento.valorAjustado}%` : fmt(revisionDescuento.valorAjustado)} para poder cobrar, o pedile al administrador que suba el tope en <em>Configuración → Empresa</em>.
+                </p>
+              )}
 
               {/* Resumen descuentos */}
               {descuentosCalc.totalDescuento > 0 && (
@@ -1828,7 +1854,11 @@ export function Pdv() {
                   )}
                 </div>
               )}
-            </div>}
+            </div> : (
+              <p className="rounded-lg border border-dashed p-2 text-[11px] text-muted-foreground">
+                Tu usuario no tiene el permiso <strong>«Aplicar descuento manual»</strong>. Las promociones y descuentos configurados (volumen, producto, cliente) se siguen aplicando solos.
+              </p>
+            ))}
 
             <div className="flex items-end justify-between">
               <span className="text-sm text-muted-foreground">{pedidoActivo ? 'Total del pedido' : 'Total'}</span>
@@ -1863,12 +1893,12 @@ export function Pdv() {
                 </Button>
               </>
             ) : tienePermiso('enviarACaja') && !tienePermiso('cobrarVenta') ? (
-              <Button onClick={enviarACaja} disabled={allItems.length === 0 || cobrando}>
+              <Button onClick={enviarACaja} disabled={allItems.length === 0 || cobrando || revisionDescuento.excede}>
                 {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 {cobrando ? 'Enviando…' : 'Enviar a caja'}
               </Button>
             ) : (
-              <Button onClick={cobrar} disabled={allItems.length === 0 || cobrando || (!pagoCredito && !resumen.puedeCobrar)}>
+              <Button onClick={cobrar} disabled={allItems.length === 0 || cobrando || revisionDescuento.excede || (!pagoCredito && !resumen.puedeCobrar)}>
                 {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 {cobrando ? 'Procesando…' : 'Cobrar'}
               </Button>

@@ -212,3 +212,68 @@ export function calcularDescuentos(
     totalFinal: Math.round(totalFinal * 100) / 100,
   }
 }
+
+// ─── Tope del descuento MANUAL (política del negocio) ────────────────────────────────────────
+
+/**
+ * Resultado de revisar el descuento manual que carga un usuario en el PDV.
+ * `porcentaje` es cuánto representa sobre el subtotal (una sola unidad de medida, tanto si el
+ * usuario escribió un % como si escribió un monto en soles).
+ */
+export type RevisionDescuento = {
+  /** Porcentaje efectivo del descuento sobre el subtotal (0 si no hay descuento). */
+  porcentaje: number
+  /** `true` si se pasó del tope del negocio. */
+  excede: boolean
+  /** Valor ya recortado al tope, listo para usar (mismo `tipo` que la entrada). */
+  valorAjustado: number
+  /** Mensaje para mostrar al usuario; vacío si no hay nada que avisar. */
+  mensaje: string
+}
+
+/**
+ * ¿El descuento manual que se está por aplicar respeta el tope del negocio?
+ *
+ * ⚠️ **El tope es del descuento MANUAL** (el que carga una persona en el PDV: global o por línea):
+ * las promociones automáticas (volumen, descuento de producto, descuento de cliente, precio
+ * especial) **no se tocan**, porque son configuración del negocio, no una decisión del momento.
+ *
+ * ⚠️ **`topePorcentaje = 0` significa SIN TOPE** (igual que `limiteCredito = 0` = sin límite):
+ * interpretarlo al revés bloquearía todo descuento de los negocios que no configuraron nada.
+ */
+export function revisarDescuentoManual({
+  tipo,
+  valor,
+  subtotal,
+  topePorcentaje,
+}: {
+  tipo: 'porcentaje' | 'monto'
+  valor: number
+  subtotal: number
+  topePorcentaje?: number | null
+}): RevisionDescuento {
+  const base = Number(subtotal) > 0 ? Number(subtotal) : 0
+  const v = Number(valor) > 0 ? Number(valor) : 0
+  const tope = Number(topePorcentaje) > 0 ? Number(topePorcentaje) : 0
+
+  // Sin base no hay porcentaje que calcular (carrito vacío): no se puede exceder nada.
+  const porcentaje = base > 0
+    ? Math.round((tipo === 'porcentaje' ? v : (v / base) * 100) * 100) / 100
+    : 0
+
+  if (tope === 0 || porcentaje <= tope) {
+    return { porcentaje, excede: false, valorAjustado: v, mensaje: '' }
+  }
+
+  // Recorte al tope, en la unidad en la que el usuario escribió.
+  const valorAjustado = tipo === 'porcentaje'
+    ? tope
+    : Math.round(((base * tope) / 100) * 100) / 100
+
+  return {
+    porcentaje,
+    excede: true,
+    valorAjustado,
+    mensaje: `El descuento manual máximo es ${tope}%. Escribiste ${porcentaje}%: se ajustó al tope.`,
+  }
+}

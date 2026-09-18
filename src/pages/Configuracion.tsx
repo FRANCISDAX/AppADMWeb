@@ -279,6 +279,31 @@ export function Configuracion() {
                 {config.conteoCiego ? 'SÍ' : 'NO'}
               </span>
             </button>
+
+            <div className="rounded-lg border p-3">
+              <Label className="font-medium">Descuento manual máximo (%)</Label>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Tope para el descuento que carga una persona en el PDV (global). <b>0 = sin tope.</b>
+                No afecta a las promociones ni a los descuentos configurados (volumen, producto,
+                cliente), que se siguen aplicando solos. Quién puede aplicar el descuento manual se
+                define por usuario con el permiso <b>«Aplicar descuento manual»</b>.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={100}
+                  placeholder="0"
+                  value={String(config.descuentoMaximoPorcentaje ?? '')}
+                  onChange={(e) => set('descuentoMaximoPorcentaje', Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                  className="h-8 w-24 text-xs"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {(Number(config.descuentoMaximoPorcentaje) || 0) === 0 ? 'Sin tope' : `Máximo ${config.descuentoMaximoPorcentaje}%`}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}

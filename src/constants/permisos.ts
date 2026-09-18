@@ -47,6 +47,7 @@ export const CLAVES_PERMISOS = {
   cobrarVenta: 'cobrarVenta',
   cancelarVentaPendiente: 'cancelarVentaPendiente',
   reportesPorVendedor: 'reportesPorVendedor',
+  aplicarDescuento: 'aplicarDescuento',
 } as const
 
 const ALL_TRUE = Object.fromEntries(Object.values(CLAVES_PERMISOS).map((k) => [k, true]))
@@ -77,6 +78,7 @@ export const PERMISOS_POR_ROL: Record<string, Record<string, boolean>> = {
     cobrarVenta: true,
     cancelarVentaPendiente: true,
     reportesPorVendedor: true,
+    aplicarDescuento: true,
   },
   VENDEDOR: {
     ...ALL_FALSE,
@@ -90,6 +92,9 @@ export const PERMISOS_POR_ROL: Record<string, Record<string, boolean>> = {
     editarProducto: true,
     informacion: true,
     enviarACaja: true,
+    // El vendedor SÍ puede descontar (comportamiento histórico), pero ahora el dueño tiene el
+    // interruptor por usuario (`Usuarios → Editar`) y el tope máximo en `Configuración → Empresa`.
+    aplicarDescuento: true,
   },
 }
 
@@ -97,7 +102,7 @@ export const MODULOS = [
   { key: 'dashboards', label: 'Dashboards', permisos: ['dashboard', 'dashboardOperaciones'] },
   { key: 'modulos', label: 'Módulos (Tabs)', permisos: ['inventario', 'turnos', 'reportes', 'ventas'] },
   { key: 'drawer', label: 'Opciones del Menú', permisos: ['clientes', 'estadoCuenta', 'compras', 'proveedores', 'reporteTurnos', 'reporteFechas', 'arqueoCaja', 'estadisticas', 'notasVenta', 'consolidado', 'registroVentas', 'kardex', 'comandosVoz', 'configuracion', 'informacion', 'usuarios', 'egresos', 'auditoria', 'sire', 'ventasPorEmpleado', 'rotacionInventario'] },
-  { key: 'funciones', label: 'Funciones', permisos: ['crearProducto', 'editarProducto', 'eliminarProducto', 'ajustarStock', 'verCostos', 'anularVenta', 'cobrarCredito', 'imprimirTicket', 'abrirTurno', 'cerrarTurno', 'rectificarCaja', 'corregirPago', 'editarMontoInicial', 'rectificarTurno', 'enviarACaja', 'verVentasPendientes', 'cobrarVenta', 'cancelarVentaPendiente', 'reportesPorVendedor'] },
+  { key: 'funciones', label: 'Funciones', permisos: ['crearProducto', 'editarProducto', 'eliminarProducto', 'ajustarStock', 'verCostos', 'anularVenta', 'cobrarCredito', 'imprimirTicket', 'abrirTurno', 'cerrarTurno', 'rectificarCaja', 'corregirPago', 'editarMontoInicial', 'rectificarTurno', 'enviarACaja', 'verVentasPendientes', 'cobrarVenta', 'cancelarVentaPendiente', 'reportesPorVendedor', 'aplicarDescuento'] },
   { key: 'accesos', label: 'Acceso Especial', permisos: ['verTodo'] },
 ]
 
@@ -149,6 +154,7 @@ export const LABELS_PERMISOS: Record<string, string> = {
   cobrarVenta: 'Cobrar Venta Pendiente',
   cancelarVentaPendiente: 'Cancelar Venta Pendiente',
   reportesPorVendedor: 'Reportes por Vendedor',
+  aplicarDescuento: 'Aplicar descuento manual',
 }
 
 export const ROLES = ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR', 'PERSONALIZADO']

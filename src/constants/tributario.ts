@@ -86,6 +86,11 @@ export const CONFIG_POR_DEFECTO = {
   // matriz. Va dentro del XML que se firma, así que entra al hash SUNAT.
   puntoEmision: '0000',
   topeBoletaDni: 700,
+  // Tope del **descuento manual** que carga una persona en el PDV (porcentaje).
+  // ⚠️ `0` = **sin tope** (misma convención que `limiteCredito = 0` = sin límite): al revés,
+  // ningún negocio que no lo configure podría descontar nada. No afecta a las promociones ni a
+  // los descuentos configurados (volumen, producto, cliente), que se aplican siempre.
+  descuentoMaximoPorcentaje: 0,
   servidor: '',
   envioHabilitado: false,
   zonasEnvio: [
