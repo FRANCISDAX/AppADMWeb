@@ -1,6 +1,7 @@
 // Configuración de conexión a la API SUNAT (SOLO helpers, nunca se llama a la API).
 // El envío real lo hace el administrador desde la app móvil.
-import { afectacionDe, descuentoDeVenta, itemsConDescuento, valorUnitarioSunat } from './sunat-importes.ts'
+import { afectacionDe, cantidadSunat, descuentoDeVenta, itemsParaSunat, valorUnitarioSunat } from './sunat-importes.ts'
+import { redondear2 } from './dinero.ts'
 
 export function construirUrlApiSunat(base: string, tipo: 'invoices' | 'notes'): string {
   const limpia = String(base || '').trim().replace(/\/+$/, '')
@@ -40,17 +41,23 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
   // el importe de lista (media docena con promo: cobrado 3.00, declarado 3.60).
   // Y en las líneas gravadas ese valor va **sin IGV** (el precio de la app incluye
   // IGV): ver `valorUnitarioSunat`.
-  const items = itemsConDescuento(venta.items || [], descuentoDeVenta(venta)).map((it: any) => {
+  // ⚠️ **2 decimales**: la API (`appadm-sunat`, Pydantic) valida `decimal_places=2` en
+  // `cantidad` y `precio_unitario` y rechaza el envío con *"decimal input should have no more
+  // that 2 decimal places"*. `itemsParaSunat` deja el precio unitario en 2 decimales **sin perder
+  // el total cobrado** y acá se redondea también el valor **sin IGV** de las líneas gravadas
+  // (que es `precio / 1.18` y tiene muchos decimales).
+  const items = itemsParaSunat(venta.items || [], descuentoDeVenta(venta)).map((it: any) => {
     const af = afectacionDe(it, { regionExonerada: config.regionExonerada })
-    const valor = valorUnitarioSunat(it.precioVenta, af)
-    const importe = Math.round(valor * (it.cantidad ?? 1) * 100) / 100
+    const cantidad = cantidadSunat(it.cantidad ?? 1)
+    const valor = redondear2(valorUnitarioSunat(it.precioVenta, af))
+    const importe = redondear2(valor * cantidad)
     if (af.startsWith('10') || af.startsWith('11')) opGravadas += importe
     else if (af.startsWith('2')) opExoneradas += importe
     else if (af.startsWith('3')) opInafectas += importe
     return {
       codigo: it.id || '',
       descripcion: it.nombre,
-      cantidad: it.cantidad,
+      cantidad,
       unidad: it.unidad === 'KG' || it.unidad === 'KGM' ? 'KGM' : 'NIU',
       precio_unitario: valor,
       tipo_afectacion: af,
@@ -58,8 +65,10 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
   })
   // El IGV se calcula por línea como (importe con IGV − base) para que el total
   // cuadre al céntimo con lo cobrado; acá se replica la misma regla.
-  const igv = Math.round(opGravadas * 0.18 * 100) / 100
-  const total = opGravadas + igv + opExoneradas + opInafectas
+  // ⚠️ **Todo redondeado a 2 decimales**: la suma de floats puede dar `0.30000000000000004` y la
+  // API (Pydantic `decimal_places=2`) rechaza el envío por eso.
+  const igv = redondear2(opGravadas * 0.18)
+  const total = redondear2(opGravadas + igv + opExoneradas + opInafectas)
 
   return {
     venta_id: venta.id || '',
@@ -76,7 +85,7 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
     direccion_emisor: config.direccion || '',
     cliente: { tipo_doc: tipoDocCliente, num_doc: cliDni || '00000000', razon_social: cliNombre || 'CLIENTE', direccion: venta.cliente_direccion || '' },
     items,
-    totales: { op_gravadas: opGravadas, op_exoneradas: opExoneradas, op_inafectas: opInafectas, igv, total },
+    totales: { op_gravadas: redondear2(opGravadas), op_exoneradas: redondear2(opExoneradas), op_inafectas: redondear2(opInafectas), igv, total },
   }
 }
 
@@ -101,26 +110,27 @@ export function construirPayloadNota(doc: any, config: Record<string, any>) {
   let opGravadas = 0
   let opExoneradas = 0
   let opInafectas = 0
-  // Igual que en el comprobante: la nota declara los importes efectivamente
-  // cobrados (descuento ya repartido) y el valor sin IGV en las líneas gravadas.
-  const items = itemsConDescuento(venta.items || [], descuentoDeVenta(venta)).map((it: any) => {
+  // Igual que en el comprobante: la nota declara los importes efectivamente cobrados (descuento
+  // ya repartido), el valor sin IGV en las líneas gravadas y **2 decimales** (lo que valida la API).
+  const items = itemsParaSunat(venta.items || [], descuentoDeVenta(venta)).map((it: any) => {
     const af = afectacionDe(it, { regionExonerada: config.regionExonerada })
-    const valor = Math.abs(valorUnitarioSunat(it.precio_unitario ?? it.precioVenta ?? 0, af))
-    const importe = Math.abs(Math.round(valor * (it.cantidad ?? 1) * 100) / 100)
+    const cantidad = cantidadSunat(Math.abs(it.cantidad ?? 1))
+    const valor = Math.abs(redondear2(valorUnitarioSunat(it.precio_unitario ?? it.precioVenta ?? 0, af)))
+    const importe = Math.abs(redondear2(valor * cantidad))
     if (af.startsWith('10') || af.startsWith('11')) opGravadas += importe
     else if (af.startsWith('2')) opExoneradas += importe
     else if (af.startsWith('3')) opInafectas += importe
     return {
       codigo: it.id || '',
       descripcion: it.nombre,
-      cantidad: Math.abs(it.cantidad || 1),
+      cantidad,
       unidad: it.unidad === 'KG' || it.unidad === 'KGM' ? 'KGM' : 'NIU',
       precio_unitario: valor,
       tipo_afectacion: af,
     }
   })
-  const igv = Math.round(opGravadas * 0.18 * 100) / 100
-  const total = opGravadas + igv + opExoneradas + opInafectas
+  const igv = redondear2(opGravadas * 0.18)
+  const total = redondear2(opGravadas + igv + opExoneradas + opInafectas)
 
   return {
     venta_id: venta.id || '',
@@ -140,6 +150,6 @@ export function construirPayloadNota(doc: any, config: Record<string, any>) {
     motivo_codigo: venta.codigoMotivo || (esCredito ? '01' : '02'),
     motivo_descripcion: venta.motivoNota || venta.motivo || '',
     items,
-    totales: { op_gravadas: Math.abs(opGravadas), op_exoneradas: Math.abs(opExoneradas), op_inafectas: Math.abs(opInafectas), igv: Math.abs(igv), total: Math.abs(total) },
+    totales: { op_gravadas: redondear2(Math.abs(opGravadas)), op_exoneradas: redondear2(Math.abs(opExoneradas)), op_inafectas: redondear2(Math.abs(opInafectas)), igv: redondear2(Math.abs(igv)), total: redondear2(Math.abs(total)) },
   }
 }

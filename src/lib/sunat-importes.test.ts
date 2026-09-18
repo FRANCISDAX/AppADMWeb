@@ -3,10 +3,12 @@ import { test } from 'node:test'
 import {
   IGV_RATE,
   afectacionDe,
+  cantidadSunat,
   descuentoDeVenta,
   esGravado,
   importeBrutoDe,
   itemsConDescuento,
+  itemsParaSunat,
   repartirDescuento,
   totalDeclarado,
   valorUnitarioSunat,
@@ -216,4 +218,53 @@ test('un descuento de promoción explica la diferencia entre las líneas y el to
   const descuento = descuentoDeVenta({ descuento_total: 0.2 })
   assert.equal(itemsConDescuento(items, 0).reduce((s, it) => s + importeBrutoDe(it), 0), 2.2)
   assert.equal(totalDeclarado(items, descuento), 2)
+})
+
+// ─── Items para la API de SUNAT (2 decimales) ────────────────────────────────────────────────
+// 📌 Bug del 18/09/2026: la API (`appadm-sunat`, Pydantic `decimal_places=2`) rechazaba el envío
+// con *"decimal input should have no more that 2 decimal places"* porque el precio unitario
+// efectivo viajaba con hasta 6 decimales (una línea con descuento: 1.09 / 2 = 0.545).
+
+const dosDecimales = (n: number) => Number(n.toFixed(2)) === n
+
+test('itemsParaSunat deja el precio unitario en 2 decimales', () => {
+  const items = [
+    { cantidad: 2, precioVenta: 0.6, subtotal: 1.2, tipoAfectacion: '20' },
+    { cantidad: 2, precioVenta: 0.5, subtotal: 1.0, tipoAfectacion: '20' },
+  ]
+  // Sin esto, el reparto proporcional daba 0.545 (3 decimales) y la API rechazaba el envío.
+  assert.equal(itemsConDescuento(items, 0.2)[0].precioVenta, 0.545)
+  const paraSunat = itemsParaSunat(items, 0.2)
+  for (const it of paraSunat) {
+    assert.ok(dosDecimales(Number(it.precioVenta)), `precio unitario ${it.precioVenta}`)
+    assert.ok(dosDecimales(Number(it.cantidad)), `cantidad ${it.cantidad}`)
+  }
+})
+
+test('itemsParaSunat conserva el total cobrado (aunque el redondeo no dé exacto por línea)', () => {
+  const items = [
+    { cantidad: 2, precioVenta: 0.6, subtotal: 1.2, tipoAfectacion: '20' },
+    { cantidad: 2, precioVenta: 0.5, subtotal: 1.0, tipoAfectacion: '20' },
+  ]
+  const paraSunat = itemsParaSunat(items, 0.2)
+  const suma = paraSunat.reduce((s, it) => s + Number(it.precioVenta) * Number(it.cantidad), 0)
+  assert.equal(Number(suma.toFixed(2)), 2, 'las líneas suman exactamente lo cobrado')
+  assert.equal(paraSunat.reduce((s, it) => s + Number(it.subtotal), 0).toFixed(2), '2.00')
+})
+
+test('itemsParaSunat sin descuento no cambia nada', () => {
+  const items = [{ cantidad: 3, precioVenta: 0.5, subtotal: 1.5, tipoAfectacion: '20' }]
+  const paraSunat = itemsParaSunat(items, 0)
+  assert.equal(paraSunat[0].precioVenta, 0.5)
+  assert.equal(paraSunat[0].cantidad, 3)
+  assert.equal(paraSunat[0].subtotal, 1.5)
+})
+
+test('itemsParaSunat avisa con una cantidad de 3 decimales: se declara con 2', () => {
+  // Venta por peso (KGM): la API no acepta 3 decimales en `cantidad`.
+  const paraSunat = itemsParaSunat([{ cantidad: 1.255, precioVenta: 20, subtotal: 25.1, tipoAfectacion: '20' }], 0)
+  assert.equal(paraSunat[0].cantidad, 1.26)
+  assert.equal(cantidadSunat(0), 1, 'una cantidad inválida se declara como 1 (nunca 0)')
+  assert.equal(cantidadSunat(-2), 1)
+  assert.equal(cantidadSunat(2), 2)
 })

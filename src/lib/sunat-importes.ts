@@ -133,6 +133,59 @@ export function descuentoDeVenta(venta: Record<string, unknown> | null | undefin
   return Number.isFinite(n) && n > 0 ? redondear2(n) : 0
 }
 
+/** Cantidad con la que se declara una línea: la API de SUNAT acepta **2 decimales**. */
+export function cantidadSunat(n: number): number {
+  const c = Number.isFinite(n) && n > 0 ? Number(n) : 1
+  return Math.max(0.01, redondear2(c))
+}
+
+/**
+ * Items listos para **enviar a SUNAT**: el descuento ya repartido (`itemsConDescuento`) y el
+ * **precio unitario con 2 decimales**.
+ *
+ * 📌 **Bug del 18/09/2026**: *"decimal input should have no more that 2 decimal places"*. Ese
+ * mensaje es del **backend** (`appadm-sunat`, Pydantic: `precio_unitario = Field(decimal_places=2)`
+ * y `cantidad = Field(gt=0, decimal_places=2)` en `app/schemas/invoice.py`), no de SUNAT. El web
+ * mandaba el precio unitario efectivo con hasta **6 decimales** (`DECIMALES_PRECIO`): una línea con
+ * descuento daba `1.09 / 2 = 0.545`, y una línea **gravada** da `precio / 1.18` (0.508475…), así que
+ * el envío se caía con un error de validación.
+ *
+ * 🔑 **El precio unitario se ajusta a 2 decimales y el residuo del redondeo se repone línea por
+ * línea** (de la más flexible —cantidad 1— a la menos flexible) moviéndolo en pasos de
+ * `cantidad` céntimos, para que **la suma de las líneas siga siendo el total cobrado**. Si el
+ * residuo no es divisible por la cantidad de ninguna línea queda ≤1 céntimo (aceptable: el XML
+ * se arma con esos importes y sigue siendo consistente).
+ */
+export function itemsParaSunat<T extends ItemVenta>(items: readonly T[], descuentoTotal: number): T[] {
+  const conDescuento = itemsConDescuento(items, descuentoTotal)
+  const totalCobrado = redondear2(conDescuento.reduce((s, it) => s + importeBrutoDe(it), 0))
+  const lineas = conDescuento.map((it) => {
+    const cantidad = cantidadSunat(cantidadDe(it))
+    const neto = importeBrutoDe(it)
+    const unitario = redondear2(neto / cantidad)
+    return { it, cantidad, unitario, neto: redondear2(unitario * cantidad) }
+  })
+
+  const suma = () => redondear2(lineas.reduce((s, l) => s + l.neto, 0))
+  let residuo = Math.round((totalCobrado - suma()) * 100)
+  if (residuo !== 0) {
+    const porFlexibilidad = [...lineas].sort((a, b) => a.cantidad - b.cantidad)
+    for (const linea of porFlexibilidad) {
+      if (residuo === 0) break
+      if (linea.cantidad <= 0) continue
+      const centavosPorUnidad = Math.trunc(residuo / linea.cantidad)
+      if (centavosPorUnidad === 0) continue
+      const nuevo = redondear2(linea.unitario + centavosPorUnidad / 100)
+      if (nuevo < 0) continue
+      linea.unitario = nuevo
+      linea.neto = redondear2(linea.unitario * linea.cantidad)
+      residuo = Math.round((totalCobrado - suma()) * 100)
+    }
+  }
+
+  return lineas.map(({ it, cantidad, unitario, neto }) => ({ ...it, cantidad, precioVenta: unitario, subtotal: neto }))
+}
+
 /** Total que debe declarar el comprobante: lo cobrado (los items ya sin descuento). */
 export function totalDeclarado(items: readonly ItemVenta[], descuentoTotal: number): number {
   const conDescuento = itemsConDescuento(items, descuentoTotal)
