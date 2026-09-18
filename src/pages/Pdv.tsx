@@ -540,6 +540,8 @@ export function Pdv() {
     setPagos([])
     setPagoCredito(false)
     setGrupoTransf(false)
+    // Envío del pedido: se carga en el cajero para que sepa que es delivery (y quede en el ticket).
+    setEnvio(p.envio ? { tipo: 'domicilio', direccion: p.envio.direccion || '', referencia: p.envio.referencia || '', zonaId: p.envio.zonaId || '', costo: Number(p.envio.costo) || 0, notas: p.envio.notas || '' } : { tipo: 'tienda', direccion: '', referencia: '', zonaId: '', costo: 0, notas: '' })
     setToast(`🧾 Cobrando pedido ${p.codigo} (${fmt(p.total)})`)
   }
 
@@ -1502,6 +1504,11 @@ export function Pdv() {
                     Vendedor: {pedidoActivo.vendedor || '—'}
                     {clienteDelPedido(pedidoActivo) ? ` · ${clienteDelPedido(pedidoActivo)}` : ''}
                   </p>
+                  {pedidoActivo.envio && (pedidoActivo.envio.direccion || pedidoActivo.envio.notas) && (
+                    <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-200">
+                      🚚 Envío a domicilio: {pedidoActivo.envio.direccion || 'sin dirección'}{pedidoActivo.envio.referencia ? ` · Ref: ${pedidoActivo.envio.referencia}` : ''}{pedidoActivo.envio.notas ? ` · ${pedidoActivo.envio.notas}` : ''}{Number(pedidoActivo.envio.costo) > 0 ? ` · S/ ${Number(pedidoActivo.envio.costo).toFixed(2)}` : ''}
+                    </p>
+                  )}
                   <p className="text-[10px] text-amber-700 dark:text-amber-300">
                     El monto es el cotizado por el vendedor: no se recalcula. Elegí comprobante y forma de pago abajo.
                   </p>

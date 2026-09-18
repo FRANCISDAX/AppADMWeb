@@ -81,6 +81,8 @@ export type PedidoEnCarrito = {
   clienteDni: string
   clienteNombre: string
   items: ItemPedidoEnCarrito[]
+  /** Envío a domicilio cargado por el vendedor (si lo hay): el cajero lo hereda. */
+  envio: { tipo?: string; direccion?: string; referencia?: string; zonaId?: string; costo?: number; notas?: string } | null
 }
 
 const texto = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
@@ -92,7 +94,7 @@ export function pedidoParaCarrito(doc: {
   serieNumero?: unknown
   vendedorNombre?: unknown
   cajaId?: unknown
-  venta?: { total?: unknown; cliente_dni?: unknown; cliente_nombre?: unknown; items?: unknown } | null
+  venta?: { total?: unknown; cliente_dni?: unknown; cliente_nombre?: unknown; items?: unknown; envio?: unknown } | null
 } | null | undefined): PedidoEnCarrito {
   const venta = doc?.venta ?? {}
   const items = Array.isArray(venta.items) ? venta.items : []
@@ -104,6 +106,7 @@ export function pedidoParaCarrito(doc: {
     cajaId: texto(doc?.cajaId),
     clienteDni: texto(venta.cliente_dni),
     clienteNombre: texto(venta.cliente_nombre),
+    envio: (venta.envio && typeof venta.envio === 'object' ? venta.envio : null) as PedidoEnCarrito['envio'],
     items: items.map((it) => {
       const linea = (it ?? {}) as { nombre?: unknown; quantity?: unknown; cantidad?: unknown; precioVenta?: unknown }
       return {
