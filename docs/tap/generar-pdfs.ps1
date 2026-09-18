@@ -22,7 +22,9 @@ $documentos = @(
   '03-requerimientos',
   '04-pruebas',
   '05-informe',
-  '06-sustentacion'
+  '05-informe-TAP',
+  '06-sustentacion',
+  '08-cronograma-y-costos'
 )
 
 foreach ($d in $documentos) {

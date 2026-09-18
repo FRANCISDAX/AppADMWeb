@@ -12,7 +12,7 @@
 # Se mantiene en ASCII a proposito (PowerShell 5.1 lee como ANSI los .ps1 UTF-8 sin BOM).
 
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$documentos = @('index','01-arquitectura','02-modelo-datos','03-requerimientos','04-pruebas','05-informe','06-sustentacion')
+$documentos = @('index','01-arquitectura','02-modelo-datos','03-requerimientos','04-pruebas','05-informe','05-informe-TAP','06-sustentacion','08-cronograma-y-costos')
 
 function Get-PaginasPdf($ruta) {
   $txt = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($ruta))
@@ -107,6 +107,8 @@ $pruebas = Leer '04-pruebas.html'
 $informe = Leer '05-informe.html'
 $slides  = Leer '06-sustentacion.html'
 $guion   = Leer 'guion-sustentacion.md'
+$informeTap = Leer '05-informe-TAP.html'
+$cronograma = Leer '08-cronograma-y-costos.html'
 
 Exigir 'Anexo 2 cubre las colecciones' ((Contar $modelo 'tbl[A-Z]') -ge 16) ("(referencias a colecciones: {0})" -f (Contar $modelo 'tbl[A-Z]'))
 Exigir 'Anexo 2 describe el ciclo de vida del documento' (($modelo -match 'PENDIENTE') -and ($modelo -match 'cancelado') -and ($modelo -match 'anulada')) ''
@@ -122,6 +124,28 @@ Exigir 'Anexo 5: los cinco capitulos' (($informe -match 'Cap.tulo V|Conclusiones
 Exigir 'Anexo 5: marcas para el tesista' ((Contar $informe '\[COMPLETAR') -ge 10) ("([COMPLETAR: {0}])" -f (Contar $informe '\[COMPLETAR'))
 Exigir 'Anexo 6: diapositivas de sustentacion' ((Contar $slides 'class="slide') -ge 18) ("(diapositivas: {0})" -f (Contar $slides 'class="slide'))
 Exigir 'Anexo 6: guion de la defensa' (($guion.Length -gt 3000) -and ((Contar $guion '\?\*?\*?') -ge 10)) ("(guion: {0:N0} KB)" -f ($guion.Length/1KB))
+
+# ─── El informe tiene que seguir el indice EXIGIDO por la institucion ────────────────────────
+# Los patrones son fragmentos sin acentos a proposito: este script se mantiene en ASCII porque
+# PowerShell 5.1 lee como ANSI los .ps1 UTF-8 sin BOM.
+$seccionesExigidas = @(
+  'INTRODUCCI','stico situacional','Adversidades potenciales','Oportunidad de mejora',
+  'Objetivos','Alcance','Ventaja Comparativa','Ubicaci','Organizaci',
+  'Beneficiarios directos e indirectos','Metas, resultados y efectos esperados',
+  'Administraci','Diagrama de Gantt','Evaluaci','Costo del proyecto','Financiamiento',
+  'Continuidad y sostenibilidad','Conclusiones','Bibliograf','Anexos'
+)
+$faltan = @()
+foreach ($s in $seccionesExigidas) { if ($informeTap -notmatch [regex]::Escape($s)) { $faltan += $s } }
+Exigir "Informe en el formato exigido (indice institucional, $($seccionesExigidas.Count) secciones)" ($faltan.Count -eq 0) ("(faltan: {0})" -f ($faltan -join ', '))
+Exigir 'Anexo 8: cronograma con diagrama de Gantt' (($cronograma -match 'Gantt') -and ($cronograma.Length -gt 8000)) ("({0:N0} KB)" -f ($cronograma.Length/1KB))
+Exigir 'Anexo 8: costos y financiamiento por completar' (($cronograma -match 'COMPLETAR') -and ($cronograma -match 'Financiamiento')) ''
+
+# Coherencia del catalogo: el informe tiene que citar la MISMA cantidad de requerimientos que el anexo.
+# (Se cuentan los codigos unicos del anexo: las referencias cruzadas inflan el total de coincidencias.)
+$rfAnexo = ([regex]::Matches($req, 'RF-\d+') | ForEach-Object { $_.Value } | Select-Object -Unique).Count
+$rfInforme = ([regex]::Matches($informeTap, "$rfAnexo requerimientos funcionales")).Count
+Exigir "Coherencia del catalogo de requerimientos ($rfAnexo RF)" ($rfInforme -ge 1) "(el informe cita $rfInforme vez(es) esa cifra)"
 
 # ─── El paquete se imprime y se entrega: no puede filtrar credenciales ──────────────────────
 # ⚠️ `Get-ChildItem -Include` SIN `-Recurse` no devuelve nada (comprobacion vacua): se enumeran

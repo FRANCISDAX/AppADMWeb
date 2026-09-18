@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>TAP — Cronograma, diagrama de Gantt, costos y financiamiento</title>
+  <link rel="stylesheet" href="tap.css">
+  <style>
+    /* ── Diagrama de Gantt (HTML/CSS puro: sin librerías, imágenes ni guiones) ───────
+       El eje tiene nueve columnas de día (10 al 18 de septiembre de 2026); cada columna
+       mide 100/9 = 11,1111 % del ancho de la pista. Las barras se ubican con las clases
+       de columna (.cN = día de inicio) y se dimensionan con las de duración (.wN = días). */
+    .gantt { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin: 3mm 0 2mm; }
+    .gantt-fila { display: grid; grid-template-columns: 46mm 1fr; }
+    .gantt-fila + .gantt-fila { border-top: 1px solid #e2e8f0; }
+    .gantt-cab { background: #f8fafc; }
+    .gantt-etiqueta { padding: 1.3mm 2mm; border-right: 1px solid #e2e8f0; line-height: 1.25; font-size: 9.5px; color: #334155; }
+    .gantt-etiqueta .cod { font-weight: 700; color: #c2410c; }
+    .gantt-etiqueta .fechas { display: block; font-size: 8.5px; color: #94a3b8; font-variant-numeric: tabular-nums; }
+    .gantt-pista { position: relative; min-height: 8mm;
+      background-image: repeating-linear-gradient(to right, #eef2f7 0 0.22mm, transparent 0.22mm 11.1111%); }
+    .gantt-eje { min-height: 7mm; }
+    .gantt-dias { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(9, 1fr); }
+    .gantt-dias span { text-align: center; font-size: 9px; color: #475569; padding-top: 0.7mm; line-height: 1.15; font-variant-numeric: tabular-nums; }
+    .gantt-dias span b { display: block; font-size: 7.5px; font-weight: 600; color: #94a3b8; }
+    .gantt-dias span.sr { background: repeating-linear-gradient(45deg, #f8fafc 0 1mm, #e9eef5 1mm 2mm); }
+    .gantt-barra { position: absolute; top: 1.3mm; height: 5.4mm; display: flex; overflow: hidden;
+      border: 1px solid #fb923c; border-radius: 2.5px; background: #fff; }
+    .gantt-barra i { flex: 1 1 0; }
+    .gantt-barra i.r { background: rgba(249, 115, 22, 0.55); }
+    .gantt-barra i.n { background: repeating-linear-gradient(45deg, rgba(249, 115, 22, 0.10) 0 1mm, rgba(249, 115, 22, 0.30) 1mm 2mm); }
+    .gantt-barra.dis { border-style: dashed; border-color: #94a3b8; background: none; }
+    .gantt-barra .rot { position: absolute; left: 1.6mm; top: 0; line-height: 5.2mm; font-size: 8.5px; color: #475569; }
+    .c1 { left: calc(0% + 0.7mm); }
+    .c6 { left: calc(55.5556% + 0.7mm); }
+    .w3 { width: calc(33.3333% - 1.4mm); }
+    .w4 { width: calc(44.4444% - 1.4mm); }
+    .w7 { width: calc(77.7778% - 1.4mm); }
+    .w8 { width: calc(88.8889% - 1.4mm); }
+    .w9 { width: calc(100% - 1.4mm); }
+    .gantt-leyenda { display: flex; flex-wrap: wrap; gap: 2mm 5mm; font-size: 9.5px; color: #475569; margin: 0 0 4mm; }
+    .gantt-leyenda span { display: flex; align-items: center; gap: 1.5mm; }
+    .muestra { display: inline-block; width: 9mm; height: 3.2mm; border: 1px solid #fb923c; border-radius: 2px; }
+    .muestra.lleno { background: rgba(249, 115, 22, 0.55); }
+    .muestra.rayado { background: repeating-linear-gradient(45deg, rgba(249, 115, 22, 0.10) 0 1mm, rgba(249, 115, 22, 0.30) 1mm 2mm); }
+    .muestra.dis { border-style: dashed; border-color: #94a3b8; }
+    .muestra.diacero { background: repeating-linear-gradient(45deg, #f8fafc 0 1mm, #e9eef5 1mm 2mm); border-color: #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="portada">
+      <div class="institucion">Trabajo de Aplicación Profesional</div>
+      <h1>Cronograma de actividades, diagrama de Gantt, costos y financiamiento</h1>
+      <div class="filete"></div>
+      <p class="subtitulo">Anexo 8 — Desarrollo de las actividades, cronograma del proyecto, costo del proyecto,
+      financiamiento, continuidad y sostenibilidad</p>
+      <p class="meta">Sistema de punto de venta, inventario y facturación electrónica<br/>
+      Cronograma construido con el historial de cambios del repositorio · estructura de costos con montos por completar</p>
+    </div>
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s1">1. Alcance y método del anexo</h2>
+
+    <p>Este anexo desarrolla el cronograma de actividades del proyecto, su representación gráfica en un diagrama
+    de Gantt y la estructura de costos y de financiamiento que el informe debe presentar. Contiene dos partes de
+    naturaleza distinta y conviene distinguirlas desde el inicio. El <strong>cronograma es un dato medido</strong>:
+    se construye con las fechas y las horas que constan en el historial de cambios del repositorio del sistema.
+    Los <strong>costos son una estructura por completar</strong>: el anexo fija los rubros, las unidades y las
+    cantidades que corresponden a este sistema y deja cada monto marcado con la etiqueta
+    <code>[COMPLETAR: …]</code>, porque solo el tesista puede obtenerlos de cotizaciones reales de su localidad.
+    No se consigna en este documento ninguna cifra monetaria, tarifa, nombre de proveedor ni dirección.</p>
+
+    <h3>1.1 Período registrado en el repositorio</h3>
+
+    <p>El historial de cambios del repositorio registra <strong>71 cambios</strong> (<em>commits</em>) entre el
+    10 y el 18 de septiembre de 2026. De ellos, <strong>70 corresponden al período de desarrollo del sistema</strong>
+    (del 10 al 17 de septiembre) y uno al cierre del paquete documental del trabajo (18 de septiembre). El primer
+    cambio está fechado el 10/09/2026 a las 15:15 y el último del período de desarrollo, el 17/09/2026 a las 23:27.</p>
+
+    <p>Los cambios se concentran en <strong>cuatro jornadas con registro</strong>: el 10, el 15, el 16 y el 17 de
+    septiembre. La ventana de calendario que va del primer al último día de desarrollo abarca ocho días, pero los
+    días 11, 12, 13 y 14 de septiembre no presentan ningún registro en el historial. Se declara esta diferencia en
+    lugar de repartir el trabajo en fechas que el repositorio no respalda.</p>
+
+    <div class="nota">
+      <strong>Aclaración metodológica obligatoria.</strong> El cronograma de este anexo refleja las
+      <strong>fechas de registro en el repositorio</strong>, es decir, el trabajo de desarrollo efectivamente
+      versionado, y no la totalidad de la actividad administrativa del proyecto. Las etapas previas al primer
+      registro —el análisis del proceso del negocio, la definición de requerimientos, la puesta en marcha inicial—
+      <strong>pueden no tener evidencia en el historial</strong>. En esos casos las fechas se sustituyen por la marca
+      <code>[COMPLETAR: fecha real de inicio y de cierre del proyecto]</code>, que el tesista debe completar porque
+      el informe necesita el período completo del trabajo. Que la actividad del proyecto excede el registro
+      versionado lo confirma el propio historial del repositorio, que consigna comprobantes emitidos en operación
+      real desde el 02/09/2026 y un turno de caja del 14/09/2026, ambos anteriores al primer cambio registrado.
+    </div>
+
+    <h3>1.2 Instrumentos con los que se construyó el cronograma</h3>
+
+    <p>Las fechas, las horas y los volúmenes de trabajo que aparecen en este anexo se obtuvieron del historial de
+    control de versiones del repositorio, sin estimaciones. Los instrumentos empleados son los siguientes.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr><th>Instrumento</th><th>Qué aporta al cronograma</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>git log --reverse --format="%ad|%s" --date=short</code></td>
+          <td>La fecha y el asunto de cada cambio, en orden cronológico: es la fuente de la fecha de inicio y de
+          cierre de cada etapa y de la asignación de cada jornada a una etapa temática.</td>
+        </tr>
+        <tr>
+          <td><code>git log --format="%ad" --date=format:"%Y-%m-%d %H:%M"</code></td>
+          <td>La hora de cada cambio: permite reconstruir la ventana de registro de cada jornada y es el insumo de
+          la estimación de horas de desarrollo de la sección 4.</td>
+        </tr>
+        <tr>
+          <td><code>git log --name-only</code></td>
+          <td>Los archivos que toca cada cambio: es lo que permite atribuir una jornada a una etapa y no a otra
+          (por ejemplo, la aparición de los módulos de emisión electrónica o de arqueo).</td>
+        </tr>
+        <tr>
+          <td><code>git log --diff-filter=A -- &lt;archivo&gt;</code></td>
+          <td>La fecha en que un archivo se incorpora al repositorio: fecha la aparición de cada módulo del sistema.</td>
+        </tr>
+        <tr>
+          <td><code>git log --shortstat</code></td>
+          <td>El volumen de cada cambio (archivos tocados, líneas agregadas y eliminadas): mide la magnitud del
+          trabajo registrado en cada jornada del cronograma.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="aviso">
+      <strong>Cómo leer los conteos.</strong> «Archivos tocados» es la suma de los archivos modificados en cada
+      cambio, de modo que un mismo archivo puede contarse más de una vez: no es un inventario de archivos distintos
+      del sistema. «Líneas agregadas» incluye también documentación y archivos de configuración, no solo código
+      fuente. Las cifras de tamaño del sistema que se citan en este anexo —195 casos automatizados en 12 archivos de
+      prueba, 16 colecciones de datos, 27 páginas de la aplicación y 29 módulos de lógica pura— coinciden con las de
+      los demás anexos del paquete documental y se midieron sobre el código del repositorio.
+    </div>
+
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s2">2. Desarrollo de las actividades</h2>
+
+    <p>El proyecto se organizó en siete etapas. La columna de duración indica el intervalo de calendario que el
+    repositorio permite sostener para cada etapa y, a continuación, las jornadas de ese intervalo en las que existen
+    cambios registrados. Los volúmenes de trabajo de cada jornada figuran en la tabla de registro diario de la
+    sección 3.4.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th style="width: 26mm;">Etapa</th>
+          <th>Actividades principales</th>
+          <th style="width: 42mm;">Producto entregable</th>
+          <th style="width: 34mm;">Duración</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>E1.</strong> Análisis del proceso del negocio y definición de los requerimientos</td>
+          <td>Levantamiento del proceso de venta, caja, inventario y compras del establecimiento; identificación de
+          los puntos donde se producían las pérdidas del rubro (existencias inmovilizadas o vencidas, ventas no
+          cobradas, diferencias de caja no explicadas y ventas no registradas); definición de los requerimientos
+          funcionales y no funcionales; delimitación del alcance y de los roles de usuario con sus permisos.</td>
+          <td>Documento de requerimientos y casos de uso, con el catálogo de actores, roles y permisos
+          (consolidado en el Anexo 3).</td>
+          <td><code>[COMPLETAR: fecha real de inicio y de cierre de la etapa]</code> · sin evidencia de fechas en el
+          repositorio</td>
+        </tr>
+        <tr>
+          <td><strong>E2.</strong> Diseño de la arquitectura del sistema y del modelo de datos</td>
+          <td>Definición de la arquitectura por capas (lógica pura verificable, servicios de acceso a datos e
+          interfaz); separación del servicio de facturación electrónica para que el certificado digital nunca resida
+          en el navegador; diseño del modelo documental con una colección por dominio; definición del ciclo de vida
+          del documento de venta, de los contadores de numeración y de los índices requeridos por las consultas.</td>
+          <td>Anexo 1 (arquitectura) y Anexo 2 (modelo de datos): esquema de 16 colecciones, capas del sistema y
+          flujo de emisión del comprobante.</td>
+          <td>7 días calendario (10 al 16 de septiembre) · 3 jornadas con registro: 10, 15 y 16</td>
+        </tr>
+        <tr>
+          <td><strong>E3.</strong> Desarrollo del núcleo de ventas y de caja</td>
+          <td>Construcción del punto de venta (búsqueda por nombre y por código, venta rápida, venta por presentación
+          con factor de conversión, venta por peso, kits y artículos no catalogados, pausa y recuperación de ventas);
+          apertura y cierre de turno; cobro con una o varias formas de pago; arqueo de caja con desglose por origen y
+          por billetera, conciliación por medio de pago y conteo ciego; cierre de caja con firmas; anulación de ventas
+          y emisión de notas de crédito y de débito.</td>
+          <td>Módulo de punto de venta y módulo de caja en operación, con las reglas de cálculo de dinero, formas de
+          pago y arqueo concentradas en la capa pura y verificadas por pruebas automatizadas.</td>
+          <td>7 días calendario (10 al 16 de septiembre) · 3 jornadas con registro: 10, 15 y 16</td>
+        </tr>
+        <tr>
+          <td><strong>E4.</strong> Desarrollo de inventario, clientes y proveedores</td>
+          <td>Catálogo de productos con presentaciones, kits, precio mínimo, stock mínimo, fecha de vencimiento y
+          afectación tributaria; registro de movimientos de existencias y kardex por producto; toma física de
+          inventario y ajustes; categorías administradas; clientes con crédito, listas de precio y descuento;
+          proveedores, registro de compras, pagos e historial de precios; reportes de rotación, comparación de precios
+          entre proveedores y ranking de confiabilidad.</td>
+          <td>Módulos de inventario, clientes y proveedores en operación, con sus reportes y sus exportaciones a hoja
+          de cálculo.</td>
+          <td>8 días calendario (10 al 17 de septiembre) · 4 jornadas con registro: 10, 15, 16 y 17</td>
+        </tr>
+        <tr>
+          <td><strong>E5.</strong> Integración de la facturación electrónica y envío a la SUNAT</td>
+          <td>Construcción de la petición de emisión en la aplicación; consumo del servicio de facturación, que valida
+          la petición, arma el documento XML conforme al estándar, lo firma con el certificado digital del emisor y lo
+          remite a la administración tributaria; registro del resultado y de la constancia de recepción en el
+          documento; administración de series y correlativos por punto de emisión; declaración del descuento, de la
+          afectación tributaria por ítem y de los importes con dos decimales; consolidación de las notas de venta del
+          día en una boleta.</td>
+          <td>Emisión electrónica en operación de boletas, facturas y notas de crédito y débito, con el flujo de
+          emisión documentado en el Anexo 1 y el ciclo de vida del documento en el Anexo 2.</td>
+          <td>8 días calendario (10 al 17 de septiembre) · 4 jornadas con registro: 10, 15, 16 y 17</td>
+        </tr>
+        <tr>
+          <td><strong>E6.</strong> Pruebas, validación con el usuario y corrección de incidencias</td>
+          <td>Ejecución de las pruebas automatizadas de la lógica de negocio con el ejecutor nativo del entorno de
+          ejecución; verificación estática de tipos y análisis de estilo sobre una línea base acordada; validación
+          funcional con el usuario en el establecimiento; corrección de las incidencias detectadas en la operación
+          real (reportes de fechas, arqueo y conciliación de caja, pedidos enviados a caja, importes declarados en el
+          comprobante) y comprobación contra los datos de producción en modo de solo lectura.</td>
+          <td>Anexo 4 (plan de pruebas): 195 casos automatizados en 12 archivos, casos de aceptación, inventario de
+          incidencias corregidas y matriz de trazabilidad.</td>
+          <td>3 días calendario (15 al 17 de septiembre) · 3 jornadas con registro: 15, 16 y 17</td>
+        </tr>
+        <tr>
+          <td><strong>E7.</strong> Despliegue, puesta en marcha y documentación</td>
+          <td>Publicación de la aplicación en el servicio de alojamiento y actualización de la caché de publicación;
+          configuración de las cabeceras de seguridad y del trabajador de servicio sin conexión; puesta en marcha en
+          el establecimiento y acompañamiento del personal durante las primeras jornadas de operación; elaboración del
+          manual de usuario y del resumen del sistema, regenerados cuando el flujo cambia de fondo; cierre del paquete
+          documental del trabajo.</td>
+          <td>Aplicación publicada y en operación en el establecimiento; manual de usuario y resumen del sistema;
+          paquete documental del trabajo (anexos 1 al 8).</td>
+          <td>9 días calendario (10 al 18 de septiembre) · 4 jornadas con registro: 10, 15, 17 y 18 ·
+          <code>[COMPLETAR: fecha real de la puesta en marcha]</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="aviso">
+      <strong>Etapas que el historial no permite separar por fecha.</strong> Las etapas 2 a 5 comparten el día 10 de
+      septiembre porque en esa jornada el historial registra la incorporación de la base completa del sistema en un
+      solo cambio (125 archivos y 22 552 líneas agregadas): el diseño, el núcleo de ventas y caja, los módulos de
+      inventario, clientes y proveedores y la integración de la facturación electrónica entran al repositorio el
+      mismo día, de modo que el cronograma no puede fecharlos por separado. Algo semejante ocurre con las etapas 4 y
+      5, que comparten íntegramente su intervalo y sus jornadas con registro, porque en las jornadas del 15, 16 y 17
+      de septiembre se alternó el trabajo sobre los módulos de gestión con el de la emisión electrónica: los cambios
+      sobre los módulos de emisión y de consolidación conviven con los de inventario, clientes y compras. Se declara
+      la coincidencia, en lugar de forzar una separación que el repositorio no respalda. Las etapas 1 y 2 presentan
+      además una limitación propia de su naturaleza: el análisis y el diseño no dejan rastro en el control de
+      versiones hasta que existe código que los materialice.
+    </div>
+
+    <h3>2.1 Correspondencia con las actividades del informe del trabajo</h3>
+
+    <p>El informe del trabajo presenta la administración de las actividades agrupada en cinco etapas y remite a este
+    anexo para las fechas y su representación gráfica. La correspondencia entre aquella agrupación y el desglose en
+    siete etapas que aquí se utiliza es la siguiente; las fechas son las mismas en ambos documentos, porque provienen
+    del único historial de cambios del repositorio.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th style="width: 58mm;">Etapas de este anexo</th>
+          <th style="width: 58mm;">Actividades del informe del trabajo</th>
+          <th>Observación</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>E1. Análisis del proceso del negocio y definición de los requerimientos</td>
+          <td>1. Análisis y diseño</td>
+          <td>Etapa previa a la ventana de cambios registrada: sus fechas se completan
+          (<code>[COMPLETAR]</code>) porque el control de versiones no las registra.</td>
+        </tr>
+        <tr>
+          <td>E2. Diseño de la arquitectura del sistema y del modelo de datos</td>
+          <td>1. Análisis y diseño</td>
+          <td>El diseño se materializa en el código de la primera jornada registrada; el período anterior se completa
+          (<code>[COMPLETAR]</code>).</td>
+        </tr>
+        <tr>
+          <td>E3. Desarrollo del núcleo de ventas y de caja</td>
+          <td>2. Desarrollo de los módulos</td>
+          <td>La construcción inicial de los módulos es anterior a la ventana registrada; la fecha de inicio que muestra
+          el diagrama es la del primer registro versionado de esos módulos, no la del comienzo de su construcción.</td>
+        </tr>
+        <tr>
+          <td>E4. Desarrollo de inventario, clientes y proveedores</td>
+          <td>2. Desarrollo de los módulos</td>
+          <td>Mismo criterio que la etapa anterior.</td>
+        </tr>
+        <tr>
+          <td>E5. Integración de la facturación electrónica y envío a la SUNAT</td>
+          <td>3. Integración fiscal</td>
+          <td>Etapa que se extiende dentro de la ventana registrada, con varios ciclos de ajuste hasta lograr la
+          aceptación de los comprobantes.</td>
+        </tr>
+        <tr>
+          <td>E6. Pruebas, validación con el usuario y corrección de incidencias</td>
+          <td>4. Validación con el usuario y correcciones</td>
+          <td>Las correcciones registradas sobre los módulos de las etapas E3 y E4 son parte de esta etapa, aunque en el
+          diagrama aparezcan dentro de su intervalo.</td>
+        </tr>
+        <tr>
+          <td>E7. Despliegue, puesta en marcha y documentación</td>
+          <td>5. Despliegue y puesta en marcha · 6. Documentación y material de sustentación</td>
+          <td>El informe separa la puesta en marcha de la documentación; este anexo las reúne en una sola etapa porque
+          el historial las registra en las mismas jornadas.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s3">3. Cronograma: diagrama de Gantt</h2>
+
+    <p>El diagrama siguiente representa las siete etapas del apartado anterior sobre un eje temporal de días, que
+    abarca del 10 al 18 de septiembre de 2026: el período completo con registro en el repositorio. Cada etapa ocupa
+    una fila; la barra se ubica en el día de inicio y se dimensiona según su duración, y cada módulo de la barra
+    corresponde a un día del calendario, con relleno sólido cuando esa fecha tiene cambios registrados y con trama
+    cuando no los tiene. El encabezado del eje identifica cada columna con el día del mes y la inicial del día de la
+    semana.</p>
+
+    <div class="gantt evitar-corte">
+      <!-- Eje temporal: nueve columnas, del 10 al 18 de septiembre de 2026 -->
+      <div class="gantt-fila gantt-cab">
+        <div class="gantt-etiqueta"><strong>Etapa</strong></div>
+        <div class="gantt-pista gantt-eje">
+          <div class="gantt-dias">
+            <span>10<b>J</b></span>
+            <span class="sr">11<b>V</b></span>
+            <span class="sr">12<b>S</b></span>
+            <span class="sr">13<b>D</b></span>
+            <span class="sr">14<b>L</b></span>
+            <span>15<b>M</b></span>
+            <span>16<b>X</b></span>
+            <span>17<b>J</b></span>
+            <span>18<b>V</b></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- E1 · sin fechas en el repositorio -->
+      <div class="gantt-fila">
+        <div class="gantt-etiqueta"><span class="cod">E1</span> Análisis y requerimientos
+          <span class="fechas">[COMPLETAR]</span></div>
+        <div class="gantt-pista">
+          <div class="gantt-barra dis c1 w9"><span class="rot">Etapa sin fechas en el repositorio ·
+            espacio reservado para que el tesista grafique la barra: [COMPLETAR: fecha real de inicio y de cierre]</span></div>
+        </div>
+      </div>
+
+      <!-- E2 · 10/09 al 16/09 · 7 días -->
+      <div class="gantt-fila">
+        <div class="gantt-etiqueta"><span class="cod">E2</span> Arquitectura y modelo de datos
+          <span class="fechas">10/09 – 16/09 · 7 días</span></div>
+        <div class="gantt-pista">
+          <div class="gantt-barra c1 w7"><i class="r"></i><i class="n"></i><i class="n"></i><i class="n"></i><i class="n"></i><i class="r"></i><i class="r"></i></div>
+        </div>
+      </div>
+
+      <!-- E3 · 10/09 al 16/09 · 7 días -->
+      <div class="gantt-fila">
+        <div class="gantt-etiqueta"><span class="cod">E3</span> Núcleo de ventas y caja
+          <span class="fechas">10/09 – 16/09 · 7 días</span></div>
+        <div class="gantt-pista">
+          <div class="gantt-barra c1 w7"><i class="r"></i><i class="n"></i><i class="n"></i><i class="n"></i><i class="n"></i><i class="r"></i><i class="r"></i></div>
+        </div>
+      </div>
+
+      <!-- E4 · 10/09 al 17/09 · 8 días -->
+      <div class="gantt-fila">
+        <div class="gantt-etiqueta"><span class="cod">E4</span> Inventario, clientes y proveedores
+          <span class="fechas">10/09 – 17/09 · 8 días</span></div>
+        <div class="gantt-pista">
+          <div class="gantt-barra c1 w8"><i class="r"></i><i class="n"></i><i class="n"></i><i class="n"></i><i class="n"></i><i class="r"></i><i class="r"></i><i class="r"></i></div>
+        </div>
+      </div>
+
+      <!-- E5 · 10/09 al 17/09 · 8 días -->
+      <div class="gantt-fila">
+        <div class="gantt-etiqueta"><span class="cod">E5</span> Facturación electrónica y envío a la SUNAT
+          <span class="fechas">10/09 – 17/09 · 8 días</span></div>
+        <div class="gantt-pista">
+          <div class="gantt-barra c1 w8"><i class="r"></i><i class="n"></i><i class="n"></i><i class="n"></i><i class="n"></i><i class="r"></i><i class="r"></i><i class="r"></i></div>
+        </div>
+      </div>
+
+      <!-- E6 · 15/09 al 17/09 · 3 días -->
+      <div class="gantt-fila">
+        <div class="gantt-etiqueta"><span class="cod">E6</span> Pruebas y corrección de incidencias
+          <span class="fechas">15/09 – 17/09 · 3 días</span></div>
+        <div class="gantt-pista">
+          <div class="gantt-barra c6 w3"><i class="r"></i><i class="r"></i><i class="r"></i></div>
+        </div>
+      </div>
+
+      <!-- E7 · 10/09 al 18/09 · 9 días -->
+      <div class="gantt-fila">
+        <div class="gantt-etiqueta"><span class="cod">E7</span> Despliegue, puesta en marcha y documentación
+          <span class="fechas">10/09 – 18/09 · 9 días</span></div>
+        <div class="gantt-pista">
+          <div class="gantt-barra c1 w9"><i class="r"></i><i class="n"></i><i class="n"></i><i class="n"></i><i class="n"></i><i class="r"></i><i class="n"></i><i class="r"></i><i class="r"></i></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gantt-leyenda">
+      <span><span class="muestra lleno"></span> Día del intervalo con cambios registrados en el repositorio</span>
+      <span><span class="muestra rayado"></span> Día del intervalo sin cambios registrados</span>
+      <span><span class="muestra dis"></span> Etapa sin fechas en el repositorio (barra reservada, no mide duración)</span>
+      <span><span class="muestra diacero"></span> Columna del eje correspondiente a un día sin registro</span>
+    </div>
+
+    <div class="nota">
+      <strong>Lectura del diagrama.</strong> El eje cubre nueve días de calendario, de los cuales cuatro tienen
+      trabajo registrado (10, 15, 16 y 17 de septiembre). Las barras indican el intervalo de cada etapa, es decir,
+      el período durante el cual el repositorio permite sostener que la etapa estuvo abierta, y no una jornada
+      continua de trabajo: los tramos con trama dentro de una barra son fechas del intervalo sin cambios registrados.
+      La etapa 1 se representa con una barra de contorno discontinuo sin relleno, porque el historial no contiene
+      ninguna fecha que permita ubicarla; el tesista debe reemplazarla por la barra real una vez completado el período
+      del proyecto. La puesta en marcha del sistema en el establecimiento es anterior al primer cambio registrado
+      —el historial consigna comprobantes emitidos desde el 02/09/2026—, de modo que su fecha también se completa:
+      <code>[COMPLETAR: fecha real de la puesta en marcha]</code>.
+    </div>
+
+    <h3>3.1 Tabla resumen del cronograma</h3>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th style="width: 12mm;">Etapa</th>
+          <th>Denominación</th>
+          <th style="width: 24mm;">Inicio</th>
+          <th style="width: 24mm;">Fin</th>
+          <th class="num" style="width: 16mm;">Días</th>
+          <th style="width: 44mm;">Días con registro en el repositorio</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>E1</td>
+          <td>Análisis del proceso del negocio y definición de los requerimientos</td>
+          <td><code>[COMPLETAR]</code></td>
+          <td><code>[COMPLETAR]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td>Sin evidencia: el historial no registra esta etapa</td>
+        </tr>
+        <tr>
+          <td>E2</td>
+          <td>Diseño de la arquitectura del sistema y del modelo de datos</td>
+          <td>10/09/2026</td>
+          <td>16/09/2026</td>
+          <td class="num">7</td>
+          <td>3 · 10, 15 y 16 de septiembre</td>
+        </tr>
+        <tr>
+          <td>E3</td>
+          <td>Desarrollo del núcleo de ventas y de caja</td>
+          <td>10/09/2026</td>
+          <td>16/09/2026</td>
+          <td class="num">7</td>
+          <td>3 · 10, 15 y 16 de septiembre</td>
+        </tr>
+        <tr>
+          <td>E4</td>
+          <td>Desarrollo de inventario, clientes y proveedores</td>
+          <td>10/09/2026</td>
+          <td>17/09/2026</td>
+          <td class="num">8</td>
+          <td>4 · 10, 15, 16 y 17 de septiembre</td>
+        </tr>
+        <tr>
+          <td>E5</td>
+          <td>Integración de la facturación electrónica y envío a la SUNAT</td>
+          <td>10/09/2026</td>
+          <td>17/09/2026</td>
+          <td class="num">8</td>
+          <td>4 · 10, 15, 16 y 17 de septiembre</td>
+        </tr>
+        <tr>
+          <td>E6</td>
+          <td>Pruebas, validación con el usuario y corrección de incidencias</td>
+          <td>15/09/2026</td>
+          <td>17/09/2026</td>
+          <td class="num">3</td>
+          <td>3 · 15, 16 y 17 de septiembre</td>
+        </tr>
+        <tr>
+          <td>E7</td>
+          <td>Despliegue, puesta en marcha y documentación</td>
+          <td>10/09/2026 <code>[COMPLETAR: puesta en marcha]</code></td>
+          <td>18/09/2026</td>
+          <td class="num">9</td>
+          <td>4 · 10, 15, 17 y 18 de septiembre</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>La columna «Días» mide el intervalo de calendario entre el inicio y el fin de la etapa, tal como el diagrama
+    lo representa. La última columna precisa cuántas de esas fechas tienen cambios registrados en el repositorio,
+    que son las únicas que el historial acredita como trabajo efectivo. Ninguna etapa del período registrado tiene
+    jornadas en los días 11, 12, 13 y 14 de septiembre.</p>
+
+    <h3>3.2 Correspondencia entre las etapas y los cambios registrados</h3>
+
+    <p>La asignación de cada jornada a una etapa se hizo por el asunto y por los archivos que toca cada cambio. Los
+    hitos que permiten fechar cada módulo son los siguientes: el 10 de septiembre se incorpora la base completa del
+    sistema, que ya incluye el punto de venta, los turnos, el arqueo, el catálogo de productos, los servicios de
+    emisión y el módulo de consolidación; el 15 de septiembre se registran los módulos de proveedores, la pantalla
+    del cliente, las promociones de volumen, las series y el punto de emisión, las categorías administradas y las
+    correcciones de los reportes; el 16 de septiembre se registra la consolidación de la arquitectura por capas con
+    sus primeras pruebas automatizadas, el pago múltiple, el desglose del arqueo por origen, el cierre de caja con
+    conciliación por billetera y conteo ciego, la declaración del descuento y del valor sin impuesto en el
+    comprobante y el reparto de las notas de crédito y débito; el 17 de septiembre se registra la apertura de cajas
+    como puntos de emisión, el flujo de pedidos enviados a caja con sus correlativos propios, el permiso y el tope
+    del descuento manual, la declaración del descuento en el consolidado y en los pedidos, y el envío a la
+    administración tributaria con precio unitario y cantidad en dos decimales; el 18 de septiembre se cierra el
+    paquete documental del trabajo.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th style="width: 40mm;">Fecha</th>
+          <th class="num" style="width: 16mm;">Cambios</th>
+          <th class="num" style="width: 20mm;">Archivos tocados</th>
+          <th class="num" style="width: 20mm;">Líneas agregadas</th>
+          <th style="width: 30mm;">Ventana de registro</th>
+          <th>Etapas que cubre</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>10/09/2026 (jueves)</td>
+          <td class="num">3</td>
+          <td class="num">131</td>
+          <td class="num">22 552</td>
+          <td>15:15 – 15:55</td>
+          <td>E2, E3, E4, E5 y E7</td>
+        </tr>
+        <tr>
+          <td>11/09/2026 al 14/09/2026</td>
+          <td class="num">0</td>
+          <td class="num">0</td>
+          <td class="num">0</td>
+          <td>—</td>
+          <td>Sin registro en el repositorio</td>
+        </tr>
+        <tr>
+          <td>15/09/2026 (martes)</td>
+          <td class="num">16</td>
+          <td class="num">107</td>
+          <td class="num">9 836</td>
+          <td>22:04 – 23:30</td>
+          <td>E2, E3, E4, E5, E6 y E7</td>
+        </tr>
+        <tr>
+          <td>16/09/2026 (miércoles)</td>
+          <td class="num">17</td>
+          <td class="num">121</td>
+          <td class="num">5 059</td>
+          <td>00:00 – 00:18 y 13:02 – 20:20</td>
+          <td>E2, E3, E4, E5 y E6</td>
+        </tr>
+        <tr>
+          <td>17/09/2026 (jueves)</td>
+          <td class="num">34</td>
+          <td class="num">188</td>
+          <td class="num">7 323</td>
+          <td>18:03 – 23:27</td>
+          <td>E4, E5, E6 y E7</td>
+        </tr>
+        <tr>
+          <td>18/09/2026 (viernes)</td>
+          <td class="num">1</td>
+          <td class="num">20</td>
+          <td class="num">6 817</td>
+          <td>14:08</td>
+          <td>E7 · cierre del paquete documental del trabajo</td>
+        </tr>
+        <tr>
+          <td><strong>Total del período</strong></td>
+          <td class="num"><strong>71</strong></td>
+          <td class="num"><strong>567</strong></td>
+          <td class="num"><strong>51 587</strong></td>
+          <td>—</td>
+          <td>70 cambios de desarrollo (10 al 17 de septiembre) y 1 de documentación (18 de septiembre)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>Las dos primeras jornadas del período registrado presentan los volúmenes más altos de trabajo por cambio
+    (22 552 líneas agregadas el 10 de septiembre y 9 836 el 15), mientras que la jornada del 17 concentra el mayor
+    número de cambios (34) con un volumen menor por cambio: es el patrón esperable de una jornada de corrección de
+    defectos y de ajuste fino sobre módulos ya construidos. La ventana de registro de cada jornada —la hora del
+    primer y del último cambio— es el insumo que se utiliza en la sección 4 para estimar las horas de desarrollo.</p>
+
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s4">4. Costo del proyecto</h2>
+
+    <p>La estructura de costos se presenta en dos tablas: los costos de inversión, que se erogan una sola vez al
+    implementar el sistema, y los costos operativos anuales, que se repiten mientras el sistema esté en
+    funcionamiento. Ambos cuadros están expresados en soles y sus columnas son las mismas: descripción del rubro,
+    unidad de medida, cantidad, costo unitario y costo total. <strong>Todos los montos se encuentran marcados con la
+    etiqueta de completar</strong>: el tesista los obtiene de cotizaciones reales de su localidad y conserva esas
+    cotizaciones como evidencia del proyecto.</p>
+
+    <h3>4.1 Costos de inversión (una sola vez)</h3>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th>Descripción</th>
+          <th style="width: 26mm;">Unidad</th>
+          <th class="num" style="width: 20mm;">Cantidad</th>
+          <th class="num" style="width: 24mm;">Costo unitario (S/)</th>
+          <th class="num" style="width: 24mm;">Costo total (S/)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Equipo de cómputo del puesto de venta (terminal del punto de venta, con teclado y pantalla)</td>
+          <td>Equipo</td>
+          <td class="num">1 <code>[COMPLETAR: uno por puesto de venta]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Impresora térmica de comprobantes (rollo de 58 mm u 80 mm, según el modelo configurado en el sistema)</td>
+          <td>Equipo</td>
+          <td class="num">1 <code>[COMPLETAR: uno por punto de emisión]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Lector de código de barras (el sistema admite la lectura con lector conectado al equipo y la lectura con
+          la cámara del dispositivo)</td>
+          <td>Equipo</td>
+          <td class="num">1</td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Equipo destinado al servicio de facturación electrónica, que firma los comprobantes y los remite a la
+          administración tributaria</td>
+          <td>Equipo</td>
+          <td class="num"><code>[COMPLETAR: 0 si el servicio se ejecuta en el equipo del punto de venta]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Certificado digital para la firma de comprobantes electrónicos (emisión inicial, con vigencia anual)</td>
+          <td>Certificado</td>
+          <td class="num">1 <code>[COMPLETAR: uno por número de RUC]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Desarrollo del sistema: análisis del proceso, diseño, construcción, pruebas y documentación</td>
+          <td>Hora</td>
+          <td class="num"><code>[COMPLETAR: total de horas]</code></td>
+          <td class="num"><code>[COMPLETAR: tarifa por hora]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Instalación, configuración y puesta en marcha (carga del catálogo, datos de la empresa, parámetros
+          tributarios, series por punto de emisión, impresora y capacitación inicial del personal)</td>
+          <td>Servicio</td>
+          <td class="num">1</td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td><strong>Total de la inversión</strong></td>
+          <td>—</td>
+          <td class="num">—</td>
+          <td class="num">—</td>
+          <td class="num"><code>[COMPLETAR: suma de la columna]</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>4.2 Costos operativos anuales (se repiten cada año)</h3>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th>Descripción</th>
+          <th style="width: 26mm;">Unidad</th>
+          <th class="num" style="width: 20mm;">Cantidad</th>
+          <th class="num" style="width: 24mm;">Costo unitario (S/)</th>
+          <th class="num" style="width: 24mm;">Costo total (S/)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Alojamiento de la aplicación web (publicación del sistema para el acceso desde el navegador)</td>
+          <td>Mes</td>
+          <td class="num">12</td>
+          <td class="num"><code>[COMPLETAR: plan contratado]</code></td>
+          <td class="num"><code>[COMPLETAR: 12 × costo mensual]</code></td>
+        </tr>
+        <tr>
+          <td>Base de datos y autenticación de usuarios en la nube (colecciones del sistema, copias de seguridad del
+          proveedor y control de acceso de los usuarios)</td>
+          <td>Mes</td>
+          <td class="num">12</td>
+          <td class="num"><code>[COMPLETAR: plan contratado]</code></td>
+          <td class="num"><code>[COMPLETAR: 12 × costo mensual]</code></td>
+        </tr>
+        <tr>
+          <td>Dominio de internet de la aplicación</td>
+          <td>Año</td>
+          <td class="num">1</td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Certificado digital: renovación anual (sin certificado vigente el sistema no puede firmar ni emitir
+          comprobantes electrónicos)</td>
+          <td>Año</td>
+          <td class="num">1</td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Mantenimiento y soporte del sistema: atención de incidencias, actualización de parámetros y
+          verificación de la emisión electrónica</td>
+          <td>Hora</td>
+          <td class="num"><code>[COMPLETAR: horas al año]</code></td>
+          <td class="num"><code>[COMPLETAR: tarifa por hora]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Capacitación continua del personal: actualización y reinducción del personal de caja, de ventas y de
+          almacén</td>
+          <td>Sesión</td>
+          <td class="num"><code>[COMPLETAR: sesiones al año]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Servicio de consulta de documento de identidad y de RUC para el registro de clientes (opcional, según su
+          habilitación)</td>
+          <td>Mes</td>
+          <td class="num">12 <code>[COMPLETAR: o consignar que no se contrata]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Energía eléctrica y conectividad a internet del puesto de venta (porción atribuible al sistema)</td>
+          <td>Mes</td>
+          <td class="num">12</td>
+          <td class="num"><code>[COMPLETAR: porción mensual atribuible]</code></td>
+          <td class="num"><code>[COMPLETAR: 12 × porción mensual]</code></td>
+        </tr>
+        <tr>
+          <td><strong>Total del costo operativo anual</strong></td>
+          <td>—</td>
+          <td class="num">—</td>
+          <td class="num">—</td>
+          <td class="num"><code>[COMPLETAR: suma de la columna]</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>4.3 Nota metodológica de los costos</h3>
+
+    <p><strong>De dónde sale cada cantidad.</strong> Ninguna cantidad de las tablas anteriores es arbitraria y todas
+    deben poder justificarse ante el jurado. La cantidad de equipos corresponde al número de puestos de venta y de
+    puntos de emisión que el negocio opera: un terminal de venta, una impresora de comprobantes y un lector por
+    puesto, y un equipo para el servicio de facturación electrónica únicamente si ese servicio no comparte el equipo
+    del punto de venta. El certificado digital es uno por número de RUC del negocio, porque es el documento con el
+    que se firma a nombre del contribuyente. Las cantidades mensuales se expresan en doce meses por año, el dominio
+    y la renovación del certificado en una unidad anual, y el mantenimiento, la capacitación y el desarrollo en
+    horas o en sesiones, según corresponda.</p>
+
+    <p><strong>De dónde salen los montos.</strong> Cada monto se completa con una <strong>cotización real de la
+    localidad del proyecto</strong>, y conviene registrar junto al monto la fecha de la cotización y el proveedor que
+    la emitió, para conservarlos como evidencia. Se recomienda además indicar si el monto cotizado incluye el
+    impuesto general a las ventas, porque la comparación entre alternativas solo es válida si todas las cifras
+    responden al mismo criterio. Los rubros que pueden agregarse si el jurado o la institución lo solicitan son los
+    consumibles del puesto de venta (rollos de papel térmico para los comprobantes), la garantía o el seguro del
+    equipo y la capacitación contratada a un tercero.</p>
+
+    <p><strong>Cómo se estiman las horas de desarrollo.</strong> La cantidad de horas del rubro de desarrollo se
+    estima a partir del propio historial del repositorio. El período de desarrollo registra <strong>70 cambios en
+    cuatro jornadas</strong> (10, 15, 16 y 17 de septiembre), con ventanas de registro medidas en la sección 3.2: en
+    conjunto, el trabajo versionado equivale a unas 15 horas de ventana de registro, que es un <em>piso</em> y no una
+    medida de las horas efectivas, porque solo contabiliza los momentos en que se registró un cambio. El tesista
+    declara las horas por jornada y la tarifa horaria de referencia: <code>[COMPLETAR: horas por día y tarifa por
+    hora]</code>. El total del rubro es el producto de ambas cifras.</p>
+
+    <p><strong>Rubros que no deben computarse dos veces.</strong> La capacitación inicial del personal está incluida
+    en el servicio de instalación y puesta en marcha de la tabla 4.1; en la tabla 4.2 se consigna únicamente la
+    capacitación continua. Si el tesista prefiere declarar la capacitación inicial como un rubro propio de la
+    inversión, debe excluirla del servicio de puesta en marcha para no duplicar el importe. Del mismo modo, la energía
+    eléctrica y la conectividad se declaran por la porción atribuible al sistema —el recibo del período permite
+    sustentar el prorrateo— y el servicio de consulta de documento de identidad se incluye solo si el negocio lo
+    contrata.</p>
+
+    <div class="nota">
+      <strong>Software sin costo de licencia.</strong> La aplicación se construyó íntegramente sobre componentes de
+      software de código abierto y sobre servicios de plataforma que se facturan por consumo, sin licencias por
+      puesto ni adquisición de servidores propios para la aplicación web. Por esa razón las tablas no incluyen
+      rubros de licencia de sistema operativo, de motor de base de datos ni de servidor de aplicaciones: los únicos
+      costos recurrentes de software son el alojamiento, la base de datos con la autenticación y el dominio.
+    </div>
+
+    <div class="aviso">
+      <strong>Declaración del trabajo académico.</strong> Si la institución lo permite, las horas de desarrollo del
+      sistema pueden declararse como <strong>aporte no monetario del tesista</strong> en lugar de consignarse como
+      una erogación en efectivo, y valorizarse con la tarifa horaria de referencia de la sección anterior para que la
+      tabla de financiamiento muestre el valor total del proyecto. En ese caso el monto debe figurar en la columna de
+      valorización y no en la de desembolso, para no duplicar el costo.
+      <code>[COMPLETAR: criterio de la institución sobre el aporte no monetario]</code>
+    </div>
+
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s5">5. Financiamiento</h2>
+
+    <p>La tabla siguiente identifica las fuentes con las que se cubre el proyecto y distingue, para cada una, si el
+    aporte es monetario —dinero efectivamente desembolsado— o no monetario —bienes, servicios o trabajo aportados y
+    valorizados—, el rubro que cubre y el monto o la valorización correspondiente. Las fuentes previsibles para este
+    proyecto son el aporte del negocio, que asume la infraestructura y los servicios recurrentes, y el aporte del
+    tesista, que asume las horas de desarrollo y el equipo con el que se construyó el sistema.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th style="width: 34mm;">Fuente</th>
+          <th style="width: 24mm;">Tipo</th>
+          <th>Rubro que cubre</th>
+          <th style="width: 30mm;">Monto o valorización (S/)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Aporte del negocio (propietario del establecimiento)</td>
+          <td>Monetario</td>
+          <td>Equipo de cómputo del puesto de venta, impresora térmica de comprobantes, lector de código de barras,
+          certificado digital y servicio de instalación y puesta en marcha.</td>
+          <td><code>[COMPLETAR]</code></td>
+        </tr>
+        <tr>
+          <td>Aporte del negocio (propietario del establecimiento)</td>
+          <td>Monetario</td>
+          <td>Costos operativos recurrentes: alojamiento de la aplicación, base de datos y autenticación en la nube,
+          dominio, renovación del certificado digital, mantenimiento y soporte, y energía y conectividad.</td>
+          <td><code>[COMPLETAR: monto anual]</code></td>
+        </tr>
+        <tr>
+          <td>Aporte del tesista</td>
+          <td>No monetario</td>
+          <td>Horas de desarrollo del sistema: análisis del proceso, diseño de la arquitectura y del modelo de datos,
+          construcción de los módulos, pruebas y documentación.</td>
+          <td><code>[COMPLETAR: horas × tarifa horaria de referencia]</code></td>
+        </tr>
+        <tr>
+          <td>Aporte del tesista</td>
+          <td>No monetario</td>
+          <td>Equipo de cómputo propio y conectividad utilizados durante el desarrollo del sistema.</td>
+          <td><code>[COMPLETAR: valorización]</code></td>
+        </tr>
+        <tr>
+          <td><code>[COMPLETAR: otras fuentes, becas o apoyo de la institución]</code></td>
+          <td><code>[COMPLETAR: monetario o no monetario]</code></td>
+          <td><code>[COMPLETAR: rubro que cubre]</code></td>
+          <td><code>[COMPLETAR]</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>5.1 Cuadro resumen del financiamiento</h3>
+
+    <p>El cuadro siguiente queda preparado para sumar los montos una vez completadas las dos tablas de costos y la
+    tabla de fuentes. Cada fila indica de qué tabla proviene la cifra, de modo que la suma pueda verificarse.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th style="width: 62mm;">Concepto</th>
+          <th class="num" style="width: 30mm;">Importe (S/)</th>
+          <th>De dónde sale la cifra</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>(I) Total de la inversión</strong></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td>Suma de la columna de costo total de la tabla 4.1 (una sola vez).</td>
+        </tr>
+        <tr>
+          <td><strong>(O) Total del costo operativo anual</strong></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td>Suma de la columna de costo total de la tabla 4.2 (cada año de operación).</td>
+        </tr>
+        <tr>
+          <td><strong>(I + O) Costo total del primer año</strong></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td>Inversión más operación anual: es la cifra que habitualmente solicita la institución.</td>
+        </tr>
+        <tr>
+          <td><strong>(A) Aporte monetario</strong></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td>Suma de las fuentes de tipo monetario de la tabla 5.</td>
+        </tr>
+        <tr>
+          <td><strong>(B) Aporte no monetario valorizado</strong></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td>Suma de las fuentes de tipo no monetario de la tabla 5 (horas de desarrollo y equipo aportado).</td>
+        </tr>
+        <tr>
+          <td><strong>(A + B) Total financiado</strong></td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td>Aporte monetario más aporte no monetario valorizado.</td>
+        </tr>
+        <tr>
+          <td>Inversión por cubrir con financiamiento adicional</td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td>(I) menos el aporte monetario destinado a la inversión. Si el resultado es cero o negativo, la
+          inversión está cubierta.</td>
+        </tr>
+        <tr>
+          <td>Operación anual por cubrir</td>
+          <td class="num"><code>[COMPLETAR]</code></td>
+          <td>(O) menos el aporte monetario destinado a la operación. Es la cifra que el negocio debe sostener cada
+          año para mantener la emisión electrónica y la operación del sistema.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="nota">
+      <strong>Sobre las fuentes no monetarias.</strong> El aporte no monetario no reduce el monto que el negocio debe
+      desembolsar, pero sí expresa el valor real del proyecto y es la forma habitual de declarar el trabajo
+      académico en este tipo de informes. Para que la valorización sea admisible conviene que cada ítem no monetario
+      pueda respaldarse: las horas de desarrollo con el historial del repositorio y la tarifa horaria de referencia
+      que se declara, y el equipo aportado con su cotización o su valor de adquisición.
+      <code>[COMPLETAR: criterio de la institución y del asesor sobre la valorización del aporte del tesista]</code>
+    </div>
+
+    <div class="salto"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <h2 id="s6">6. Continuidad y sostenibilidad</h2>
+
+    <p>El sistema queda en operación en el establecimiento; sostenerlo depende de un conjunto acotado de actividades
+    periódicas, no de trabajo de desarrollo continuo. La tabla siguiente define qué debe hacerse, quién lo hace y con
+    qué frecuencia, con el criterio o la evidencia que permite comprobar que se hizo. Los responsables se designan
+    por función, de modo que la continuidad no dependa de una persona determinada.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th>Actividad</th>
+          <th style="width: 30mm;">Responsable</th>
+          <th style="width: 30mm;">Frecuencia</th>
+          <th style="width: 46mm;">Criterio o evidencia</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Respaldo de la base de datos: exportación de las colecciones del sistema</td>
+          <td>Administrador del sistema</td>
+          <td>Semanal, y antes de cada actualización</td>
+          <td>Copia conservada fuera del equipo de operación.
+          <code>[COMPLETAR: procedimiento, herramienta y destino del respaldo]</code></td>
+        </tr>
+        <tr>
+          <td>Renovación del certificado digital del contribuyente</td>
+          <td>Propietario del negocio</td>
+          <td>Anual, iniciando el trámite treinta días antes del vencimiento</td>
+          <td>Sin certificado vigente el servicio de facturación no puede firmar: la emisión electrónica se detiene
+          por completo.</td>
+        </tr>
+        <tr>
+          <td>Actualización de series y correlativos por punto de emisión</td>
+          <td>Administrador, con el cajero responsable de cada caja</td>
+          <td>Al crear un punto de emisión o al autorizar una serie nueva; revisión mensual</td>
+          <td>Coincidencia entre las series registradas en el sistema y las autorizadas a nombre del negocio.
+          <code>[COMPLETAR: series autorizadas por punto de emisión]</code></td>
+        </tr>
+        <tr>
+          <td>Verificación del estado de los comprobantes electrónicos emitidos (aceptados, observados o rechazados)</td>
+          <td>Administrador</td>
+          <td>Mensual</td>
+          <td>Reportes de facturación del sistema y bandeja de la administración tributaria, sin comprobantes
+          rechazados pendientes de regularizar.</td>
+        </tr>
+        <tr>
+          <td>Capacitación del personal en el uso del sistema y en los controles de caja</td>
+          <td>Administrador</td>
+          <td>Al incorporar personal y una vez al año</td>
+          <td>Manual de usuario del sistema y registro de asistencia o de la sesión realizada.</td>
+        </tr>
+        <tr>
+          <td>Revisión de las reglas de acceso a los datos: permisos por rol y reglas de la base de datos</td>
+          <td>Administrador</td>
+          <td>Trimestral y ante cada cambio de personal</td>
+          <td>Permisos vigentes uno por uno, retiro de los accesos de las personas que ya no trabajan en el
+          establecimiento y revisión del alcance de las reglas de acceso de la base de datos.</td>
+        </tr>
+        <tr>
+          <td>Depuración del registro de errores de la aplicación</td>
+          <td>Administrador</td>
+          <td>Mensual</td>
+          <td>Registro de errores del sistema, con los avisos reiterados identificados y derivados a soporte.</td>
+        </tr>
+        <tr>
+          <td>Actualización y reinicio del servicio de facturación electrónica ante cambios de la normativa o del
+          esquema del comprobante</td>
+          <td>Responsable técnico</td>
+          <td>Cuando la administración tributaria modifique la normativa o los esquemas de emisión</td>
+          <td>Prueba de emisión de un comprobante de verificación después de cada actualización; el servicio debe
+          reiniciarse para que el cambio tome efecto.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>6.1 Mejoras planificadas</h3>
+
+    <p>Las mejoras siguientes son las que se derivan del propio proceso de desarrollo y de las limitaciones
+    reconocidas en el Anexo 4. Su ejecución no condiciona la operación actual del sistema.</p>
+
+    <table class="compacta">
+      <thead>
+        <tr>
+          <th style="width: 52mm;">Mejora</th>
+          <th>Situación actual y trabajo previsto</th>
+          <th style="width: 22mm;">Prioridad</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Pruebas automatizadas de interfaz</td>
+          <td>Las pruebas automatizadas cubren la lógica de negocio pura; la interacción del usuario se valida de
+          forma manual. Se prevé incorporar pruebas de interfaz que recorran el cobro, el cierre de caja y la emisión
+          de un comprobante.</td>
+          <td>Media</td>
+        </tr>
+        <tr>
+          <td>Verificación continua en cada cambio</td>
+          <td>Las verificaciones (pruebas, tipos, análisis de estilo y construcción) se ejecutan de forma manual antes
+          de cada publicación. Se prevé automatizarlas en un flujo que se dispare con cada cambio del repositorio.</td>
+          <td>Media</td>
+        </tr>
+        <tr>
+          <td>Restricción de las reglas de la base de datos por rol</td>
+          <td>Las reglas de acceso conceden lectura y escritura a cualquier usuario autenticado, de modo que un usuario
+          con conocimientos técnicos podría escribir directamente en la base de datos y eludir las validaciones de la
+          interfaz. Se prevé restringir las reglas por rol y por colección, de modo que la autorización deje de
+          depender del cliente.</td>
+          <td>Alta</td>
+        </tr>
+        <tr>
+          <td>Alineación de la aplicación móvil</td>
+          <td>Existe una aplicación móvil complementaria que comparte el mismo modelo de datos y que conserva dos
+          defectos ya corregidos en la aplicación web: la consolidación de las notas de venta que no declara el
+          descuento y el envío de importes con más de dos decimales. Se prevé portar esas correcciones y alinear el
+          resto de las funcionalidades.</td>
+          <td>Alta</td>
+        </tr>
+        <tr>
+          <td>Descuento por línea en el comprobante electrónico</td>
+          <td>El descuento se declara hoy como una fila de descuento sobre el total del documento, y se reparte por
+          línea únicamente para determinar el precio unitario declarado. Se prevé declarar el descuento en la propia
+          línea del comprobante, que es la otra forma que admite el estándar del documento electrónico.</td>
+          <td>Baja</td>
+        </tr>
+        <tr>
+          <td>Cobertura de pruebas de la capa de servicios</td>
+          <td>Las 195 pruebas automatizadas se concentran en la lógica de negocio pura, sin dependencias de la base de
+          datos. Se prevé extender la verificación a las operaciones de escritura de la capa de servicios, que hoy se
+          comprueban contra la operación real.</td>
+          <td>Media</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="ok">
+      <strong>Cierre del anexo.</strong> El cronograma de este anexo se sostiene íntegramente en el historial de
+      cambios del repositorio: 70 cambios de desarrollo registrados entre el 10 y el 17 de septiembre de 2026, en
+      cuatro jornadas, y un cambio de documentación el 18 de septiembre. Las fechas que el historial no puede
+      acreditar —el análisis previo, el diseño anterior al primer registro y la puesta en marcha en el
+      establecimiento— quedan marcadas para que el tesista las complete con el período real del proyecto, tal como lo
+      exige el informe. La estructura de costos, de financiamiento y de sostenibilidad está completa en rubros,
+      unidades y cantidades; los montos se completan con cotizaciones reales de la localidad del proyecto.
+    </div>
+
+    <div class="pie">Anexo 8 · Cronograma de actividades, diagrama de Gantt, costos y financiamiento ·
+    Paquete documental del Trabajo de Aplicación Profesional · <code>docs/tap/</code></div>
+  </div>
+</body>
+</html>
