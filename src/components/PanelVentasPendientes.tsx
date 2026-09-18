@@ -308,7 +308,7 @@ export function PanelVentasPendientes() {
               <Button size="sm" variant="outline" className="flex-1" onClick={() => setCobrandoId(null)}>Volver</Button>
               <Button size="sm" className="flex-1" onClick={() => cobrar(v)} disabled={procesando}>
                 {procesando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                {procesando ? 'Cobrando…' : `Cobrar ${fmt(total)}`}
+                {procesando ? 'Cobrando…' : `Confirmar cobro ${fmt(total)}`}
               </Button>
             </div>
           </div>
@@ -334,9 +334,11 @@ export function PanelVentasPendientes() {
         ) : (
           <div className="flex gap-2">
             {tienePermiso('cobrarVenta') && (
+              // ⚠️ "Cobrar pedido", no "Cobrar": el PDV tiene abajo el "Cobrar" del carrito y dos
+              // botones con el mismo nombre en la misma columna significan cosas distintas.
               <Button size="sm" className="flex-1" onClick={() => abrirCobro(v)} disabled={procesando}>
                 <Check className="h-3.5 w-3.5" />
-                Cobrar
+                Cobrar pedido
               </Button>
             )}
             {tienePermiso('cancelarVentaPendiente') && (
