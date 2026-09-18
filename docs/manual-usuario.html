@@ -106,7 +106,7 @@
   <h1>JorFel</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.1 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.2 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -128,6 +128,7 @@
     <div class="toc-item"><span class="num">13</span> Gestión de Usuarios</div>
     <div class="toc-item"><span class="num">14</span> Auditoría</div>
     <div class="toc-item"><span class="num">15</span> Funciones Especiales</div>
+    <div class="toc-item"><span class="num">16</span> Emisión Electrónica y SUNAT</div>
   </div>
 </div>
 
@@ -794,9 +795,67 @@
   </div>
 </div>
 
+<!-- ============ 16. EMISIÓN ELECTRÓNICA Y SUNAT ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">🧾</span> 16. Emisión Electrónica y SUNAT</div>
+
+  <h3>Dos componentes: la aplicación y el servicio de emisión</h3>
+  <p>El sistema funciona con <strong>dos componentes</strong> que trabajan juntos y que están desplegados por separado:</p>
+  <ul>
+    <li><strong>La aplicación web</strong> (lo que usted usa en el navegador), alojada en <strong>Firebase Hosting</strong>:
+      registra la venta, asigna la serie y el número del comprobante, descuenta el stock, actualiza el turno e imprime
+      el comprobante.</li>
+    <li><strong>El servicio de emisión (backend)</strong>, un servicio propio desplegado <strong>en la nube de Amazon Web
+      Services</strong> (como función sin servidor detrás de su pasarela de servicios) y <strong>es el único
+      componente que se comunica con la SUNAT</strong>. Recibe los datos del comprobante desde la aplicación, los
+      valida, construye el archivo electrónico (XML en el estándar UBL 2.1), lo <strong>firma con el certificado
+      digital</strong> del negocio, lo empaqueta y lo envía. La SUNAT responde con la constancia de recepción (el
+      <em>CDR</em>), que vuelve a la aplicación y queda guardada en el documento de venta.</li>
+  </ul>
+  <p><strong>Importante:</strong> la aplicación web <strong>no envía comprobantes por sí sola</strong>. Si el servicio
+    de emisión no está disponible o el equipo no tiene internet, la venta se registra igual y el comprobante queda
+    <strong>emitido en el sistema con su número</strong>, pero el envío queda <strong>pendiente</strong> hasta que el
+    servicio responda. Es una separación intencional: el certificado digital y las claves de SUNAT viven únicamente en
+    el servicio, nunca en el navegador.</p>
+
+  <h3>Qué significa cada estado del envío</h3>
+  <table>
+    <thead><tr><th>Estado</th><th>Qué significa</th><th>Qué hacer</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Pendiente</strong></td><td>El comprobante está emitido y todavía no se envió (por ejemplo, no había internet).</td><td>Enviarlo desde <em>Reportes → SUNAT</em> cuando haya conexión. El comprobante no se pierde.</td></tr>
+      <tr><td><strong>Aceptado</strong></td><td>La SUNAT lo recibió y devolvió su constancia (CDR).</td><td>Nada: la constancia queda guardada en el sistema.</td></tr>
+      <tr><td><strong>Ya registrado</strong></td><td>La SUNAT ya tenía ese comprobante (por ejemplo, se envió dos veces por un corte de conexión).</td><td>Nada: el sistema lo marca como aceptado y no se duplica.</td></tr>
+      <tr><td><strong>Rechazado</strong></td><td>La SUNAT lo recibió pero lo observó; el motivo viene en el detalle.</td><td>Leer el motivo y corregir lo que indica. Consultar con el administrador antes de rehacer nada.</td></tr>
+      <tr><td><strong>Error</strong></td><td>No se pudo completar el envío (sin internet o el servicio no respondió a tiempo).</td><td><strong>Reintentar el envío del mismo comprobante</strong>, nunca emitir uno nuevo para la misma venta.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Qué necesita el sistema para emitir</h3>
+  <ul>
+    <li>El <strong>servicio de emisión disponible</strong> (es un servicio en la nube: no se apaga con el equipo del
+      negocio, pero requiere que el negocio tenga internet).</li>
+    <li><strong>Conexión a internet</strong> en el equipo donde se cobra.</li>
+    <li><strong>Certificado digital vigente</strong> del negocio: se renueva todos los años y lo administra el
+      responsable del sistema.</li>
+    <li><strong>Datos de emisión configurados</strong>: RUC y razón social del negocio, series de cada tipo de
+      comprobante y punto de emisión (<em>Configuración → Empresa y Cajas</em>).</li>
+  </ul>
+
+  <h3>Recomendaciones de operación</h3>
+  <ul>
+    <li>Revisar <strong>una vez al día</strong> en <em>Reportes → SUNAT</em> que no queden comprobantes en estado
+      pendiente o con error; enviarlos antes de cerrar el turno.</li>
+    <li><strong>No emitir un comprobante nuevo</strong> para una venta que muestra error: se reintenta el mismo; si se
+      emitiera otro, la venta quedaría declarada dos veces.</li>
+    <li>Ante dudas con un comprobante rechazado, <strong>consultar al administrador</strong> antes de anular o rehacer.</li>
+    <li>Las <strong>notas de venta</strong> son internas: se agrupan en una boleta consolidada y es esa boleta la que se
+      envía a la SUNAT.</li>
+  </ul>
+</div>
+
 <!-- Footer -->
 <div class="footer">
-  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.1</p>
+  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.2</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

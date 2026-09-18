@@ -613,6 +613,30 @@
     </table>
   </div>
 
+  <!-- Emisión electrónica -->
+  <div class="section">
+    <div class="section-title"><span class="icon">🧾</span> Cómo se emiten los comprobantes ante la SUNAT</div>
+    <div class="card">
+      <p>El sistema trabaja con <strong>dos componentes</strong> desplegados por separado:</p>
+      <ul>
+        <li><strong>La aplicación web</strong> (alojada en <strong>Firebase Hosting</strong>), donde se opera la venta,
+          el inventario y la caja: registra la venta, asigna la serie y el número del comprobante, descuenta el stock y
+          actualiza el turno.</li>
+        <li><strong>El servicio de emisión (backend)</strong>, desplegado <strong>en la nube de Amazon Web Services</strong>
+          (función sin servidor detrás de su pasarela de servicios), que es <strong>el único que se comunica con la
+          SUNAT</strong>: valida los datos, construye el archivo electrónico (XML UBL 2.1), lo <strong>firma con el
+          certificado digital</strong> del negocio y lo envía, devolviendo la constancia de recepción (CDR) que queda
+          guardada en el documento de venta.</li>
+      </ul>
+      <p>La aplicación web <strong>no envía comprobantes por sí sola</strong>: si el servicio no está disponible o el
+        negocio no tiene internet, la venta se registra y el comprobante queda emitido con su número, con el envío
+        <strong>pendiente</strong> hasta que el servicio responda. Es una separación intencional: el certificado digital
+        y las claves de SUNAT viven únicamente en el servicio, nunca en el navegador.</p>
+      <p>El estado de cada envío (pendiente, aceptado, ya registrado, rechazado o con error) se consulta en
+        <em>Reportes → SUNAT</em>; el manual de usuario dedica la sección 16 a la operación de este componente.</p>
+    </div>
+  </div>
+
   <!-- Requisitos -->
   <div class="section">
     <div class="section-title"><span class="icon">🖥️</span> Requisitos</div>

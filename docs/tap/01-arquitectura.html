@@ -57,7 +57,7 @@
         <div class="caja">
           <div class="titulo">Servicio de facturación electrónica</div>
           API REST propia (FastAPI + Pydantic) que construye el XML UBL 2.1, lo firma digitalmente y lo envía a la SUNAT.
-          Se ejecuta en la red local del negocio, en contenedor.
+          Se ejecuta en AWS como función sin servidor (imagen de contenedor) detrás de API Gateway.
         </div>
       </div>
       <div class="flecha">▼ &nbsp; acceso a datos &nbsp; ▼</div>
@@ -218,7 +218,7 @@
     </div>
     <p>
       El servicio se empaqueta como contenedor (<code>Dockerfile</code> y <code>lambda.Dockerfile</code>), de modo que
-      puede ejecutarse tanto en un equipo de la red local del negocio como en un entorno sin servidor. La dirección del
+      se ejecuta como función sin servidor en AWS y tambien puede levantarse en un equipo propio para desarrollo o pruebas. La dirección del
       servicio es un parámetro de configuración de la aplicación web, lo que permite apuntar al ambiente de pruebas o al
       de producción sin recompilar la aplicación.
     </p>
@@ -230,7 +230,7 @@
       <tbody>
         <tr><td>Aplicación web</td><td>Compilación del proyecto y publicación del contenido estático en el servicio de alojamiento de Firebase.</td><td>El despliegue se realiza con un comando único; la aplicación se sirve como sitio estático con cabeceras de seguridad.</td></tr>
         <tr><td>Funcionamiento sin conexión</td><td>Service worker y persistencia local de la base de datos.</td><td>El service worker conserva hojas de estilo, imágenes y tipografías, aplica estrategia de red primero para las llamadas a datos y avisa al usuario cuando no hay conexión; Firestore mantiene una caché local que permite seguir consultando lo ya cargado y sincroniza las escrituras al recuperar la conexión. ⚠️ El <strong>envío a la SUNAT sí requiere conexión</strong>: si no hay red, el comprobante queda emitido y el envío se reintenta.</td></tr>
-        <tr><td>Servicio de facturación</td><td>Contenedor en la red local del negocio; se reinicia al actualizarlo.</td><td>Un cambio en el servicio no surte efecto hasta reiniciarlo, por eso el procedimiento de actualización se documenta como parte de la operación.</td></tr>
+        <tr><td>Servicio de facturación</td><td>Funcion sin servidor en AWS (imagen de contenedor) detras de API Gateway; se actualiza publicando una version nueva del servicio.</td><td>Un cambio en el servicio no surte efecto hasta reiniciarlo, por eso el procedimiento de actualización se documenta como parte de la operación.</td></tr>
         <tr><td>Base de datos</td><td>Servicio administrado, con reglas de acceso e índices declarados en el repositorio.</td><td>Los índices compuestos se declaran en un archivo versionado y se despliegan con el comando correspondiente; un índice creado manualmente fuera del archivo se perdería al forzar la publicación, de ahí la prohibición de usar el modo forzado.</td></tr>
         <tr><td>Seguridad de contenido</td><td>Cabeceras HTTP configuradas en el alojamiento.</td><td>Política de seguridad de contenido (orígenes permitidos explícitos), protección contra inclusión en marcos, tipo de contenido declarado y política de referencia.</td></tr>
       </tbody>

@@ -126,6 +126,20 @@ table.larga thead { display: table-header-group; }
   El alcance del trabajo y sus límites declarados se detallan en los apartados 2.2 y 3.2; el sistema se encuentra
   <strong>en operación real</strong> en el establecimiento del negocio.</p>
 
+  <p><strong>Composición de la solución: dos componentes que conviene distinguir desde el inicio.</strong> El
+  proyecto comprende (1) la <strong>aplicación web</strong>, que es donde el personal opera el punto de venta, el
+  inventario, la caja y los reportes, y (2) el <strong>servicio de facturación electrónica</strong> —un servicio
+  <em>backend</em> propio, ejecutado como funcion sin servidor en AWS detras de una pasarela de servicios—, que es el único componente que se
+  comunica con la SUNAT: recibe los datos del comprobante, los valida, construye el archivo XML en el estándar
+  UBL 2.1, lo firma con el certificado digital del emisor, lo empaqueta y lo envía, y devuelve la constancia de
+  recepción (CDR) que la aplicación web guarda en el documento de venta. Dicho de otro modo:
+  <strong>la aplicación web no envía comprobantes por sí sola</strong>; si el servicio no está disponible, la venta
+  se registra y el comprobante queda emitido en el sistema, pero el envío permanece pendiente hasta que el servicio
+  responda. Esta separación es una decisión de diseño, no una limitación accidental: mantiene el certificado digital
+  fuera del navegador y permite actualizar la lógica tributaria sin volver a publicar la aplicación. El flujo
+  completo, paso a paso, se documenta en el <strong>Anexo 1</strong> y la evaluación del componente en el
+  <strong>apartado 3.2</strong> de este informe.</p>
+
   <p>El informe se organiza en tres capítulos que siguen la secuencia de un proyecto de aplicación profesional y no
   la de una investigación por capítulos clásicos. El <strong>Capítulo I</strong> presenta el diagnóstico de la
   situación previa, las adversidades reportadas durante la operación y las pruebas —incluidas las diez incidencias
@@ -1004,7 +1018,7 @@ table.larga thead { display: table-header-group; }
       <tr><td><strong>Distrito, provincia y región</strong></td><td>[COMPLETAR: distrito, provincia y región]</td></tr>
       <tr><td><strong>Actividad económica</strong></td><td>Venta al por menor de abarrotes y productos de consumo inmediato.</td></tr>
       <tr><td><strong>Punto o puntos de emisión</strong></td><td>[COMPLETAR: número y denominación de las cajas o puntos de emisión habilitados]</td></tr>
-      <tr><td><strong>Ubicación del servicio de facturación electrónica</strong></td><td>Servicio backend propio que se ejecuta en un equipo de la red local del establecimiento, en contenedor, y que custodia el certificado digital del emisor.</td></tr>
+      <tr><td><strong>Ubicación del servicio de facturación electrónica</strong></td><td>Servicio backend propio desplegado en AWS como funcion sin servidor (imagen de contenedor) detras de API Gateway, y que custodia el certificado digital del emisor en su propia configuracion.</td></tr>
     </tbody>
   </table>
 

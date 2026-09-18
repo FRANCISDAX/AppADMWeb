@@ -136,7 +136,7 @@
 
     <p>El servicio de facturación es un <strong>proyecto independiente</strong> del cliente web
     (<code>appadm-sunat</code>), desarrollado con FastAPI y la biblioteca <code>sunat_py</code>, que corre
-    como servicio interno en la red local del negocio y se despliega de forma separada: un cambio en ese
+    como servicio en AWS (funcion sin servidor detras de la pasarela de servicios) y se despliega de forma separada: un cambio en ese
     proyecto no surte efecto hasta que el servicio se reinicia. La responsabilidad de la validación está
     repartida: el servicio <strong>valida la estructura del comprobante</strong> antes de firmarlo (el
     esquema del envío se verifica con Pydantic en <code>app/schemas/invoice.py</code>, que exige, entre
