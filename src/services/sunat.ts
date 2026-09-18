@@ -1,6 +1,7 @@
 import { doc as fsDoc, updateDoc } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
+import { limpiarUndefined } from '@/lib/limpio'
 import { construirPayloadComprobante, construirPayloadNota, endpointSunat, puntoEmisionDe } from '@/lib/sunat'
 
 const TIMEOUT_SUNAT = 60000
@@ -45,6 +46,25 @@ function extraerHashDelXmlBase64(base64Xml: string) {
   }
 }
 
+/**
+ * Campos del CDR que se guardan en `doc.sunat`, **siempre definidos**.
+ *
+ * ⚠️ **La API no manda todos los campos en todas las respuestas** (`cdr_code`/`cdr_desc`/`hash`
+ * pueden faltar) y **Firestore RECHAZA `undefined`**: el `updateDoc` fallaba con
+ * *"Function updateDoc() called with invalid data. Unsupported field value: undefined"* y el
+ * comprobante quedaba sin registrar **aunque SUNAT ya lo hubiera aceptado** (el aviso al usuario
+ * era ese texto de Firestore, no el resultado del envío). Los que faltan van en `null`.
+ */
+function datosCdr(data: Record<string, any>, hashXml: string | null) {
+  return {
+    cdrCode: data.cdr_code ?? null,
+    cdrDesc: data.cdr_desc ?? data.error ?? null,
+    hash: hashXml ?? data.hash ?? null,
+    xml: data.xml_content ?? null,
+    cdr: data.cdr_content ?? null,
+  }
+}
+
 // Envía un comprobante (boleta/factura) a SUNAT mediante la API configurada en
 // Configuración → API SUNAT (producción). Devuelve { success, message?, error? }.
 export async function enviarDocumentoASunat(
@@ -66,7 +86,9 @@ export async function enviarDocumentoASunat(
   const sunatBase = { serie, numero, puntoEmision: puntoEmisionDe(doc, config) }
   const docRef = fsDoc(db, COL.DOCUMENTOS, doc.id)
   const actualizar = async (data: Record<string, any>, extra: Record<string, any> = {}) => {
-    await updateDoc(docRef, { sunat: { ...data, ...extra, ultimoEnvio: new Date().toISOString() } })
+    // `limpiarUndefined` es la red de seguridad obligatoria en el borde de escritura: Firestore
+    // rechaza `undefined` y TypeScript no avisa (ver invariante de Firestore en AGENTS.md).
+    await updateDoc(docRef, limpiarUndefined({ sunat: { ...data, ...extra, ultimoEnvio: new Date().toISOString() } }))
   }
 
   try {
@@ -100,24 +122,24 @@ export async function enviarDocumentoASunat(
 
     if (data.success || data.cdr_code === 0) {
       const hashXml = extraerHashDelXmlBase64(data.xml_content)
-      const ok = { ...sunatBase, estado: 'aceptado', cdrCode: data.cdr_code, cdrDesc: data.cdr_desc, hash: hashXml || data.hash, xml: data.xml_content || null, cdr: data.cdr_content || null }
+      const ok = { ...sunatBase, estado: 'aceptado', ...datosCdr(data, hashXml) }
       await actualizar(ok)
       return { success: true, message: `CDR: ${data.cdr_code || ''} - ${data.cdr_desc || 'OK'}` }
     } else if (data.cdr_code === 1033) {
       // 1033 = "El comprobante ya fue registrado" (duplicado): SUNAT YA lo tiene.
       const hashXml = extraerHashDelXmlBase64(data.xml_content)
-      const ok = { ...sunatBase, estado: 'aceptado', cdrCode: 1033, cdrDesc: data.cdr_desc || 'Ya registrado en SUNAT (duplicado)', hash: hashXml || data.hash, xml: data.xml_content || null, cdr: data.cdr_content || null, duplicado: true }
+      const ok = { ...sunatBase, estado: 'aceptado', ...datosCdr(data, hashXml), cdrCode: 1033, cdrDesc: data.cdr_desc || 'Ya registrado en SUNAT (duplicado)', duplicado: true }
       await actualizar(ok)
       return { success: true, message: 'Ya estaba registrado en SUNAT (código 1033). Se marca como emitido.' }
     } else if (data.cdr_code !== undefined) {
       const hashXml = extraerHashDelXmlBase64(data.xml_content)
-      const rej = { ...sunatBase, estado: 'rechazado', cdrCode: data.cdr_code, cdrDesc: data.cdr_desc || data.error, hash: hashXml || data.hash, xml: data.xml_content || null, cdr: data.cdr_content || null }
+      const rej = { ...sunatBase, estado: 'rechazado', ...datosCdr(data, hashXml), cdrDesc: data.cdr_desc || data.error || null }
       await actualizar(rej)
       return { success: false, error: data.cdr_desc || data.error || 'Error desconocido' }
     } else {
       const detalle = data.detail ? (Array.isArray(data.detail) ? data.detail.map((d: any) => d.msg).join('\n') : data.detail) : data.error || 'Error de validación'
       const hashXml = extraerHashDelXmlBase64(data.xml_content)
-      const errSt = { ...sunatBase, estado: 'error', error: detalle, hash: hashXml || data.hash, xml: data.xml_content || null, cdr: data.cdr_content || null }
+      const errSt = { ...sunatBase, estado: 'error', ...datosCdr(data, hashXml), error: detalle }
       await actualizar(errSt)
       return { success: false, error: detalle }
     }
@@ -128,7 +150,13 @@ export async function enviarDocumentoASunat(
       ? 'Tiempo de espera agotado. SUNAT no respondió a tiempo; el comprobante PUEDE haber sido aceptado. Reintenta para confirmar.'
       : err.message || 'Error de conexión'
     console.error('❌ Error al emitir a SUNAT:', { url: endpointSunat(config, 'invoices'), error: err.message, name: err.name, esAbort })
-    await actualizar({ ...sunatBase, estado: 'error', error: `${msg} (URL: ${endpointSunat(config, 'invoices')})` })
+    // Guardar el estado de error **no puede tapar el error real**: si esta escritura también
+    // falla, se avisa por consola y se devuelve igual el mensaje del envío.
+    try {
+      await actualizar({ ...sunatBase, estado: 'error', error: `${msg} (URL: ${endpointSunat(config, 'invoices')})` })
+    } catch (e2) {
+      console.warn('⚠️ No se pudo guardar el estado de error en el documento:', e2)
+    }
     return { success: false, error: msg }
   }
 }
@@ -153,7 +181,9 @@ export async function enviarNotaASunat(
   const sunatBase = { tipo, serie, numero, puntoEmision: puntoEmisionDe(doc, config) }
   const docRef = fsDoc(db, COL.DOCUMENTOS, doc.id)
   const actualizar = async (data: Record<string, any>, extra: Record<string, any> = {}) => {
-    await updateDoc(docRef, { sunat: { ...data, ...extra, ultimoEnvio: new Date().toISOString() } })
+    // `limpiarUndefined` es la red de seguridad obligatoria en el borde de escritura: Firestore
+    // rechaza `undefined` y TypeScript no avisa (ver invariante de Firestore en AGENTS.md).
+    await updateDoc(docRef, limpiarUndefined({ sunat: { ...data, ...extra, ultimoEnvio: new Date().toISOString() } }))
   }
 
   try {
@@ -187,23 +217,23 @@ export async function enviarNotaASunat(
 
     if (data.success || data.cdr_code === 0) {
       const hashXml = extraerHashDelXmlBase64(data.xml_content)
-      const ok = { ...sunatBase, estado: 'aceptado', cdrCode: data.cdr_code, cdrDesc: data.cdr_desc, hash: hashXml || data.hash, xml: data.xml_content || null, cdr: data.cdr_content || null }
+      const ok = { ...sunatBase, estado: 'aceptado', ...datosCdr(data, hashXml) }
       await actualizar(ok)
       return { success: true, message: `CDR: ${data.cdr_code || ''} - ${data.cdr_desc || 'OK'}` }
     } else if (data.cdr_code === 1033) {
       const hashXml = extraerHashDelXmlBase64(data.xml_content)
-      const ok = { ...sunatBase, estado: 'aceptado', cdrCode: 1033, cdrDesc: data.cdr_desc || 'Ya registrado en SUNAT (duplicado)', hash: hashXml || data.hash, xml: data.xml_content || null, cdr: data.cdr_content || null, duplicado: true }
+      const ok = { ...sunatBase, estado: 'aceptado', ...datosCdr(data, hashXml), cdrCode: 1033, cdrDesc: data.cdr_desc || 'Ya registrado en SUNAT (duplicado)', duplicado: true }
       await actualizar(ok)
       return { success: true, message: 'Ya estaba registrado en SUNAT (código 1033). Se marca como emitido.' }
     } else if (data.cdr_code !== undefined) {
       const hashXml = extraerHashDelXmlBase64(data.xml_content)
-      const rej = { ...sunatBase, estado: 'rechazado', cdrCode: data.cdr_code, cdrDesc: data.cdr_desc || data.error, hash: hashXml || data.hash, xml: data.xml_content || null, cdr: data.cdr_content || null }
+      const rej = { ...sunatBase, estado: 'rechazado', ...datosCdr(data, hashXml), cdrDesc: data.cdr_desc || data.error || null }
       await actualizar(rej)
       return { success: false, error: data.cdr_desc || data.error || 'Error desconocido' }
     } else {
       const detalle = data.detail ? (Array.isArray(data.detail) ? data.detail.map((d: any) => d.msg).join('\n') : data.detail) : data.error || 'Error de validación'
       const hashXml = extraerHashDelXmlBase64(data.xml_content)
-      const errSt = { ...sunatBase, estado: 'error', error: detalle, hash: hashXml || data.hash, xml: data.xml_content || null, cdr: data.cdr_content || null }
+      const errSt = { ...sunatBase, estado: 'error', ...datosCdr(data, hashXml), error: detalle }
       await actualizar(errSt)
       return { success: false, error: detalle }
     }
@@ -214,7 +244,13 @@ export async function enviarNotaASunat(
       ? 'Tiempo de espera agotado. SUNAT no respondió a tiempo; la nota PUEDE haber sido aceptada. Reintenta para confirmar.'
       : err.message || 'Error de conexión'
     console.error('❌ Error al emitir nota a SUNAT:', { url: endpointSunat(config, 'notes'), error: err.message, name: err.name, esAbort })
-    await actualizar({ ...sunatBase, estado: 'error', error: `${msg} (URL: ${endpointSunat(config, 'notes')})` })
+    // Guardar el estado de error **no puede tapar el error real**: si esta escritura también
+    // falla, se avisa por consola y se devuelve igual el mensaje del envío.
+    try {
+      await actualizar({ ...sunatBase, estado: 'error', error: `${msg} (URL: ${endpointSunat(config, 'notes')})` })
+    } catch (e2) {
+      console.warn('⚠️ No se pudo guardar el estado de error en el documento:', e2)
+    }
     return { success: false, error: msg }
   }
 }
