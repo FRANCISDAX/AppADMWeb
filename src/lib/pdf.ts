@@ -141,6 +141,11 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   const clienteNombre = venta.cliente_nombre || venta.cliente || '-'
   const clienteDni = venta.cliente_dni || venta.clienteDoc || '-'
   const clienteDireccion = venta.cliente_direccion || venta.clienteDireccion || ''
+  // Envío a domicilio: se imprime **solo si el documento lo trae**; si no existe, no aparece nada.
+  const envioDoc = venta.envio || null
+  const envioLinea = envioDoc && (envioDoc.direccion || envioDoc.notas)
+    ? [envioDoc.direccion, envioDoc.referencia ? `Ref: ${envioDoc.referencia}` : '', envioDoc.notas, Number(envioDoc.costo) > 0 ? `S/ ${Number(envioDoc.costo).toFixed(2)}` : ''].filter(Boolean).join(' · ')
+    : ''
   const sucursal = venta.sucursal || ''
   const autorizacion = venta.autorizacion || ''
   const validarEn = venta.validar_en || ''
@@ -243,6 +248,7 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   <tr><td class="td-l">${docLabel}:</td><td class="td-l" colspan="2"><span class="b">${esc(clienteDni)}</span></td></tr>
   <tr><td class="td-l">Cliente:</td><td class="td-l" colspan="2"><span class="b">${esc(clienteNombre)}</span></td></tr>
   ${clienteDireccion ? `<tr><td class="td-l">Dirección:</td><td class="td-l" colspan="2">${esc(clienteDireccion)}</td></tr>` : ''}
+  ${envioLinea ? `<tr><td class="td-l">🚚 Envío:</td><td class="td-l" colspan="2">${esc(envioLinea)}</td></tr>` : ''}
   </table>
   <table class="tbl cabecera"><thead><tr><th class="th-p">Producto</th><th>Cant.</th><th>Und.</th><th>Precio</th><th>Total</th></tr></thead></table>
   <div class="items">${itemsRows}</div>
