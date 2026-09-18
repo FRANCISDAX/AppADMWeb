@@ -87,6 +87,16 @@ El detalle de cada sesión —objective, decisiones con su porqué, evidencias, 
 - `npm run preview` — serve production build locally
 - `npx firebase deploy --only hosting` — deploy to Firebase Hosting
 
+### Documentos del producto (`docs/`)
+
+`docs/manual-usuario.html` (manual de usuario, con su PDF) y `docs/resumen-app.html` (resumen comercial). Los PDF se regeneran **sin abrir el navegador a mano** con Chrome headless:
+
+```
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new --disable-gpu --no-pdf-header-footer --print-to-pdf="docs/manual-usuario.pdf" "file:///C:/ruta/al/repo/docs/manual-usuario.html"
+```
+
+⚠️ **Actualizarlos NO requiere deploy**: `docs/` no está en `public/` y la app no los linkea (son archivos para compartir con el cliente). Si el manual cambia de fondo, subir la versión en la portada y en el footer. **Los PDF están versionados en el repo a pedido del usuario** (17/09).
+
 No test framework is configured. No CI workflows exist.
 
 ## Path alias
