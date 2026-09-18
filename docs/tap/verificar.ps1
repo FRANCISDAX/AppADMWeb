@@ -12,7 +12,7 @@
 # Se mantiene en ASCII a proposito (PowerShell 5.1 lee como ANSI los .ps1 UTF-8 sin BOM).
 
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$documentos = @('index','01-arquitectura','02-modelo-datos','03-requerimientos','04-pruebas','05-informe','05-informe-TAP','06-sustentacion','08-cronograma-y-costos')
+$documentos = @('index','01-arquitectura','02-modelo-datos','03-requerimientos','04-pruebas','05-informe','05-informe-TAP','05-informe-TAP-APA','06-sustentacion','08-cronograma-y-costos')
 
 function Get-PaginasPdf($ruta) {
   $txt = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($ruta))

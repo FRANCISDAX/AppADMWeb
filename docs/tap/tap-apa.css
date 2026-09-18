@@ -1,0 +1,66 @@
+/* Ajustes de formato APA (7.ª edición) que se cargan DESPUÉS de tap.css y lo sobrescriben.
+   Requisitos del formato que exige la institución:
+     · Papel A4
+     · Márgenes de 2.54 cm en los cuatro lados
+     · Times New Roman 12 (o Arial 11)
+     · Interlineado doble
+     · Alineación a la izquierda (no justificada)
+     · Numeración de páginas en la esquina superior derecha
+   ⚠️ La numeración de páginas NO se puede resolver con CSS: Chrome no soporta los márgenes de
+   página de Paged Media (`@top-right`). Por eso el documento final se genera con Word
+   (`generar-apa-word.ps1`), que inserta el número como campo en el encabezado. Esta hoja sirve
+   para la versión HTML y para la conversión: Word hereda la tipografía y el interlineado. */
+
+@page {
+  size: A4;
+  margin: 2.54cm;   /* el margen lo pone la página: el contenedor no debe volver a aplicarlo */
+}
+
+body {
+  font-family: 'Times New Roman', Times, Georgia, serif;
+  font-size: 12pt;
+  line-height: 2;               /* interlineado doble */
+  text-align: left;             /* APA: alineación a la izquierda, no justificada */
+  color: #000;
+  background: #fff;
+}
+
+/* El contenedor de tap.css traía los márgenes como relleno: con `@page` ya no hacen falta. */
+.page { max-width: none; margin: 0; padding: 0; }
+
+/* APA: primera línea de cada párrafo con sangría de 1.27 cm, sin espacio extra entre párrafos. */
+p { text-indent: 1.27cm; margin: 0; text-align: left; }
+
+/* Encabezados APA 7: nivel 1 centrado y en negrita; niveles 2 y 3 al margen izquierdo. */
+h1 { font-family: inherit; font-size: 12pt; font-weight: bold; text-align: center; margin: 0; text-indent: 0; }
+h2 { font-family: inherit; font-size: 12pt; font-weight: bold; text-align: left; border: 0; margin: 12pt 0 0; padding: 0; color: #000; text-indent: 0; }
+h3 { font-family: inherit; font-size: 12pt; font-weight: bold; font-style: italic; text-align: left; color: #000; margin: 12pt 0 0; text-indent: 0; }
+h4 { font-family: inherit; font-size: 12pt; font-weight: normal; font-style: italic; text-align: left; color: #000; margin: 0; text-indent: 0; }
+
+/* Listas y viñetas: sin sangría de primera línea y con el mismo interlineado doble. */
+ul, ol { margin: 0 0 0 1.27cm; }
+li { text-indent: 0; line-height: 2; }
+
+/* Tablas: APA admite cuerpo algo menor y a un espacio dentro de las tablas (si no, son ilegibles). */
+table { font-family: inherit; font-size: 11pt; line-height: 1; }
+th, td { line-height: 1; }
+table, th, td { border-color: #000; }
+
+/* Los diagramas del paquete se conservan: son figuras, no texto académico. */
+.diagrama, .kpis, .kpi { font-size: 10pt; line-height: 1.2; }
+.kpi .valor { font-size: 14pt; }
+.capa, .caja, .capa .detalle, .caja .titulo { line-height: 1.2; }
+
+/* La portada del paquete no es la portada APA (esa la arma el tesista con su plantilla). */
+.portada { text-align: center; }
+.portada h1 { font-size: 12pt; }
+.portada .subtitulo, .portada .meta, .portada .institucion { font-size: 12pt; line-height: 2; }
+
+/* Las cajas de aviso y nota se mantienen legibles a doble espacio. */
+.nota, .aviso, .ok { line-height: 1.5; font-size: 11pt; }
+.nota p, .aviso p, .ok p { text-indent: 0; }
+
+/* Bloques de código: monoespaciado y a un espacio. */
+code { font-family: Consolas, 'Courier New', monospace; font-size: 10pt; background: none; color: #000; padding: 0; }
+
+.pie { font-size: 11pt; line-height: 2; border-top: 0; }

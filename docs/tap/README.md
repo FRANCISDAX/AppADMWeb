@@ -37,19 +37,30 @@ powershell -ExecutionPolicy Bypass -File docs\tap\verificar.ps1
 ⚠️ `docs/` **no** está en `public/` y la aplicación no lo enlaza: actualizar estos documentos **no requiere
 desplegar** el sitio.
 
-## Versión en Word (`.docx`)
+## Versión APA (formato que exige la institución)
 
-El informe del TAP se entrega en la **plantilla de la institución**, así que además del PDF hay una versión
-editable en Word (`05-informe-TAP.docx`), que se regenera con:
+El formato APA general que pide la institución es: **papel A4**, **márgenes de 2.54 cm** en los cuatro
+lados, **Times New Roman 12** (o Arial 11), **interlineado doble**, **alineación a la izquierda** y
+**numeración de páginas en la esquina superior derecha**.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File docs\tap\generar-docx.ps1
-```
+| Archivo | Qué es | Estado |
+|---|---|---|
+| `tap-apa.css` | Hoja de estilo con el formato APA (se carga después de `tap.css` y lo sobrescribe) | ✅ listo |
+| `05-informe-TAP-APA.html` | El informe con esa hoja enlazada | ✅ listo |
+| `05-informe-TAP-APA.pdf` | Versión APA generada con Chrome: A4, márgenes de 2.54 cm, TNR 12, interlineado doble, alineación izquierda. Las **tablas** van a un espacio y en 11 pt porque a doble espacio resultan ilegibles (el propio formato APA lo admite en tablas y figuras) | ⚠️ **sin numeración de páginas** |
+| `05-informe-TAP-APA.docx` | Versión editable con los números de página insertados como campo en el encabezado | ⏳ **pendiente: `generar-apa-word.ps1` no llegó a terminar** |
 
-Sirve para pegar el contenido en la plantilla, dejar que Word genere el **índice con números de página**
-automático y reemplazar las marcas `[COMPLETAR: …]`. Dos advertencias: Word **repagina** con su propio motor
-(62 páginas en Chrome → 54 en Word para el mismo informe) y **los diagramas hechos con CSS** (el Gantt del
-Anexo 8, los diagramas de capas del Anexo 1) pueden desarmarse: esos conviene insertarlos como imagen desde el PDF.
+⚠️ **Por qué el PDF no lleva números de página**: la numeración en la esquina superior derecha **no se puede
+hacer con CSS** (Chrome no soporta los márgenes de página de Paged Media) y `generar-pdfs.ps1` usa Chrome.
+La única vía es Word, que la inserta como campo en el encabezado — y `generar-apa-word.ps1` **tarda más de
+13 minutos en este equipo** y hubo que detenerlo (Word recompagina el informe entero, con ~100 tablas, a
+doble espacio). Dos formas de cerrarlo, cuando se pueda:
+
+1. Correr `powershell -ExecutionPolicy Bypass -File docs\tap\generar-apa-word.ps1` y dejarlo trabajar
+   (funciona: los cuatro pasos se ejecutan; lo lento es el guardado del `.docx` y del `.pdf`).
+2. **Abrir `05-informe-TAP-APA.html` con Word**, aplicar *Diseño → Márgenes → Normal*, fuente Times New
+   Roman 12, interlineado doble y *Insertar → Número de página → Superior derecha*, y guardar como `.docx`.
+   Es el camino más rápido y deja el documento listo para pegar en la plantilla institucional.
 
 ## Formato del informe
 
