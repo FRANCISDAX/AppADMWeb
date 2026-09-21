@@ -10,6 +10,10 @@
     body { font-family: 'Inter', sans-serif; color: #1e293b; background: #fff; line-height: 1.7; font-size: 14px; }
 
     .page { max-width: 210mm; margin: 0 auto; padding: 18mm 20mm; }
+    /* El PDF sale en A4 (210 x 297 mm) y no en Letter: sin `@page` Chrome usa su default (Letter,
+       216 x 279 mm) y el documento se imprime con otro tamaño y otro corte de pagina. Los margenes
+       los pone el padding de `.page` en la regla de impresion de abajo. */
+    @page { size: A4; margin: 0; }
     @media print { .page { padding: 12mm 15mm; font-size: 11pt; } .no-print { display: none; } .page-break { page-break-before: always; } }
 
     /* Cover */
@@ -106,7 +110,7 @@
   <h1>JorFel</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.2 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.3 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -455,9 +459,23 @@
 
   <h3>5.4 Kardex</h3>
   <p>Desde <strong>Kardex</strong> (menú lateral) puedes ver el historial completo de movimientos de cada producto: ventas, compras, ajustes, anulaciones. Incluye fecha, tipo, cantidad, stock anterior y nuevo.</p>
+  <p>El kardex está <strong>valorizado</strong>: cada movimiento muestra además <strong>Costo unit.</strong> (con qué costo se valorizó ese movimiento) y <strong>Valor</strong> (cantidad × costo). Una <strong>compra</strong> entra con <strong>su</strong> costo y <strong>mueve el promedio</strong> del producto; un <strong>ajuste de entrada</strong> —que no pide costo— y una <strong>salida</strong> (venta, ajuste negativo) se valorizan <strong>al promedio vigente</strong> y <strong>no</strong> lo cambian. Los movimientos anteriores a esta función muestran <code>s/d</code> (sin dato): el sistema no inventa un costo que nunca se registró.</p>
 
-  <h3>5.5 Exportar a Excel</h3>
+  <h3>5.5 Valorización del inventario (costo promedio)</h3>
+  <p>Arriba de la tabla de productos, al lado de los filtros, ves <strong>cuánta plata hay en mercadería</strong>: <em>Inventario valorizado S/ …</em> con las unidades totales. Es el número que pide el contador.</p>
+  <p>El costo de cada producto se lleva con el método de <strong>costo promedio ponderado móvil</strong>: cuando entra mercadería a otro precio, el sistema recalcula el promedio —(stock anterior × promedio + lo que entra × su costo) ÷ stock total—. Por eso una compra más cara <strong>no</strong> distorsiona de golpe el valor de todo lo que ya había, que es lo que pasaba cuando se valorizaba con el último costo.</p>
+  <div class="steps">
+    <div class="step"><strong>Toca "Valorización"</strong> (arriba de la tabla) y se descarga un Excel con <strong>código, producto, categoría, stock, costo unitario, origen del costo y valor</strong>, ordenado de mayor a menor valor y con una fila <strong>TOTAL</strong> al final.</div>
+    <div class="step"><strong>Mirá la columna "Origen del costo"</strong>: dice <em>Promedio ponderado</em> cuando el producto ya tiene su promedio calculado y <em>Último costo</em> cuando todavía se usa el último precio de compra como respaldo (productos que no tuvieron una compra desde que se activó el promedio). El aviso <em>"N con último costo"</em> en pantalla cuenta esos casos.</div>
+  </div>
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p>Tienes 10 unidades valorizadas a S/ 2.00 cada una (promedio S/ 2.00). Llega una compra de 10 unidades a S/ 3.00: el promedio pasa a (10 × 2.00 + 10 × 3.00) ÷ 20 = <strong>S/ 2.50</strong>. Vendes 4 unidades: salen valorizadas a S/ 2.50 y el promedio <strong>sigue</strong> en S/ 2.50. El inventario queda en 16 unidades × S/ 2.50 = <strong>S/ 40.00</strong>.</p>
+  </div>
+
+  <h3>5.6 Exportar a Excel</h3>
   <p>Toca <strong>"Excel"</strong> para descargar la tabla de productos actual como archivo .xlsx con todos los campos.</p>
+  <p>Para el reporte <strong>valorizado</strong> (con costos y valores) usa el botón <strong>"Valorización"</strong> de la sección anterior.</p>
 </div>
 
 <!-- ============ 6. TURNOS DE CAJA ============ -->
@@ -897,7 +915,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.2</p>
+  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.3</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>
