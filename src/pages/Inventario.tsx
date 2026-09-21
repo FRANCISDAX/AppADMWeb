@@ -22,6 +22,7 @@ import { categoriasParaFiltros } from '@/services/categorias'
 import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento, esc } from '@/lib/ui-utils'
 import { exportarExcel } from '@/lib/excel'
+import { valorizacionDeMovimiento } from '@/services/kardex'
 import { logActividad } from '@/lib/audit'
 import { registrarCambioPrecio, obtenerHistorialPrecios } from '@/services/historial-precios'
 import { cargarProveedores, type Proveedor } from '@/services/proveedores'
@@ -314,12 +315,23 @@ export function Inventario() {
       const nuevoStock = ajusteTipo === 'entrada' ? stockActual + cant : stockActual - cant
       const f = new Date().toISOString()
       const batch = writeBatch(db)
-      batch.update(doc(db, 'tblProductos', prod.id), { stock: nuevoStock, ultimaActualizacion: f, updatedAt: f })
+      // Valoriza el movimiento con el costo promedio ponderado: una entrada sin costo NO mueve el
+      // promedio (la mercaderia vuelve con el costo con el que salio) y una salida se valora al
+      // promedio vigente (lib/valorizacion.ts).
+      const valorizado = valorizacionDeMovimiento({
+        tipoMovimiento: ajusteTipo === 'entrada' ? 'ajuste_entrada' : 'ajuste_salida',
+        cantidad: cant,
+        stockAntes: stockActual,
+        stockNuevo: nuevoStock,
+        producto: prod,
+      })
+      batch.update(doc(db, 'tblProductos', prod.id), { stock: nuevoStock, ...valorizado.camposProducto, ultimaActualizacion: f, updatedAt: f })
       batch.set(doc(collection(db, 'tblMovimientos')), {
         productoId: prod.id,
         productoCodigo: prod.codigo || prod.id,
         productoNombre: prod.nombre,
         tipoMovimiento: ajusteTipo === 'entrada' ? 'ajuste_entrada' : 'ajuste_salida',
+        ...valorizado.camposMovimiento,
         cantidad: cant,
         stockAnterior: stockActual,
         stockNuevo: nuevoStock,

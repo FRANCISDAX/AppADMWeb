@@ -435,7 +435,16 @@ export async function anularNotaVenta({ documentoId, motivo, usuario = 'sistema'
         const factor = item.factorConversion || 1
         const cantidadBase = item.cantidadEnUnidadBase || item.cantidad * factor
         const nuevoStock = stockActual + cantidadBase
-        tx.update(prodRef, { stock: nuevoStock, ultimaActualizacion: new Date().toISOString(), updatedAt: new Date().toISOString() })
+        // La anulación **devuelve** la mercadería: es una ENTRADA valorizada **al costo promedio
+        // vigente** (sin costo explícito), así el promedio del producto no se mueve.
+        const valorizado = valorizacionDeMovimiento({
+          tipoMovimiento: 'anulacion_venta',
+          cantidad: cantidadBase,
+          stockAntes: stockActual,
+          stockNuevo: nuevoStock,
+          producto: prod,
+        })
+        tx.update(prodRef, { stock: nuevoStock, ...valorizado.camposProducto, ultimaActualizacion: new Date().toISOString(), updatedAt: new Date().toISOString() })
         const movRef = doc(collection(db, COL.MOVIMIENTOS))
         tx.set(movRef, {
           productoId: item.id,
@@ -446,6 +455,7 @@ export async function anularNotaVenta({ documentoId, motivo, usuario = 'sistema'
           motivo: `Anulación de ${docData.serieNumero || documentoId}: ${motivo || 'sin motivo'}`,
           stockAnterior: stockActual,
           stockNuevo: nuevoStock,
+          ...valorizado.camposMovimiento,
           usuario,
           metadata: { ventaId: venta.id, documentoId },
           fecha: new Date().toISOString(),
