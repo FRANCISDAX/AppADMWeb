@@ -42,7 +42,9 @@ const hoyISO = () => {
 }
 const fmtFecha = (iso?: string) => (iso ? new Date(iso).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-')
 
-type Fila = { id: string; tipoMovimiento: string; cantidad: number; cantidadReal: number; stockCorriente: number; fecha: string; stockAnterior?: number; stockNuevo?: number; motivo?: string; usuario?: string }
+type Fila = { id: string; tipoMovimiento: string; cantidad: number; cantidadReal: number; stockCorriente: number;
+  /** Valorizacion del movimiento (los movimientos anteriores a la valorizacion no la tienen). */
+  costoUnitario?: number | null; valorTotal?: number | null; costoPromedioDespues?: number | null; stockValorizadoDespues?: number | null; fecha: string; stockAnterior?: number; stockNuevo?: number; motivo?: string; usuario?: string }
 type KardexData = { producto: any; stockInicial: number; stockFinal: number; totalEntradas: number; totalSalidas: number; filas: Fila[] }
 
 export function Kardex() {

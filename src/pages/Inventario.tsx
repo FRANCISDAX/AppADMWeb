@@ -539,7 +539,16 @@ export function Inventario() {
       for (const p of conDiferencia) {
         const fisico = parseInt(tomaConteos[p.id])
         const stockAnterior = p.stock ?? 0
-        batch.update(doc(db, 'tblProductos', p.id), { stock: fisico, ultimaActualizacion: f, updatedAt: f })
+        // La toma fija el stock al conteo real: el sobrante es una ENTRADA y el faltante una
+        // SALIDA, y se valorizan con la misma regla (promedio ponderado) que el resto.
+        const valorizado = valorizacionDeMovimiento({
+          tipoMovimiento: fisico > stockAnterior ? 'ajuste_entrada' : 'ajuste_salida',
+          cantidad: Math.abs(fisico - stockAnterior),
+          stockAntes: stockAnterior,
+          stockNuevo: fisico,
+          producto: p,
+        })
+        batch.update(doc(db, 'tblProductos', p.id), { stock: fisico, ...valorizado.camposProducto, ultimaActualizacion: f, updatedAt: f })
         batch.set(doc(collection(db, 'tblMovimientos')), {
           productoId: p.id,
           productoCodigo: p.codigo || p.id,
@@ -548,6 +557,7 @@ export function Inventario() {
           cantidad: Math.abs(fisico - stockAnterior),
           stockAnterior,
           stockNuevo: fisico,
+          ...valorizado.camposMovimiento,
           motivo: 'toma_inventario',
           nota: 'Toma de inventario',
           usuario,
