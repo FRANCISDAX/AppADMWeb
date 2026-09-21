@@ -1038,7 +1038,7 @@ export function Pdv() {
         manual: true,
       }))
       const items = [...invItems, ...manItems]
-      const res = await crearVentaPendiente({
+      const payloadPedido = {
         items,
         venta: {
           total,
@@ -1073,7 +1073,23 @@ export function Pdv() {
         vendedorId: user?.uid || '',
         vendedorNombre: nombreUsuario || user?.email || 'sistema',
         cajaId: cajaId || '',
-      })
+      }
+      let res = await crearVentaPendiente(payloadPedido)
+
+      // 🔑 **Pedido duplicado**: si el mismo vendedor ya mandó esta misma venta y el pedido sigue
+      // esperando en caja, se avisa con el código del que ya existe y decide él. Caso real
+      // (18/09/2026): un reenvío dejaba dos pedidos idénticos y el cajero veía "un pedido ya
+      // procesado" que en realidad era el sobrante, colgado para siempre.
+      if (!res.success && res.duplicado) {
+        const otro = await confirm({
+          title: '¿Enviar otro pedido igual?',
+          message: `Ya enviaste este mismo pedido (${res.codigoPedido}) hace menos de 15 minutos y todavía está esperando en caja.\n\nSi es la MISMA venta, cancelá: el cajero va a cobrar el pedido que ya está en su lista.\nSi es OTRA venta con los mismos productos, confirmá y se envía un pedido nuevo.`,
+          okText: 'Enviar otro igual',
+        })
+        if (!otro) return setToast(`ℹ️ No se envió nada: el pedido ${res.codigoPedido} ya está en caja`)
+        res = await crearVentaPendiente({ ...payloadPedido, permitirDuplicado: true })
+      }
+
       if (res.success) {
         setToast(`✅ Pedido ${res.correlativo ?? ''} enviado a caja`)
         setCart({})

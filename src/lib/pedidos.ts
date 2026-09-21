@@ -131,3 +131,114 @@ export function clienteDelPedido(p: PedidoEnCarrito): string {
   const doc = p.clienteDni ? `${p.clienteDni.length === 11 ? 'RUC' : 'DNI'} ${p.clienteDni}` : ''
   return [p.clienteNombre, doc].filter(Boolean).join(' · ')
 }
+
+// ─── Pedidos duplicados ──────────────────────────────────────────────────────────────────────
+//
+// 📌 **Caso real (18/09/2026)**: un vendedor enviaba la venta a caja y, si el aviso tardaba o
+// volvía a cargar los mismos productos, terminaba creando **dos pedidos idénticos** (`PED-000123`
+// y `PED-000124`). El cajero cobraba uno y el otro quedaba pendiente para siempre: en la lista
+// parecía "un pedido ya procesado que sigue apareciendo" y el stock se descontaba una sola vez,
+// pero el pedido colgado confundía a la caja.
+//
+// La defensa es **detectar y avisar, no bloquear**: si el mismo vendedor envía exactamente la
+// misma venta dentro de una ventana corta, el sistema avisa cuál es el pedido que ya existe y
+// pide confirmación — porque una venta legítimamente igual (otro cliente, los mismos productos)
+// tiene que poder enviarse.
+
+/** Minutos dentro de los cuales un pedido idéntico se considera un reenvío y no una venta nueva. */
+export const VENTANA_DUPLICADO_MINUTOS = 15
+
+/** Item tal como llega desde el carrito o desde el documento, para calcular la huella. */
+export type ItemParaHuella = {
+  id?: unknown
+  nombre?: unknown
+  cantidad?: unknown
+  quantity?: unknown
+  precioVenta?: unknown
+}
+
+/** Valor normalizado para comparar: texto recortado, números a dos decimales. */
+function norm(v: unknown): string {
+  if (typeof v === 'string') return v.trim()
+  if (typeof v === 'number' && Number.isFinite(v)) return String(Math.round(v * 100) / 100)
+  return ''
+}
+
+/**
+ * **Huella de un pedido**: identifica la misma venta enviada por el mismo vendedor, con
+ * independencia de la hora y del orden en que se cargaron los productos.
+ *
+ * Incluye vendedor, total y las líneas (producto, cantidad y precio). **No** incluye la fecha —
+ * es justamente lo que hay que ignorar para detectar un reenvío— ni el cliente: si el vendedor
+ * reenvía la misma venta habiendo corregido el cliente, sigue siendo el mismo pedido.
+ */
+export function huellaPedido({
+  vendedorId,
+  items,
+  total,
+}: {
+  vendedorId?: string | null
+  items?: readonly ItemParaHuella[] | null
+  total?: number | null
+}): string {
+  const lineas = (items ?? [])
+    .map((it) =>
+      [
+        norm(it?.id) || norm(it?.nombre),
+        norm(it?.cantidad) || norm(it?.quantity),
+        norm(it?.precioVenta),
+      ].join('~'),
+    )
+    .filter((linea) => linea.replace(/~/g, '') !== '')
+    .sort()
+  return [norm(vendedorId), norm(total), ...lineas].join('|')
+}
+
+/** Pedido pendiente, con lo mínimo para compararlo contra uno nuevo. */
+export type PedidoParaDuplicado = {
+  id?: string
+  serieNumero?: string
+  vendedorId?: string
+  estado?: string
+  fecha?: string
+  /** Huella guardada al crear el pedido (los pedidos viejos no la tienen). */
+  huella?: string
+  venta?: { items?: unknown; total?: unknown } | null
+}
+
+/**
+ * Devuelve el pedido **idéntico y todavía pendiente** que ese vendedor envió dentro de la ventana,
+ * o `null` si no hay ninguno. Es la regla que usa la capa de servicios antes de crear un pedido.
+ *
+ * Los pedidos creados antes de que existiera la huella se comparan recalculándola con la misma
+ * función (misma regla, mismos datos), así la comprobación también cubre lo ya enviado.
+ */
+export function pedidoDuplicado(
+  pendientes: readonly PedidoParaDuplicado[] | null | undefined,
+  candidato: { vendedorId?: string | null; huella: string; ahora?: Date; ventanaMinutos?: number },
+): PedidoParaDuplicado | null {
+  const ventana = (candidato.ventanaMinutos ?? VENTANA_DUPLICADO_MINUTOS) * 60000
+  const ahora = (candidato.ahora ?? new Date()).getTime()
+  const vendedor = norm(candidato.vendedorId)
+
+  for (const pedido of pendientes ?? []) {
+    if (norm(pedido?.vendedorId) !== vendedor) continue
+    if ((pedido?.estado || 'pendiente') !== 'pendiente') continue
+
+    const huella =
+      norm(pedido?.huella) ||
+      huellaPedido({
+        vendedorId: pedido?.vendedorId,
+        items: (Array.isArray(pedido?.venta?.items) ? pedido?.venta?.items : []) as ItemParaHuella[],
+        total: Number(pedido?.venta?.total) || 0,
+      })
+    if (huella !== candidato.huella) continue
+
+    // Fuera de la ventana se considera una venta nueva (el mismo cliente puede volver a comprar lo mismo).
+    const fecha = Date.parse(norm(pedido?.fecha))
+    if (Number.isFinite(fecha) && ahora - fecha > ventana) continue
+
+    return pedido
+  }
+  return null
+}

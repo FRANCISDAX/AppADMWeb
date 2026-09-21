@@ -12,7 +12,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { avisoOtraCaja, clienteDelPedido, nombreCaja, pedidoParaCarrito, repartirPedidos } from './pedidos.ts'
+import { avisoOtraCaja, clienteDelPedido, huellaPedido, nombreCaja, pedidoDuplicado, pedidoParaCarrito, repartirPedidos, VENTANA_DUPLICADO_MINUTOS } from './pedidos.ts'
 
 const p = (id: string, cajaId?: string) => ({ id, cajaId })
 
@@ -129,6 +129,99 @@ describe('pedidoParaCarrito — el carrito cobra lo COTIZADO, no lo recalculado'
     assert.equal(pedidoParaCarrito({ venta: { total: 2 } }).descuento, 0)
     assert.equal(pedidoParaCarrito({ venta: { descuentoTotal: 'x' } }).descuento, 0)
     assert.equal(pedidoParaCarrito(null).descuento, 0)
+  })
+})
+
+// ─── Pedidos duplicados (caso real del 18/09/2026) ───────────────────────────────────────────
+// El vendedor enviaba la misma venta dos veces y el cajero quedaba con un pedido colgado.
+
+const items = [
+  { id: 'huevo', cantidad: 2, precioVenta: 0.6 },
+  { id: 'galleta', cantidad: 2, precioVenta: 0.5 },
+]
+
+const pedido = (extra: Record<string, unknown> = {}) => ({
+  id: '2026-9_PED-000123',
+  serieNumero: 'PED-000123',
+  vendedorId: 'vendedor-1',
+  estado: 'pendiente',
+  fecha: '2026-09-18T15:00:00.000Z',
+  huella: huellaPedido({ vendedorId: 'vendedor-1', items, total: 2 }),
+  venta: { items, total: 2 },
+  ...extra,
+})
+
+describe('huellaPedido', () => {
+  it('es igual para la misma venta, sin importar el orden de las líneas', () => {
+    const directa = huellaPedido({ vendedorId: 'v1', items, total: 2 })
+    const invertida = huellaPedido({ vendedorId: 'v1', items: [...items].reverse(), total: 2 })
+    assert.equal(directa, invertida)
+  })
+
+  it('cambia si cambia el vendedor, el total, una cantidad o un precio', () => {
+    const base = huellaPedido({ vendedorId: 'v1', items, total: 2 })
+    assert.notEqual(base, huellaPedido({ vendedorId: 'v2', items, total: 2 }))
+    assert.notEqual(base, huellaPedido({ vendedorId: 'v1', items, total: 3 }))
+    assert.notEqual(base, huellaPedido({ vendedorId: 'v1', items: [{ ...items[0], cantidad: 3 }, items[1]], total: 2 }))
+    assert.notEqual(base, huellaPedido({ vendedorId: 'v1', items: [{ ...items[0], precioVenta: 0.7 }, items[1]], total: 2 }))
+  })
+
+  it('no se rompe con items vacíos o con basura', () => {
+    assert.equal(huellaPedido({ vendedorId: 'v1', items: [], total: 0 }), 'v1|0')
+    assert.equal(huellaPedido({}), '|', 'sin datos no inventa un total: queda vacío')
+    assert.equal(huellaPedido({ items: [null, {}, 'x'] as never, total: 0 }), '|0')
+  })
+})
+
+describe('pedidoDuplicado', () => {
+  const ahora = new Date('2026-09-18T15:05:00.000Z')   // 5 minutos después del pedido
+
+  it('detecta el reenvío de la misma venta dentro de la ventana', () => {
+    const encontrado = pedidoDuplicado([pedido()], {
+      vendedorId: 'vendedor-1',
+      huella: huellaPedido({ vendedorId: 'vendedor-1', items, total: 2 }),
+      ahora,
+    })
+    assert.equal(encontrado?.serieNumero, 'PED-000123')
+  })
+
+  it('no lo detecta si pasó la ventana: el mismo cliente puede volver a comprar lo mismo', () => {
+    const tarde = new Date(Date.parse('2026-09-18T15:00:00.000Z') + (VENTANA_DUPLICADO_MINUTOS + 1) * 60000)
+    assert.equal(
+      pedidoDuplicado([pedido()], { vendedorId: 'vendedor-1', huella: huellaPedido({ vendedorId: 'vendedor-1', items, total: 2 }), ahora: tarde }),
+      null,
+    )
+  })
+
+  it('no lo detecta si el pedido es de otro vendedor', () => {
+    assert.equal(
+      pedidoDuplicado([pedido()], { vendedorId: 'vendedor-2', huella: huellaPedido({ vendedorId: 'vendedor-1', items, total: 2 }), ahora }),
+      null,
+    )
+  })
+
+  it('no lo detecta si el pedido ya no está pendiente (cobrado o eliminado)', () => {
+    for (const estado of ['pagado', 'cancelado', 'anulada']) {
+      assert.equal(
+        pedidoDuplicado([pedido({ estado })], { vendedorId: 'vendedor-1', huella: huellaPedido({ vendedorId: 'vendedor-1', items, total: 2 }), ahora }),
+        null,
+      )
+    }
+  })
+
+  it('detecta también los pedidos viejos, que no tienen huella guardada', () => {
+    const viejo = pedido({ huella: undefined })
+    assert.equal(
+      pedidoDuplicado([viejo], { vendedorId: 'vendedor-1', huella: huellaPedido({ vendedorId: 'vendedor-1', items, total: 2 }), ahora })?.serieNumero,
+      'PED-000123',
+    )
+  })
+
+  it('con una venta distinta no avisa nada', () => {
+    assert.equal(
+      pedidoDuplicado([pedido()], { vendedorId: 'vendedor-1', huella: huellaPedido({ vendedorId: 'vendedor-1', items: [{ id: 'pan', cantidad: 1, precioVenta: 3 }], total: 3 }), ahora }),
+      null,
+    )
   })
 })
 

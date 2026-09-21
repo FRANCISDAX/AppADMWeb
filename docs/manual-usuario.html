@@ -301,6 +301,17 @@
     <p>Un pedido en espera <strong>no descuenta stock</strong>: el inventario baja cuando el cajero cobra. Por eso, si el pedido se elimina, <strong>no hay nada que devolver</strong> y el inventario queda intacto. ⚠️ La contra es que la unidad sigue disponible para otro vendedor: si alguien más la vende antes de que se cobre, al cobrar el sistema avisa <em>"El stock de X se agotó mientras el pedido esperaba en caja"</em> y no permite cobrar con el inventario mal.</p>
   </div>
 
+  <div class="tip">
+    <div class="tip-label">🔁 Un pedido no se envía dos veces</div>
+    <p>Si tocás <strong>"Enviar a caja"</strong> con la misma venta que ya enviaste y ese pedido <strong>todavía está esperando</strong> en caja (dentro de los últimos 15 minutos), el sistema <strong>no crea un pedido nuevo</strong>: te avisa con el código del que ya existe
+    (<em>"Este pedido ya fue enviado a caja (PED-000123)…"</em>).</p>
+    <ul>
+      <li><strong>Si es la misma venta</strong>: cancelá el aviso y no hagas nada más — el cajero va a cobrar el pedido que ya está en su lista.</li>
+      <li><strong>Si es otra venta</strong> con los mismos productos (otro cliente, por ejemplo): confirmá <em>"Enviar otro igual"</em> y se crea un pedido nuevo. Queda registrado que fue confirmado a propósito.</li>
+    </ul>
+    <p>Esto evita el problema más confuso de la caja: dos pedidos idénticos donde el cajero cobra uno y el otro queda colgado en la lista como si fuera una venta por atender.</p>
+  </div>
+
   <h3>3.2 Panel de ventas pendientes (cajero)</h3>
   <p>Cuando un cajero abre el PDV, si tiene permiso <code>verVentasPendientes</code>, ve un panel con los pedidos enviados por los vendedores:</p>
   <ul style="list-style:none; padding:0; margin: 8px 0;">

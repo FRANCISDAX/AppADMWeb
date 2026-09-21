@@ -7,6 +7,7 @@ import { bolsillosDeVenta, formaPagoLabel, type PagoGuardado } from '@/lib/pagos
 import { CAMPO_CONTADOR, CLAVE_PEDIDO, claveContador, codigoPedido } from '@/lib/contadores'
 import { limpiarUndefined } from '@/lib/limpio'
 import { revisarDescuentoManual } from '@/lib/descuentos'
+import { VENTANA_DUPLICADO_MINUTOS, huellaPedido, pedidoDuplicado } from '@/lib/pedidos'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
@@ -541,6 +542,7 @@ export async function crearVentaPendiente({
   vendedorId,
   vendedorNombre,
   cajaId,
+  permitirDuplicado = false,
 }: {
   items: VentaItem[]
   venta: Omit<VentaData, 'tipoDoc' | 'tipoPago'>
@@ -548,10 +550,38 @@ export async function crearVentaPendiente({
   vendedorId: string
   vendedorNombre: string
   cajaId?: string
-}): Promise<{ success: boolean; correlativo?: string; documento?: DocumentoVenta; error?: string }> {
+  /**
+   * `true` cuando el vendedor **confirmó** que quiere enviar otra vez la misma venta (venta
+   * distinta con los mismos productos). Sin esto, un pedido idéntico y pendiente del mismo
+   * vendedor dentro de `VENTANA_DUPLICADO_MINUTOS` se rechaza con el código del pedido existente.
+   */
+  permitirDuplicado?: boolean
+}): Promise<{ success: boolean; correlativo?: string; documento?: DocumentoVenta; error?: string; duplicado?: boolean; codigoPedido?: string }> {
   try {
     if (!items.length) return { success: false, error: 'No hay items para vender' }
     if (!venta.usuarioId) return { success: false, error: 'Falta usuarioId' }
+
+    // 🔑 **Segunda capa contra el pedido duplicado** (la primera es el aviso del PDV): si el mismo
+    // vendedor ya mandó esta misma venta y ese pedido sigue pendiente, no se crea otro. Caso real
+    // (18/09/2026): un reenvío dejaba dos pedidos idénticos (`PED-000123` y `PED-000124`), el cajero
+    // cobraba uno y el otro quedaba colgado para siempre en su lista.
+    const huella = huellaPedido({ vendedorId, items, total: venta.total })
+    if (!permitirDuplicado) {
+      try {
+        const repetido = pedidoDuplicado(await obtenerVentasPendientes(), { vendedorId, huella })
+        if (repetido) {
+          return {
+            success: false,
+            duplicado: true,
+            codigoPedido: repetido.serieNumero || repetido.id || '',
+            error: `Este pedido ya fue enviado a caja (${repetido.serieNumero || repetido.id}) hace menos de ${VENTANA_DUPLICADO_MINUTOS} minutos.`,
+          }
+        }
+      } catch (e) {
+        // La comprobación es una ayuda, no un candado: si la consulta falla, el pedido se crea igual.
+        console.warn('⚠️ No se pudo verificar si el pedido estaba duplicado:', e)
+      }
+    }
 
     // Tope del **descuento manual** (`config.descuentoMaximoPorcentaje`, 0 = sin tope): segunda
     // capa de la regla de `lib/descuentos.ts` (la primera es la UI del PDV). No mira las
@@ -663,6 +693,11 @@ export async function crearVentaPendiente({
         vendedorId,
         vendedorNombre,
         cajaId: cajaId || '',
+        // Huella de la venta: permite reconocer un reenvío del mismo pedido (`lib/pedidos.ts`).
+        // Los pedidos creados antes de esta regla no la tienen y se comparan recalculándola.
+        huella,
+        // Queda constancia de que el vendedor confirmó un envío idéntico al anterior.
+        ...(permitirDuplicado ? { duplicadoConfirmado: true } : {}),
       }
 
       tx.set(pedidoRef, { [CAMPO_CONTADOR]: numeroPedido, updatedAt: f.toISOString() }, { merge: true })
