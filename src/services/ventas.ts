@@ -1,4 +1,4 @@
-import { collection, doc, increment, getDoc, getDocs, query, runTransaction, updateDoc, where, limit, writeBatch } from 'firebase/firestore'
+import { collection, doc, increment, getDoc, getDocs, onSnapshot, query, runTransaction, updateDoc, where, limit, writeBatch } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
@@ -755,6 +755,39 @@ export async function obtenerVentasPendientes(): Promise<DocumentoVenta[]> {
     console.error('❌ Error obteniendo ventas pendientes:', e)
     return []
   }
+}
+
+/**
+ * Escucha los pedidos pendientes **en tiempo real** (`onSnapshot`) y avisa en cada cambio.
+ * Devuelve la función para dejar de escuchar.
+ *
+ * 🔑 **Por qué en vivo y no cada 30 segundos**: un pedido cobrado o eliminado —acá o desde otra
+ * caja— **sale de la lista al instante**. Con el refresco periódico quedaba a la vista hasta medio
+ * minuto *pareciendo pendiente*, que es justo lo que confundía al cajero ("ya lo cobré y sigue
+ * apareciendo"). Además sale más barato: un sondeo cada 30 s relee los 50 documentos en cada
+ * terminal, mientras que el canal en vivo sólo transmite los cambios.
+ *
+ * La consulta es la misma que la del listado (igualdad sola + límite ⇒ **sin índice compuesto**),
+ * así que el panel nunca queda ciego por configuración de caja.
+ */
+export function suscribirVentasPendientes(
+  onCambio: (ventas: DocumentoVenta[]) => void,
+  onError?: (e: unknown) => void,
+): () => void {
+  const q = query(collection(db, COL.DOCUMENTOS), where('estado', '==', 'pendiente'), limit(50))
+  return onSnapshot(
+    q,
+    (snap) => {
+      const lista = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }) as unknown as DocumentoVenta)
+        .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
+      onCambio(lista)
+    },
+    (e) => {
+      console.error('❌ Error escuchando los pedidos pendientes:', e)
+      onError?.(e)
+    },
+  )
 }
 
 /**

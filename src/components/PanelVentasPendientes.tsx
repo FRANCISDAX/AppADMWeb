@@ -6,7 +6,7 @@ import { usePermisos } from '@/context/permisos'
 import { useAuth } from '@/context/auth'
 import { fmt } from '@/lib/ui-utils'
 import { nombreCaja, repartirPedidos } from '@/lib/pedidos'
-import { obtenerVentasPendientes, cancelarVentaPendiente, type DocumentoVenta } from '@/services/ventas'
+import { obtenerVentasPendientes, suscribirVentasPendientes, cancelarVentaPendiente, type DocumentoVenta } from '@/services/ventas'
 
 function tiempoTranscurrido(fechaIso: string): string {
   const diff = Date.now() - new Date(fechaIso).getTime()
@@ -31,12 +31,9 @@ function tiempoTranscurrido(fechaIso: string): string {
  */
 export function PanelVentasPendientes({
   onCobrarPedido,
-  refreshKey = 0,
 }: {
   /** El PDV trae el pedido al carrito para cobrarlo. */
   onCobrarPedido: (pedido: DocumentoVenta) => void
-  /** Cambia cuando el PDV cobra un pedido, para recargar la lista. */
-  refreshKey?: number
 }) {
   const { user } = useAuth()
   const { cajaId, nombre: nombreUsuario, tienePermiso } = usePermisos()
@@ -56,12 +53,23 @@ export function PanelVentasPendientes({
 
   const { mios, otrasCajas } = React.useMemo(() => repartirPedidos(ventas, cajaId), [ventas, cajaId])
 
-  React.useEffect(() => { cargar() }, [cargar, refreshKey])
-
-  // Refresco cada 30s
   React.useEffect(() => {
-    const timer = setInterval(() => { cargar() }, 30000)
-    return () => clearInterval(timer)
+    // 🔑 La lista se escucha **en vivo** (`onSnapshot`): un pedido que se cobra o se elimina sale al
+    // instante, acá o desde otra caja. Antes se refrescaba cada 30 s y el pedido ya procesado podía
+    // seguir a la vista, pareciendo pendiente. Si el canal en vivo no se puede abrir, se cae al
+    // refresco periódico: la lista nunca queda congelada.
+    try {
+      const soltar = suscribirVentasPendientes((lista) => {
+        setVentas(lista)
+        setCargando(false)
+      })
+      return soltar
+    } catch (e) {
+      console.warn('⚠️ No se pudo abrir el canal en vivo de pedidos: se refresca cada 30 s', e)
+      cargar()
+      const timer = setInterval(() => { cargar() }, 30000)
+      return () => clearInterval(timer)
+    }
   }, [cargar])
 
   function cancelar(v: DocumentoVenta) {

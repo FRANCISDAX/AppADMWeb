@@ -135,8 +135,6 @@ export function Pdv() {
    * tiene un solo lugar para elegir comprobante y forma de pago, en vez de dos copias.
    */
   const [pedidoActivo, setPedidoActivo] = React.useState<PedidoEnCarrito | null>(null)
-  /** Se incrementa al cobrar un pedido para que el panel de pendientes recargue la lista. */
-  const [refrescoPedidos, setRefrescoPedidos] = React.useState(0)
 
   const handleBarcodeDetectado = React.useCallback((codigo: string) => {
     const codigoLimpio = codigo.replace(/[\s-]/g, '').trim()
@@ -610,7 +608,8 @@ export function Pdv() {
       setVentaOk({ correlativo, total: pedidoActivo.total, vuelto: resumen.vuelto, documento: (documento ?? {}) as Record<string, unknown> })
       setPedidoActivo(null)
       setPagos([])
-      setRefrescoPedidos((n) => n + 1)
+      // El panel de pendientes no se refresca a mano: escucha la colección en vivo (`onSnapshot`),
+      // así que el pedido cobrado sale de la lista por sí solo, en este equipo y en los demás.
       setToast(`✅ Pedido ${pedidoActivo.codigo} cobrado · ${correlativo}`)
     } catch (e) {
       setToast(`❌ ${(e as Error).message}`)
@@ -1346,7 +1345,7 @@ export function Pdv() {
 
           {tienePermiso('verVentasPendientes') && (
             <div className="border-b px-5 py-3">
-              <PanelVentasPendientes onCobrarPedido={activarPedido} refreshKey={refrescoPedidos} />
+              <PanelVentasPendientes onCobrarPedido={activarPedido} />
             </div>
           )}
 
