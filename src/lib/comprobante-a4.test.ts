@@ -11,8 +11,9 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import QRCode from 'qrcode'
 
-import { construirPDFComprobanteA4, datosComprobanteA4, limpiarTextoA4, nombreArchivoComprobante } from './comprobante-a4.ts'
+import { construirPDFComprobanteA4, datosComprobanteA4, disposicionEncabezadoA4, limpiarTextoA4, nombreArchivoComprobante, COLUMNAS_A4, LOGO_CAJA } from './comprobante-a4.ts'
 
 const CONFIG = {
   nombre: 'JorFel',
@@ -42,8 +43,8 @@ const BOLETA = {
   },
 }
 
-async function textoDelPDF(doc: Record<string, unknown>) {
-  const { pdf } = await construirPDFComprobanteA4(doc, CONFIG, { comprimir: false })
+async function textoDelPDF(doc: Record<string, unknown>, config: Record<string, unknown> = CONFIG) {
+  const { pdf } = await construirPDFComprobanteA4(doc, config, { comprimir: false })
   return { txt: Buffer.from(pdf.output('arraybuffer')).toString('latin1'), pdf }
 }
 
@@ -101,6 +102,85 @@ describe('nombreArchivoComprobante', () => {
   it('usa el serie-número, que es lo que el cliente busca en su correo', () => {
     assert.equal(nombreArchivoComprobante({ serieNumero: 'B001-000064' }), 'B001-000064.pdf')
     assert.equal(nombreArchivoComprobante({ tipoDoc: 'NC', numero: 3 }, 'NC'), 'NC-3.pdf')
+  })
+})
+
+describe('⚠️ el logo no puede tapar el nombre de la empresa', () => {
+  // Bug real del 21/09/2026: el logo se dibujaba con ancho 0 (= tamaño natural de la imagen) y el
+  // texto de la empresa salía ENCIMA. Ahora el logo se encaja en una caja y el texto baja.
+  it('un logo tipo banner (400x100) se encaja en la caja y el texto arranca debajo', () => {
+    const d = disposicionEncabezadoA4({ width: 400, height: 100 })
+    assert.ok(d.logo, 'el logo tiene que dibujarse')
+    assert.equal(d.logo.w, LOGO_CAJA.ancho, 'limitado por el ancho máximo')
+    assert.equal(d.logo.h, 12.5, 'alto proporcional (400x100 → 50x12.5)')
+    assert.ok(d.textoY >= d.logo.y + d.logo.h + 3, `el texto (${d.textoY}) tiene que quedar debajo del logo (${d.logo.y + d.logo.h})`)
+  })
+
+  it('un logo alto (100x400) se limita por el alto y deja libre el ancho', () => {
+    const d = disposicionEncabezadoA4({ width: 100, height: 400 })
+    assert.ok(d.logo)
+    assert.equal(d.logo.h, LOGO_CAJA.alto)
+    assert.ok(d.logo.w <= LOGO_CAJA.ancho)
+    assert.ok(d.textoY >= d.logo.y + d.logo.h + 3)
+  })
+
+  it('sin logo el texto queda en su altura normal', () => {
+    assert.deepEqual(disposicionEncabezadoA4(null), { logo: null, textoY: 18 })
+    // Una imagen sin dimensiones útiles no puede romper el encabezado (ni dar NaN).
+    assert.deepEqual(disposicionEncabezadoA4({ width: 0, height: 0 }), { logo: null, textoY: 18 })
+  })
+
+  it('el logo nunca invade la caja del RUC/documento (que empieza en x=118)', () => {
+    const d = disposicionEncabezadoA4({ width: 1000, height: 100 })
+    assert.ok(d.logo)
+    assert.ok(d.logo.x + d.logo.w <= 118, 'el logo tiene que terminar antes de la caja del documento')
+  })
+
+  it('con un logo REAL (data URL, como el de producción) el PDF se arma y el nombre sigue visible', async () => {
+    // El logo de JorFel es un banner ancho: acá se usa un PNG de verdad para ejercitar
+    // `getImageProperties` + `addImage` (el camino que estaba roto con ancho 0).
+    const logo = await QRCode.toDataURL('LOGO', { margin: 0, width: 400 })
+    const { txt } = await textoDelPDF({ ...BOLETA }, { ...CONFIG, logo_url: logo })
+    assert.ok(txt.startsWith('%PDF'))
+    assert.ok(txt.includes('JorFel'), 'el nombre de la empresa tiene que seguir estando')
+    assert.ok(txt.includes('/XObject'), 'el logo entra como imagen')
+    assert.ok(BOLETA.venta.items.length > 0 && txt.includes('HUEVOS'), 'y los ítems siguen imprimiéndose')
+  })
+
+  it('si el logo viene roto, el A4 se genera igual y sin superponer nada', async () => {
+    const { txt } = await textoDelPDF({ ...BOLETA }, { ...CONFIG, logo_url: 'data:image/png;base64,ESTO-NO-ES-UNA-IMAGEN' })
+    assert.ok(txt.startsWith('%PDF'))
+    assert.ok(txt.includes('JorFel'))
+  })
+})
+
+describe('⚠️ el código del producto no puede pisar la descripción', () => {
+  // Bug real del 21/09/2026: la columna tenía 17 mm y un EAN-13 o una referencia `P-1788…` se
+  // desbordaba sobre el nombre del producto.
+  const PT_A_MM = 0.3528 // 1 pt = 0.3528 mm
+  const anchoDigito = 0.556 // dígitos en Helvetica (em)
+
+  it('la columna del código entra un EAN-13 y una referencia larga a la fuente de la columna', () => {
+    const mmPorEm = COLUMNAS_A4.fuenteCodigo * PT_A_MM
+    const ean13 = 13 * anchoDigito * mmPorEm
+    const referencia = 15 * anchoDigito * mmPorEm // P-1788835884480
+    assert.ok(ean13 < COLUMNAS_A4.codigoAncho, `EAN-13 (${ean13.toFixed(1)} mm) tiene que entrar`)
+    assert.ok(referencia < COLUMNAS_A4.codigoAncho, `referencia (${referencia.toFixed(1)} mm) tiene que entrar`)
+  })
+
+  it('las columnas no se solapan y la descripción empieza después del código', () => {
+    assert.ok(COLUMNAS_A4.descripcion - COLUMNAS_A4.codigo >= COLUMNAS_A4.codigoAncho, 'el hueco del código tiene que ser al menos su ancho útil')
+    assert.ok(COLUMNAS_A4.descripcion + COLUMNAS_A4.descripcionAncho < COLUMNAS_A4.unidad - 4, 'la descripción no puede tocar la columna UND')
+    assert.ok(COLUMNAS_A4.cantidad < COLUMNAS_A4.valorUnitario && COLUMNAS_A4.valorUnitario < COLUMNAS_A4.precioUnitario && COLUMNAS_A4.precioUnitario < COLUMNAS_A4.descuento && COLUMNAS_A4.descuento < COLUMNAS_A4.importe, 'el orden de las columnas numéricas')
+  })
+
+  it('un código larguísimo se recorta en vez de desbordarse (el PDF sigue siendo válido)', async () => {
+    const { txt } = await textoDelPDF({
+      ...BOLETA,
+      venta: { ...BOLETA.venta, items: [{ nombre: 'Producto con referencia larga', cantidad: 1, precioVenta: 1, subtotal: 1, unidad: 'UND', tipoAfectacion: '20', codigo: 'P-1788835884480123456789' }], total: 1, importe_total: 1 },
+    })
+    assert.ok(txt.includes('Producto con referencia larga'))
+    assert.ok(!txt.includes('P-1788835884480123456789'), 'el código se recorta antes de invadir la descripción')
   })
 })
 

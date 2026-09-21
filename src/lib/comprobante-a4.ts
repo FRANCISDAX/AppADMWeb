@@ -264,6 +264,63 @@ const M = 15
 const ANCHO = 210 - M * 2
 const LIMITE_Y = 258
 
+/**
+ * **Caja máxima del logo en el A4** (mm). ⚠️ El logo **nunca** se dibuja a su tamaño natural: un
+ * banner de 400×100 px sin límite **tapaba el nombre de la empresa** (bug real del 21/09/2026, visto
+ * en el PDF que mandó el usuario). Se encaja acá y, si sobra alto, el texto de la empresa baja.
+ */
+export const LOGO_CAJA = { ancho: 50, alto: 16 }
+
+/**
+ * **Encabezado del A4**: dónde va el logo (sin deformar, dentro de su caja) y en qué altura arranca el
+ * texto de la empresa. Es una función pura para poder probar que **nunca se superponen**: el texto
+ * empieza siempre por debajo del borde inferior del logo más un respiro.
+ */
+export function disposicionEncabezadoA4(natural: { width: number; height: number } | null): {
+  logo: { x: number; y: number; w: number; h: number } | null
+  textoY: number
+} {
+  const x = M
+  const y = 12
+  if (!natural || !(Number(natural.width) > 0) || !(Number(natural.height) > 0)) {
+    return { logo: null, textoY: 18 }
+  }
+  const escala = Math.min(LOGO_CAJA.ancho / natural.width, LOGO_CAJA.alto / natural.height)
+  const w = Math.round(natural.width * escala * 100) / 100
+  const h = Math.round(natural.height * escala * 100) / 100
+  return { logo: { x, y, w, h }, textoY: y + h + 5 }
+}
+
+/**
+ * **Columnas de la tabla de ítems** (mm). El **código** tiene 25 mm porque un EAN-13
+ * (`7750243077521`, 13 dígitos) o una referencia `P-1788835884480` miden ~20 mm a 6.8 pt: con los
+ * 17 mm que tenía antes **se desbordaba sobre la descripción** (bug real del 21/09/2026).
+ * Los dígitos en Helvetica miden 0.556 em, así que 15 caracteres ≈ 20 mm a 6.8 pt.
+ */
+export const COLUMNAS_A4 = {
+  codigo: 16,
+  codigoAncho: 25,
+  fuenteCodigo: 6.8,
+  descripcion: 43,
+  descripcionAncho: 44,
+  unidad: 96,
+  cantidad: 116,
+  valorUnitario: 133,
+  precioUnitario: 151,
+  descuento: 166,
+  importe: M + ANCHO - 1,
+}
+
+/** Recorta un texto al ancho disponible a esa fuente, para que **nunca** invada la columna vecina. */
+function recortarA(d: JSPDFDoc, texto: string, anchoMax: number, size: number): string {
+  d.setFont('helvetica', 'normal')
+  d.setFontSize(size)
+  if (d.getTextWidth(texto) <= anchoMax) return texto
+  let corte = texto
+  while (corte.length > 1 && d.getTextWidth(corte + '…') > anchoMax) corte = corte.slice(0, -1)
+  return corte + '…'
+}
+
 type JSPDFDoc = any
 
 function texto(d: JSPDFDoc, s: string, x: number, y: number, opts?: { size?: number; bold?: boolean; align?: 'left' | 'right' | 'center'; color?: [number, number, number] }) {
@@ -282,14 +339,14 @@ function fila(d: JSPDFDoc, y: number, etiqueta: string, valor: string, opts?: { 
 function encabezadoTabla(d: JSPDFDoc, y: number): number {
   d.setFillColor(238, 240, 244)
   d.rect(M, y, ANCHO, 7, 'F')
-  texto(d, 'CÓDIGO', 16, y + 5, { size: 7.5, bold: true })
-  texto(d, 'DESCRIPCIÓN', 33, y + 5, { size: 7.5, bold: true })
-  texto(d, 'UND', 96, y + 5, { size: 7.5, bold: true, align: 'center' })
-  texto(d, 'CANT.', 116, y + 5, { size: 7.5, bold: true, align: 'right' })
-  texto(d, 'V. UNIT.', 133, y + 5, { size: 7.5, bold: true, align: 'right' })
-  texto(d, 'P. UNIT.', 151, y + 5, { size: 7.5, bold: true, align: 'right' })
-  texto(d, 'DESC.', 166, y + 5, { size: 7.5, bold: true, align: 'right' })
-  texto(d, 'IMPORTE', M + ANCHO - 1, y + 5, { size: 7.5, bold: true, align: 'right' })
+  texto(d, 'CÓDIGO', COLUMNAS_A4.codigo, y + 5, { size: 7.5, bold: true })
+  texto(d, 'DESCRIPCIÓN', COLUMNAS_A4.descripcion, y + 5, { size: 7.5, bold: true })
+  texto(d, 'UND', COLUMNAS_A4.unidad, y + 5, { size: 7.5, bold: true, align: 'center' })
+  texto(d, 'CANT.', COLUMNAS_A4.cantidad, y + 5, { size: 7.5, bold: true, align: 'right' })
+  texto(d, 'V. UNIT.', COLUMNAS_A4.valorUnitario, y + 5, { size: 7.5, bold: true, align: 'right' })
+  texto(d, 'P. UNIT.', COLUMNAS_A4.precioUnitario, y + 5, { size: 7.5, bold: true, align: 'right' })
+  texto(d, 'DESC.', COLUMNAS_A4.descuento, y + 5, { size: 7.5, bold: true, align: 'right' })
+  texto(d, 'IMPORTE', COLUMNAS_A4.importe, y + 5, { size: 7.5, bold: true, align: 'right' })
   return y + 7
 }
 
@@ -301,8 +358,20 @@ export function dibujarComprobanteA4(d: JSPDFDoc, m: ModeloA4, qrDataUrl: string
   let y = 18
 
   // ---- Empresa (izquierda) ----
+  // 🔑 El logo se encaja en su **caja** (`disposicionEncabezadoA4`) y el texto arranca **debajo**: un
+  // logo ancho dibujado a tamaño natural tapaba el nombre de la empresa.
   if (m.empresa.logoUrl.startsWith('data:image')) {
-    try { d.addImage(m.empresa.logoUrl, M, 12, 0, 14) } catch { /* logo ilegible: se ignora */ }
+    try {
+      const nat = d.getImageProperties(m.empresa.logoUrl)
+      const disp = disposicionEncabezadoA4({ width: nat.width, height: nat.height })
+      if (disp.logo) {
+        d.addImage(m.empresa.logoUrl, disp.logo.x, disp.logo.y, disp.logo.w, disp.logo.h)
+        y = disp.textoY
+      }
+    } catch {
+      // Logo ilegible: se omite y el texto queda en su altura normal (nunca encima de nada).
+      console.warn('⚠️ No se pudo leer el logo de la empresa para el A4')
+    }
   }
   texto(d, m.empresa.nombre, M, y, { size: 13, bold: true })
   y += 6
@@ -347,7 +416,7 @@ export function dibujarComprobanteA4(d: JSPDFDoc, m: ModeloA4, qrDataUrl: string
   }
   for (let i = 0; i < m.items.length; i++) {
     const it = m.items[i]
-    const lineas: string[] = d.splitTextToSize(it.descripcion || '-', 60)
+    const lineas: string[] = d.splitTextToSize(it.descripcion || '-', COLUMNAS_A4.descripcionAncho)
     const alto = Math.max(6, lineas.length * 4)
     if (y + alto > LIMITE_Y) {
       d.addPage()
@@ -360,14 +429,15 @@ export function dibujarComprobanteA4(d: JSPDFDoc, m: ModeloA4, qrDataUrl: string
     d.setDrawColor(226, 232, 240)
     d.line(M, y + alto, M + ANCHO, y + alto)
     const base = y + 4.2
-    texto(d, it.codigo, 16, base, { size: 7.5 })
-    lineas.forEach((ln: string, k: number) => texto(d, ln, 33, base + k * 4, { size: 8 }))
-    texto(d, it.unidad, 96, base, { size: 7.5, align: 'center' })
-    texto(d, it.cantidad.toFixed(2), 116, base, { size: 7.5, align: 'right' })
-    texto(d, it.valorUnitario.toFixed(2), 133, base, { size: 7.5, align: 'right' })
-    texto(d, it.precioUnitario.toFixed(2), 151, base, { size: 7.5, align: 'right' })
-    texto(d, it.descuento > 0 ? it.descuento.toFixed(2) : '-', 166, base, { size: 7.5, align: 'right' })
-    texto(d, it.importe.toFixed(2), M + ANCHO - 1, base, { size: 7.5, bold: true, align: 'right' })
+    // El código se recorta al ancho de SU columna: nunca se mete en la descripción.
+    texto(d, recortarA(d, it.codigo, COLUMNAS_A4.codigoAncho - 2, COLUMNAS_A4.fuenteCodigo), COLUMNAS_A4.codigo, base, { size: COLUMNAS_A4.fuenteCodigo })
+    lineas.forEach((ln: string, k: number) => texto(d, ln, COLUMNAS_A4.descripcion, base + k * 4, { size: 8 }))
+    texto(d, recortarA(d, it.unidad, 14, 7), COLUMNAS_A4.unidad, base, { size: 7, align: 'center' })
+    texto(d, it.cantidad.toFixed(2), COLUMNAS_A4.cantidad, base, { size: 7.5, align: 'right' })
+    texto(d, it.valorUnitario.toFixed(2), COLUMNAS_A4.valorUnitario, base, { size: 7.5, align: 'right' })
+    texto(d, it.precioUnitario.toFixed(2), COLUMNAS_A4.precioUnitario, base, { size: 7.5, align: 'right' })
+    texto(d, it.descuento > 0 ? it.descuento.toFixed(2) : '-', COLUMNAS_A4.descuento, base, { size: 7.5, align: 'right' })
+    texto(d, it.importe.toFixed(2), COLUMNAS_A4.importe, base, { size: 7.5, bold: true, align: 'right' })
     y += alto
   }
 
