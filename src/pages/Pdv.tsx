@@ -1588,7 +1588,7 @@ export function Pdv() {
                       <div className="truncate text-[13px] font-semibold">{it.nombre}</div>
                       <div className="num text-[11px] text-muted-foreground">{fmt(it.precio)} c/u × {it.cantidad}</div>
                     </div>
-                    <span className="num w-20 text-right text-sm font-bold">{fmt(it.precio * it.cantidad)}</span>
+                    <span className="num min-w-[5rem] whitespace-nowrap pl-1 text-right text-sm font-bold">{fmt(it.precio * it.cantidad)}</span>
                   </div>
                 ))}
                 <div className="flex items-center justify-between py-2.5">
@@ -1655,7 +1655,7 @@ export function Pdv() {
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => dec(p.id)} aria-label="Quitar">
                         <Minus className="h-4 w-4" />
                       </Button>
-                      <span className="num w-9 text-center text-sm font-bold">{qty}</span>
+                      <span className="num min-w-[2.25rem] whitespace-nowrap px-1 text-center text-sm font-bold">{qty}</span>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -1667,7 +1667,7 @@ export function Pdv() {
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
-                    <span className="num w-16 text-right text-sm font-bold">{fmt(precioFinal(p) * factorActual * qty)}</span>
+                    <span className="num min-w-[4rem] whitespace-nowrap pl-1 text-right text-sm font-bold">{fmt(precioFinal(p) * factorActual * qty)}</span>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => del(p.id)} aria-label="Eliminar">
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -1695,8 +1695,8 @@ export function Pdv() {
                         ))}
                       </select>
                     </div>
-                    <span className="num w-9 text-center text-sm font-bold">{it.qty}</span>
-                    <span className="num w-16 text-right text-sm font-bold">{fmt(it.precio * it.qty)}</span>
+                    <span className="num min-w-[2.25rem] whitespace-nowrap px-1 text-center text-sm font-bold">{it.qty}</span>
+                    <span className="num min-w-[4rem] whitespace-nowrap pl-1 text-right text-sm font-bold">{fmt(it.precio * it.qty)}</span>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => delManual(id)} aria-label="Eliminar">
                       <Trash2 className="h-4 w-4" />
                     </Button>
