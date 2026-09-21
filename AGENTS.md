@@ -128,6 +128,14 @@ El detalle de cada sesión —objective, decisiones con su porqué, evidencias, 
 - `npm run preview` — serve production build locally
 - `npx firebase deploy --only hosting` — deploy to Firebase Hosting
 
+### Pruebas de carga (emulador local, nunca producción)
+- 🔑 **Toda prueba de volumen o concurrencia va contra el EMULADOR, jamás contra el proyecto real.** Está configurado en `firebase.json` (`emulators.firestore` en el 8080) y se corre con un **proyecto `demo-`**, que no existe en la nube: Firebase lo dice al arrancar (*"attempts to access non-emulated services for this project will fail"*). Comando: `npx firebase emulators:start --only firestore --project demo-appadm`.
+- ⚠️ **El script de prueba tiene que llevar el candado** (el que usé está en la carpeta temporal, fuera del repo): abortar si no hay `FIRESTORE_EMULATOR_HOST`, si no apunta a `localhost` o si el proyecto no empieza con `demo-`. Estas pruebas escriben **miles** de documentos: un error de dedo apuntando a producción sería destructivo.
+- ⚠️ **Los tiempos del emulador NO son los de producción**: corre en la JVM local, serializa transacciones de forma conservadora y no tiene latencia de red (≈ 400-1.700 ms por transacción medida acá, contra ~100-200 ms típicos en Firestore real). Sirven para juzgar **corrección bajo concurrencia** y **relaciones** entre escenarios, no para prometer latencias.
+- 📌 **Medido el 21/09/2026** (2.000 SKU sembrados, 2 cajas, 8 usuarios): **150 ventas / 600 líneas con 2 cajas → 150 OK, 0 fallos**, **10 escrituras por venta** (1 contador + 1 documento + N productos + N movimientos), stock sin sobreventa ni valores negativos (vendió las últimas 5 unidades entre 20 intentos simultáneos y las 15 restantes recibieron *"Stock insuficiente"*), **doble cobro del mismo pedido: 1 exitoso y 1 rechazado con *"La venta ya no está pendiente"***, y **numeración sin duplicados ni huecos**. En el cliente: **0,38 KB por producto** (2.000 SKU ≈ **0,85 MB** de snapshot inicial), búsqueda del PDV **0,23 ms** y valorización completa **1 ms** a 2.000 productos.
+- 🔑 **Lo que la prueba confirmó como decisión de diseño**: **la serie por caja es lo que hace que 2 cajas escalen**. Con dos series distintas (NV01/NV02) **2-8 ventas simultáneas pasan sin un solo fallo**; con **una sola serie compartida**, 2 simultáneas ya tardan ~3,5 s y a las 16 empiezan los `ABORTED`. ⚠️ El contador **`pedido` SÍ es único y compartido por todas las cajas**: a ritmo real es irrelevante, pero con muchos vendedores enviando a la vez es el primer punto de contención (el paso siguiente, si hiciera falta, es un contador por caja).
+
+
 ### Documentos del producto (`docs/`)
 
 `docs/manual-usuario.html` (manual de usuario, con su PDF) y `docs/resumen-app.html` (resumen comercial). Los PDF se regeneran **sin abrir el navegador a mano** con Chrome headless:
