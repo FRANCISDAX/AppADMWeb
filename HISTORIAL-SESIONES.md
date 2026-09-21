@@ -11,6 +11,40 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 19 — Paginación del catálogo del PDV: el costo de render deja de depender del catálogo)
+
+🔑 **Pedido del usuario**: *"Paginación del catálogo del PDV con esto el app sería más estable??? daría mejor resultado de carga???"* y después *"procede entonces y con esto el app ya estaría en mejores condiciones y posición en cuanto a las pruebas???"* — la paginación era el **punto (3)** del veredicto del bloque ·18 y el **único cuello de botella real** que habían encontrado las tres pruebas anteriores.
+
+- **Qué se cambió (una sola idea)**: el PDV **dibuja** el catálogo de a **`PAGE_CATALOGO = 60`** tarjetas (`visibles` + `paginados = lista.slice(0, visibles)`), con el **`InfiniteScroll`** que ya usaba Inventario (centinela al llegar al final) + botón **«Ver más»** de respaldo + contador **«Mostrando X de Y productos»**. El reset de la página va en el **evento** (`onChange` del buscador y `filtrarCategoria` de los chips), **no en un efecto** — sincronizar estado en un efecto es lo que sube el baseline de lint (se mantuvo en **80 warnings / 0 errores**).
+- 🔑 **Decisión de diseño, la parte que importa**: **se pagina el DIBUJO, no la consulta**. `useProductos()` sigue trayendo el catálogo completo por `onSnapshot` y el filtro sigue siendo en memoria, porque la búsqueda tiene que encontrar **cualquier** producto y no solo los de la primera página. **Verificado**: buscar `1999` —el SKU 1.999, que está en la última página— lo encuentra (evidencia: `docs/pruebas-carga/pdv-busqueda-encuentra-el-ultimo-sku.png`, donde se ve «Sapolio Abarrotes 1999» en pantalla con el buscador en `1999`). Habría sido mucho más fácil poner un `limit()` en Firestore y **romper la búsqueda**.
+- 📌 **Medición honesta (mismo entorno: emulador local + build de PRODUCCIÓN + Chrome headless; se comparó la MISMA rama de código con `PAGE_CATALOGO = 20000`, que se comporta igual que el `{lista.map(...)}` anterior)**:
+
+  | Con **2.000 productos** (3 corridas paginado / 2 sin) | antes | con paginación |
+  |---|---|---|
+  | Tarjetas en el DOM | 2.000 | **60** |
+  | Nodos en el DOM | **32.415** | **1.384** |
+  | Una tecla (peor caso: 1 letra ⇒ 1.917 coincidencias) | **211-216 ms** | **23-46 ms** |
+  | Catálogo completo en memoria | 7.040-7.091 ms | 6.157-6.610 ms |
+  | Heap del catálogo | 41-43 MB | 11-29 MB |
+  | Errores de consola | 0 | 0 |
+
+  | Con **4.000 productos** (el caso que en el bloque ·17 mataba el navegador) | antes | con paginación |
+  |---|---|---|
+  | Tarjetas / nodos | 4.000 / **64.415** | 60 / **1.384** |
+  | Una tecla (3.833 coincidencias) | **518 ms** | **26 ms** |
+  | Catálogo completo | 12.172 ms | 9.648 ms |
+  | Heap | 42-87 MB | 39-47 MB |
+  | Errores de consola | 0 | 0 |
+
+- ⚠️ **Lo que NO mejora, dicho claro**: el **primer pintado y la carga completa del catálogo** no dependen del render sino de **traer y materializar el snapshot** (2.000 SKU ≈ 0,85 MB llegan en **~6,2-6,6 s**; 4.000 ≈ 1,7 MB en **~9,6-12,2 s**, y ahí el tiempo es prácticamente el mismo con y sin paginación). Ese es el precio real de un catálogo grande y se ataca **cargando menos productos** (catálogo activo, categorías) o **pre-cargando**, no con paginación de render. Y **medido en una sola corrida** por escenario en el caso de 4.000: la primera corrida paginada dio 12,4 s de primer pintado contra 3,6 s de la corrida sin paginar, diferencia que resultó ser **arranque en frío del emulador** (al repetirla con el emulador tibio dio **3,2 s**): no es un efecto del código, y por eso las tablas de arriba son de corridas comparables.
+- ✅ **Funcional, verificado en el navegador**: «Ver más» pasa de **60 → 120** tarjetas en **42-51 ms**; al llegar al final el **centinela** carga otra página solo (**120 → 180**), el contador dice «Mostrando 180 de 2000 productos», **0 errores de consola**, el botón **Cobrar** está disponible y la venta sigue funcionando (no se tocó ningún flujo de cobro).
+- ⚠️ **Sobre las capturas (lección de método)**: la primera captura del catálogo **sale idéntica** con y sin paginación — la diferencia está **debajo del pliegue**, así que una foto del viewport no la muestra (comprobado: los tres archivos daban el **mismo hash**). Por eso se borraron las capturas «sin paginar» en vez de dejar una evidencia que no prueba nada: **lo que prueba el cambio son los conteos del arnés** (tarjetas y nodos del DOM, ms por tecla), y la captura que sí aporta es `pdv-busqueda-encuentra-el-ultimo-sku.png` (el buscador encuentra el SKU de la última página: la prueba de que paginar el dibujo no rompió la búsqueda).
+- ⚠️ **Nota de método (para no engañarse)**: el listener de Firestore entrega el catálogo **por partes** (la primera medición leyó «Mostrando 60 de **191** productos» mientras el resto seguía llegando), así que hay que esperar a que el contador llegue a los 2.000 sembrados antes de medir; medir antes compara cosas distintas. Además, el emulador **escribe un `firestore-debug.log` que llegó a 1,3 GB** y con ese archivo encima las escrituras se vuelven lentísimas (una siembra de 4.000 documentos se quedó colgada): se borró el log, se reinició el emulador y todo volvió a la normalidad. Queda anotado porque va a volver a pasar.
+- ✅ **Producción intacta y sin cambios de estado**: todo corrió con el **proyecto `demo-appadm`** (emulador) y el candado de siempre (aborta si el host no es localhost o el proyecto no empieza con `demo-`); `.env.local` y el hook de emulador de `lib/firebase.ts` se **restauraron** (hash de `.env.local` **idéntico**: `495D84C4…6632`), `dist/` reconstruido limpio (**0 referencias al hook del emulador** — la única `127.0.0.1` que queda en el bundle es la comprobación de contexto seguro de `html5-qrcode`), emulador y preview apagados, `firestore-debug.log` borrado y la carpeta temporal del arnés eliminada. **Sí se desplegó a Hosting** (`npx firebase deploy --only hosting`) el build con la paginación: el deploy es del **código de la app**, no toca datos.
+- **Next Move**: (a) los otros dos puntos del veredicto para poner 6 empleados: **reglas de Firestore por rol** y **respaldos automáticos**; (b) **resúmenes diarios precalculados** (`tblResumenDiario`) para que un reporte del mes no sean 4.500 lecturas; (c) **importación masiva de productos** (cargar 2.000 SKU a mano no es viable) y **actualización masiva de precios**; (d) prueba de volumen de **emisión SUNAT**, que sigue sin medir.
+
+**Relevant Files**: `src/pages/Pdv.tsx` (paginación: `PAGE_CATALOGO`, `visibles`, `paginados`, `cargarMas`, `filtrarCategoria`, contador + `InfiniteScroll`), `AGENTS.md` (invariante *PDV: el catálogo se dibuja por páginas* + sección *Pruebas de carga* actualizada), `docs/pruebas-carga/*.png`, `HISTORIAL-SESIONES.md`.
+
 ### (2026-09 · 18 — Estrés + veredicto de arquitectura: ¿hace falta servidor nuevo o base SQL?)
 
 🔑 **Pedido del usuario**: *"y prueba de estrés??? y luego me das un resumen de las 3 pruebas y un veredicto final. Si es que poner en un servidor nuevo, base de datos SQL, etc???"* — todo contra el **emulador local** (producción intacta).

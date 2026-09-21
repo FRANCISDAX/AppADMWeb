@@ -67,9 +67,21 @@ import { PanelMisPedidos } from '@/components/PanelMisPedidos'
 import { promocionesAplicables, type PromocionVolumen } from '@/services/promociones-volumen'
 import QRCode from 'qrcode'
 import { PanelVentasPendientes } from '@/components/PanelVentasPendientes'
+import { InfiniteScroll } from '@/components/ui/infinite-scroll'
 
 // Un producto tiene precio especial (promo) si su valor es > 0.
 const tienePromo = (p: Producto) => p?.precioEspecial != null && p.precioEspecial > 0
+
+/**
+ * 🔑 **El catálogo se DIBUJA por páginas.** Con 40 productos daba igual; medido con **2.000 SKU** el
+ * PDV pintaba **2.000 tarjetas = 32.400 nodos** en el DOM y el hilo principal se bloqueaba (con 4.000
+ * el navegador dejaba de responder): fue el **único cuello de botella real** de las pruebas de carga.
+ * ⚠️ Lo que se pagina es el **render**, no la consulta: `useProductos()` sigue trayendo el catálogo
+ * completo, así que **buscar encuentra cualquier producto**, no solo los que están a la vista (el
+ * filtrado en sí no cuesta: 0,23 ms con 2.000 productos). No cambiar esto por un `limit()` de
+ * Firestore: la búsqueda por nombre/código/alias es en memoria y dejaría de ver el resto del catálogo.
+ */
+const PAGE_CATALOGO = 60
 
 /**
  * Una línea de la lista "Formas de pago". El monto se guarda como texto porque
@@ -97,6 +109,8 @@ export function Pdv() {
   const { config: cfg } = useConfiguracion()
   const [q, setQ] = React.useState('')
   const [categoria, setCategoria] = React.useState('Todos')
+  // Cuántas tarjetas del catálogo se están dibujando ahora (ver `PAGE_CATALOGO`).
+  const [visibles, setVisibles] = React.useState(PAGE_CATALOGO)
   const [tipoComp, setTipoComp] = React.useState<'nv' | 'boleta' | 'factura'>('boleta')
   const [pagos, setPagos] = React.useState<PagoUI[]>([])
   // El crédito es exclusivo (no se combina): cuando está activo, la venta entera
@@ -213,6 +227,18 @@ export function Pdv() {
         (!t || p.nombre?.toLowerCase().includes(t) || p.codigo?.includes(t) || p.aliasVoz?.toLowerCase().includes(t))
     )
   }, [productos, q, categoria])
+
+  // Paginación del dibujo: `lista` sigue siendo el filtro completo (de ahí sale el total del
+  // contador «Mostrando X de Y») y `paginados` es lo que se pinta. Al cambiar de filtro se vuelve a
+  // la primera página, y ese reset va en el EVENTO (input/chip), **no en un efecto**: sincronizar
+  // estado dentro de un efecto es justo lo que sube el baseline de lint.
+  const hayMas = visibles < lista.length
+  const paginados = React.useMemo(() => lista.slice(0, visibles), [lista, visibles])
+  const cargarMas = React.useCallback(() => setVisibles((prev) => prev + PAGE_CATALOGO), [])
+  const filtrarCategoria = React.useCallback((c: string) => {
+    setCategoria(c)
+    setVisibles(PAGE_CATALOGO)
+  }, [])
 
   // Precio aplicado a una línea del carrito: si el producto tiene promo y no fue
   // desactivada manualmente (usarPromo=false), se usa el especial; si no, el normal.
@@ -1199,10 +1225,21 @@ export function Pdv() {
         <div className="flex gap-2 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar producto o código…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-10 pr-9" />
+            <Input
+              placeholder="Buscar producto o código…"
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value)
+                setVisibles(PAGE_CATALOGO)
+              }}
+              className="pl-10 pr-9"
+            />
             {q && (
               <button
-                onClick={() => setQ('')}
+                onClick={() => {
+                  setQ('')
+                  setVisibles(PAGE_CATALOGO)
+                }}
                 type="button"
                 aria-label="Limpiar búsqueda"
                 title="Limpiar búsqueda"
@@ -1279,7 +1316,7 @@ export function Pdv() {
           {categorias.map((c) => (
             <button
               key={c}
-              onClick={() => setCategoria(c)}
+              onClick={() => filtrarCategoria(c)}
               className={cn(
                 'shrink-0 rounded-full px-3.5 h-9 text-xs font-bold transition-colors cursor-pointer',
                 categoria === c ? 'bg-primary text-white' : 'bg-background border hover:bg-accent'
@@ -1305,7 +1342,7 @@ export function Pdv() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 gap-3">
-            {lista.map((p) => {
+            {paginados.map((p) => {
               const enCaja = cart[p.id] ?? 0
               const stock = stockEnPresentacion(p)
               const agotado = stock === 0
@@ -1371,6 +1408,25 @@ export function Pdv() {
               )
             })}
           </div>
+        )}
+
+        {/* Contador + carga de la siguiente página. Va solo cuando hay más de una página, para no
+            llenar de ruido un catálogo chico (con 40 productos nunca aparece). El centinela de
+            `InfiniteScroll` carga al llegar al final y el botón es el respaldo manual. */}
+        {!loading && !error && lista.length > PAGE_CATALOGO && (
+          <InfiniteScroll hayMas={hayMas} cargandoMas={false} onCargarMas={cargarMas} className="mt-3">
+            <p className="text-center text-xs text-muted-foreground">
+              Mostrando <span className="num font-semibold">{paginados.length}</span> de{' '}
+              <span className="num font-semibold">{lista.length}</span> productos
+            </p>
+            {hayMas && (
+              <div className="mt-1 flex justify-center">
+                <Button variant="outline" size="sm" onClick={cargarMas} className="gap-1.5">
+                  <ChevronDown className="h-4 w-4" /> Ver más
+                </Button>
+              </div>
+            )}
+          </InfiniteScroll>
         )}
       </section>
 
