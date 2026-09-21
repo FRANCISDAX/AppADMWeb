@@ -14,6 +14,16 @@ export type Producto = {
   categoria?: string
   precioVenta?: number
   precioCompra?: number
+  /** Costo de la última compra (nombre viejo; el vigente para valorizar es `precioCompra`). */
+  costo?: number | null
+  /**
+   * **Costo promedio ponderado móvil** (4 decimales) que mantiene `lib/valorizacion.ts` en cada
+   * entrada de mercadería. Es el costo con el que se valoriza el kardex y el inventario; si falta,
+   * se usa `precioCompra` como respaldo (`costoVigente()`).
+   */
+  costoPromedio?: number | null
+  /** Valor del stock **al costo vigente** (`stock × costo`), el que se muestra en Inventario. */
+  valorStock?: number
   precioEspecial?: number
   descuentoPorcentaje?: number
   stock?: number

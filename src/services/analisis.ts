@@ -1,4 +1,5 @@
 import { collection, getDocs, query, where } from 'firebase/firestore'
+import { costoVigente, valorDeStock } from '@/lib/valorizacion'
 import { COL } from '@/constants/colecciones'
 import { CATEGORIA_SIN_ASIGNAR } from '@/lib/categorias'
 import { db } from '@/lib/firebase'
@@ -156,10 +157,14 @@ export async function obtenerAnalisisMes(anio: number, mes: number): Promise<Ana
     const p = d.data() as any
     if (p.activo === false) return
     const stock = Number(p.stock) || 0
-    const costo = Number(p.precioCompra) || 0
+    // 🔑 Se valora con el **costo promedio ponderado movil** (`lib/valorizacion.ts`); si el
+    // producto todavia no tiene promedio calculado (nunca se compro desde que existe la
+    // valorizacion), cae al ultimo costo conocido, que es lo que se usaba antes.
+    const costo = costoVigente({ costoPromedio: p.costoPromedio, costoUltimo: p.precioCompra ?? p.costo })
+    const valor = valorDeStock({ stock, costo })
     const cat = p.categoria || 'General'
-    totalValorizacion += stock * costo
-    valCat[cat] = (valCat[cat] || 0) + stock * costo
+    totalValorizacion += valor
+    valCat[cat] = (valCat[cat] || 0) + valor
     if (stock === 0) agotados++
     if (stock <= (Number(p.minStock) || 0)) stockBajo.push({ nombre: p.nombre || d.id, codigo: p.codigo || d.id, stock, minStock: Number(p.minStock) || 0 })
   })

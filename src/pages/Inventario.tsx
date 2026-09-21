@@ -22,6 +22,7 @@ import { categoriasParaFiltros } from '@/services/categorias'
 import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento, esc } from '@/lib/ui-utils'
 import { exportarExcel } from '@/lib/excel'
+import { resumenValorizacion } from '@/lib/valorizacion'
 import { valorizacionDeMovimiento } from '@/services/kardex'
 import { logActividad } from '@/lib/audit'
 import { registrarCambioPrecio, obtenerHistorialPrecios } from '@/services/historial-precios'
@@ -208,6 +209,18 @@ export function Inventario() {
   const hayMas = visibles < lista.length
   const paginados = lista.slice(0, visibles)
 
+  /**
+   * **Valorización del inventario a costo promedio ponderado** (regla única en `lib/valorizacion.ts`).
+   * Se muestra el total en pantalla y se exporta a Excel con el botón *Valorización*; `sinPromedio`
+   * cuenta los productos que todavía se valorizan con el **último costo** (nunca tuvieron una entrada
+   * de mercadería desde que el promedio existe) — el dato que dice cuánto falta para que el reporte
+   * esté 100% por promedio.
+   */
+  const valorizado = React.useMemo(() => {
+    const { filas, total, unidades } = resumenValorizacion(lista)
+    return { filas, total, unidades, sinPromedio: filas.filter((f) => !f.usaPromedio).length }
+  }, [lista])
+
   async function exportarExcelInv() {
     if (lista.length === 0) { setToast('No hay productos para exportar'); return }
     const headers = ['Código', 'Nombre', 'Categoría', 'Stock', 'Mín.', 'Precio Compra', 'Precio Venta', 'Precio Especial', 'Estado', 'Vencimiento']
@@ -232,6 +245,40 @@ export function Inventario() {
     })
     await exportarExcel([{ name: 'Inventario', headers, rows }], `Inventario_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`, { empresa: cfg?.nombre || 'AppADM', titulo: 'Inventario de Productos' })
     setToast('Excel exportado')
+  }
+
+  /**
+   * **Valorización del inventario (costo promedio ponderado) a Excel**: cuánta plata hay en
+   * mercadería. Es el reporte que pide un contador y el que muestra el botón *Valorización*.
+   *
+   * Las filas van **ordenadas por valor** (lo que más plata tiene primero, ver `resumenValorizacion`)
+   * y al final va una fila **TOTAL** con las unidades y el valor. La columna *Costo* es la de la
+   * regla única: el **promedio ponderado** si el producto ya tiene uno calculado (`costoPromedio`),
+   * y si no el **último costo** como respaldo — la columna *Origen* lo deja ver (un producto que
+   * muestra *Último costo* es uno que todavía no tuvo una entrada de mercadería desde que existe el
+   * promedio).
+   */
+  async function exportarValorizacion() {
+    if (lista.length === 0) { setToast('No hay productos para valorizar'); return }
+    const { filas, total, unidades } = resumenValorizacion(lista)
+    const codigoPorId = new Map(lista.map((p) => [p.id ?? '', p.codigo ?? '']))
+    const headers = ['Código', 'Producto', 'Categoría', 'Stock', 'Costo unitario', 'Origen del costo', 'Valor']
+    const rows: (string | number)[][] = filas.map((f) => [
+      codigoPorId.get(f.productoId) ?? '',
+      f.nombre,
+      f.categoria,
+      f.stock,
+      f.costoPromedio,
+      f.usaPromedio ? 'Promedio ponderado' : 'Último costo',
+      f.valor,
+    ])
+    rows.push(['', 'TOTAL', '', unidades, '', '', total])
+    await exportarExcel(
+      [{ name: 'Valorizacion', headers, rows }],
+      `Valorizacion_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`,
+      { empresa: cfg?.nombre || 'AppADM', titulo: 'Valorización de inventario (costo promedio ponderado)' },
+    )
+    setToast(`Valorizado S/ ${fmt(total)}`)
   }
 
   const cargarMas = React.useCallback(() => {
@@ -719,6 +766,9 @@ export function Inventario() {
             <ClipboardCheck className="h-4 w-4" /> Toma de Inventario
           </Button>
         )}
+        <Button variant="outline" onClick={exportarValorizacion} disabled={lista.length === 0}>
+          <BarChart3 className="h-4 w-4" /> Valorización
+        </Button>
         <Button variant="outline" onClick={exportarExcelInv} disabled={lista.length === 0}>
           <Download className="h-4 w-4" /> Excel
         </Button>
@@ -759,6 +809,19 @@ export function Inventario() {
             Solo stock bajo
           </span>
         </label>
+        <div className="ml-auto flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>Inventario valorizado</span>
+          <span className="num rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary">S/ {fmt(valorizado.total)}</span>
+          <span className="num">{valorizado.unidades} u.</span>
+          {valorizado.sinPromedio > 0 && (
+            <span
+              className="rounded-full border px-2 py-0.5"
+              title="Productos valorizados con el último costo: todavía no tuvieron una entrada de mercadería desde que se activó el costo promedio ponderado. Con la primera compra pasan a promedio."
+            >
+              {valorizado.sinPromedio} con último costo
+            </span>
+          )}
+        </div>
       </div>
 
       {loading ? (
