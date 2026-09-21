@@ -131,11 +131,17 @@ export function valorizarMovimiento({
   const cant = Math.abs(Number(cantidad) || 0)
   const promedioPrevio = costoVigente({ costoPromedio: costoPromedioActual, costoUltimo })
 
+  // ⚠️ **Una entrada sin costo NO baja el promedio**: una devolución, una anulación o un ajuste
+  // positivo sin dato de costo devuelven mercadería que ya estaba valorizada al promedio, así que se
+  // valorizan **al promedio vigente** (y por lo tanto el promedio no se mueve). Tratar el costo
+  // faltante como 0 hundiría el promedio del producto y valorizaría el inventario de menos.
+  const costoEntradaUsado = Number(costoEntrada) > 0 ? Number(costoEntrada) : promedioPrevio
+
   const costoPromedioDespues = esEntrada
-    ? promedioConEntrada({ stockActual: stockAntes, promedioActual: promedioPrevio, cantidad: cant, costoEntrada: Number(costoEntrada) || 0 })
+    ? promedioConEntrada({ stockActual: stockAntes, promedioActual: promedioPrevio, cantidad: cant, costoEntrada: costoEntradaUsado })
     : promedioPrevio
 
-  const costoUnitario = esEntrada ? redondearCosto(Number(costoEntrada) || promedioPrevio) : costoPromedioDespues
+  const costoUnitario = esEntrada ? redondearCosto(costoEntradaUsado) : costoPromedioDespues
 
   return {
     costoUnitario,

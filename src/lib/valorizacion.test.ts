@@ -88,6 +88,22 @@ describe('valorizarMovimiento', () => {
     assert.equal(v.costoPromedioDespues, 4.25)
     assert.equal(v.stockValorizadoDespues, 51)
   })
+
+  // ⚠️ Defecto encontrado al escribir la etapa 2: una entrada SIN costo (devolución, anulación,
+  // ajuste sin dato) tomaba costo 0 y hundía el promedio del producto.
+  it('⚠️ una entrada sin costo se valora al promedio vigente y NO lo baja', () => {
+    const devolucion = valorizarMovimiento({ esEntrada: true, cantidad: 4, stockAntes: 6, stockNuevo: 10, costoPromedioActual: 3 })
+    assert.equal(devolucion.costoUnitario, 3, 'vuelve al costo promedio, no a cero')
+    assert.equal(devolucion.costoPromedioDespues, 3, 'el promedio queda igual')
+    assert.equal(devolucion.valorTotal, 12)
+    assert.equal(devolucion.stockValorizadoDespues, 30, '10 unidades × 3.00')
+  })
+
+  it('una entrada sin costo y sin ningún costo conocido (producto nuevo de un ajuste) no inventa valor', () => {
+    const v = valorizarMovimiento({ esEntrada: true, cantidad: 5, stockAntes: 0, stockNuevo: 5, costoPromedioActual: null, costoUltimo: null })
+    assert.equal(v.costoPromedioDespues, 0)
+    assert.equal(v.stockValorizadoDespues, 0, 'queda en cero hasta que se cargue un costo, no ensucia el promedio')
+  })
 })
 
 describe('valorDeSalida y valorDeStock', () => {

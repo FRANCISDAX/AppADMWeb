@@ -4,6 +4,7 @@ import { numeroALetras } from '@/lib/numero-a-letras'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { normalizarSerie } from '@/lib/series'
 import { bolsillosDeVenta, medioDeVenta } from '@/lib/pagos'
+import { valorizacionDeMovimiento } from '@/services/kardex'
 import { redondear2 } from '@/lib/dinero'
 import { db } from '@/lib/firebase'
 
@@ -182,7 +183,17 @@ export async function crearNotaCreditoDebito({
           const factor = item.factorConversion || 1
           const cantidadBase = (item.cantidad || 1) * factor
           const nuevoStock = stockActual + cantidadBase
-          tx.update(prodRef, { stock: nuevoStock, ultimaActualizacion: f.toISOString(), updatedAt: f.toISOString() })
+          // La nota de crédito **devuelve** mercadería: es una ENTRADA, y se valoriza **al costo
+          // promedio vigente** (sin costo explícito, así el promedio no se mueve — la mercadería
+          // vuelve con el costo con el que salió).
+          const valorizado = valorizacionDeMovimiento({
+            tipoMovimiento: 'nota_credito',
+            cantidad: cantidadBase,
+            stockAntes: stockActual,
+            stockNuevo: nuevoStock,
+            producto: prod,
+          })
+          tx.update(prodRef, { stock: nuevoStock, ...valorizado.camposProducto, ultimaActualizacion: f.toISOString(), updatedAt: f.toISOString() })
           const movRef = doc(collection(db, COL.MOVIMIENTOS))
           tx.set(movRef, {
             productoId: item.id,
@@ -193,6 +204,7 @@ export async function crearNotaCreditoDebito({
             motivo: `Nota de Crédito ${correlativo}: ${motivo || 'devolución de mercadería'}`,
             stockAnterior: stockActual,
             stockNuevo: nuevoStock,
+            ...valorizado.camposMovimiento,
             usuario: 'sistema',
             metadata: { notaId: docId, documentoRef: `${documentoOriginal.serie}-${documentoOriginal.numero}` },
             fecha: f.toISOString(),
