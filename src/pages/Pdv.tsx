@@ -16,6 +16,7 @@ import {
   Trash2,
   UserRound,
   X,
+  ClipboardList,
 } from 'lucide-react'
 import * as React from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -56,6 +57,7 @@ import { EscanearCodigo } from '@/components/EscanearCodigo'
 import { broadcastCart, closeSession } from '@/lib/customer-display'
 import { calcularDescuentos, revisarDescuentoManual } from '@/lib/descuentos'
 import { clienteDelPedido, pedidoParaCarrito, pedidoPendienteCoincidente, type PedidoEnCarrito } from '@/lib/pedidos'
+import { PanelMisPedidos } from '@/components/PanelMisPedidos'
 import { promocionesAplicables, type PromocionVolumen } from '@/services/promociones-volumen'
 import QRCode from 'qrcode'
 import { PanelVentasPendientes } from '@/components/PanelVentasPendientes'
@@ -135,6 +137,8 @@ export function Pdv() {
    * tiene un solo lugar para elegir comprobante y forma de pago, en vez de dos copias.
    */
   const [pedidoActivo, setPedidoActivo] = React.useState<PedidoEnCarrito | null>(null)
+  /** Modal de «Pedidos enviados» (solo vendedores). */
+  const [misPedidosAbierto, setMisPedidosAbierto] = React.useState(false)
 
   const handleBarcodeDetectado = React.useCallback((codigo: string) => {
     const codigoLimpio = codigo.replace(/[\s-]/g, '').trim()
@@ -1329,6 +1333,8 @@ export function Pdv() {
       </section>
 
       {/* ===== Caja ===== */}
+      {misPedidosAbierto && <PanelMisPedidos onCerrar={() => setMisPedidosAbierto(false)} />}
+
       <aside className="lg:self-start">
         <div className="rounded-2xl border bg-card shadow-card lg:min-h-[560px] flex flex-col">
           <div className="flex items-center gap-2 border-b px-5 py-4">
@@ -1338,6 +1344,19 @@ export function Pdv() {
               <Pause className="h-3.5 w-3.5" />
               Pausadas
             </Button>
+            {/* 🔑 Solo para vendedores: sus pedidos enviados y en qué terminó cada uno. Un botón,
+                pedido así a propósito, para no llenar el PDV de paneles. */}
+            {esVendedor && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMisPedidosAbierto(true)}
+                className="gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                <ClipboardList className="h-3.5 w-3.5" />
+                Pedidos enviados
+              </Button>
+            )}
             <Button
               variant={displaySession ? 'default' : 'ghost'}
               size="sm"

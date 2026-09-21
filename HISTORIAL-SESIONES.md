@@ -11,6 +11,16 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### Botón «Pedidos enviados» para el vendedor (21/09/2026)
+
+🔑 **Pedido del usuario**: *"que cada vendedor tenga su botón de pedidos enviados para saber qué productos envió a caja, pero un botón nomás en el PDV, solo para los vendedores"*. Esto **revierte la decisión anterior** del 18/09 (cuando se descartó el bloque "Mis pedidos"): ahora sí existe, pero como **un solo botón** para no llenar el PDV de paneles.
+
+- **Implementado**: botón **"Pedidos enviados"** en la cabecera de *Nueva Venta* del PDV, visible **solo si `esVendedor`** (la regla que ya existía: `enviarACaja` **sin** `cobrarVenta`, así que un cajero o un admin no lo ven). Abre un modal (`components/PanelMisPedidos.tsx`) con los pedidos **del mes elegido**, cada uno con su **código**, el **comprobante** (si ya se cobró), el **estado**, la **fecha y hora**, quién lo cobró, el **motivo** si fue eliminado, y **los productos en una línea** (`2 × Huevos, 2 × Galletas`).
+- 🔑 **La lista la sigue filtrando `pedidosVisiblesPara()`** (`lib/pedidos.ts`, pura y testeada): el vendedor ve **solo los suyos** aunque la consulta traiga todo el mes. El botón no reimplementa ninguna regla; y reusa `obtenerPedidosDelMes()` (una sola igualdad + filtro en JS ⇒ sin índice compuesto).
+- **Regla pura nueva**: `textoItemsPedido()` (cantidad × nombre, con resumen `… +N más` cuando hay muchas líneas y respaldo al `id` si no hay nombre), con **3 pruebas**.
+- ⚠️ **El baseline de lint se mantuvo en 80**: el componente nuevo había subido a **81** por un `set-state-in-effect` (el `setCargando(true)` sincrónico en el efecto) → se **derivó** el estado (`const cargando = datos?.mes !== mes`) en vez de sincronizarlo, que es exactamente la regla que documenta `AGENTS.md`.
+- **Verificado**: **224/224 pruebas** ✓, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 advertencias** ✓, `npm run build` ✓. Manual de usuario: sección **3.4 Pedidos enviados (solo vendedores)** (la sección de Cajas pasó a 3.5).
+
 ### Control espejo: avisar cuando el cajero vende algo que ya está pedido (21/09/2026)
 
 🔑 **Causa raíz del caso PED-000007 corregido arriba**: el problema no era el listado sino el flujo — el cajero puede **vender directo** los mismos productos de un pedido pendiente en vez de cobrarlo desde la lista, y el pedido queda colgado para siempre. Se implementó el **espejo del anti-duplicado**: al cobrar una venta directa, si hay un pedido pendiente con **los mismos productos y el mismo total**, el PDV avisa y ofrece traerlo al carrito (*"¿Cobrar el pedido PED-000007?"*). Si el cajero ignora el aviso, la venta directa sigue igual.

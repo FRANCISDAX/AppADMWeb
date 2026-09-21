@@ -351,7 +351,17 @@
     <p>¿Por qué importa? Si el cajero vende directo lo mismo que un vendedor ya mandó a caja, <strong>el pedido queda pendiente para siempre</strong> en la lista: la venta se cobra una sola vez (la del cajero), pero el pedido viejo confunde a la caja y ensucia el seguimiento del vendedor.</p>
   </div>
 
-  <h3>3.4 Cajas</h3>
+  <h3>3.4 Pedidos enviados (solo vendedores)</h3>
+  <p>En el PDV, arriba del carrito, el <strong>vendedor</strong> tiene un botón <strong>"Pedidos enviados"</strong>. Ábrelo para saber <strong>qué mandaste a caja y en qué terminó cada pedido</strong>, sin tener que preguntarle al cajero:</p>
+  <ul>
+    <li><strong>En caja</strong>: todavía espera que un cajero lo cobre (todavía no hay comprobante).</li>
+    <li><strong>Cobrado · NV01-000174</strong>: ya se cobró; muestra <strong>el comprobante emitido</strong>, quién lo cobró y la hora.</li>
+    <li><strong>Eliminado</strong>: el cajero lo descartó y se ve <strong>el motivo</strong>.</li>
+  </ul>
+  <p>Cada pedido muestra su <strong>código</strong> (<code>PED-000123</code>), <strong>los productos que enviaste</strong> (por ejemplo <em>2 × Huevos, 2 × Galletas</em>), el <strong>total</strong> y la <strong>fecha y hora</strong>. Se puede cambiar el mes con el selector de arriba.</p>
+  <p>⚠️ Este botón lo ven <strong>solo los vendedores</strong>: cada uno ve únicamente <strong>sus propios pedidos</strong>. El cajero y el administrador tienen la lista completa en <em>Reportes → Pedidos</em>.</p>
+
+  <h3>3.5 Cajas</h3>
   <p>Cada caja define sus propias series de comprobante. En <code>Configuración → Cajas</code> el admin puede crear cajas con series distintas:</p>
   <table>
     <thead><tr><th>Caja</th><th>Serie Boleta</th><th>Serie Factura</th><th>Serie NV</th></tr></thead>

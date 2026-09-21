@@ -382,3 +382,25 @@ export function resumenPedidos(pedidos: readonly PedidoEnLista[] | null | undefi
   for (const p of pedidos ?? []) resumen[estadoPedido(p)]++
   return resumen
 }
+
+/**
+ * **Productos de un pedido en una línea**: `2 × Huevos, 2 × Galletas`. Es lo que el vendedor quiere
+ * ver ("qué mandé a caja"), así que se muestran la cantidad y el nombre; si hay más líneas que
+ * `max`, se resume el resto (`… +3 más`) para no romper la fila.
+ */
+export function textoItemsPedido(
+  items: readonly ItemParaHuella[] | null | undefined,
+  { max = 4 }: { max?: number } = {},
+): string {
+  const lista = (items ?? [])
+    .map((it) => {
+      const cantidad = Number(it?.cantidad ?? it?.quantity)
+      const nombre = norm(it?.nombre) || norm(it?.id)
+      if (!nombre) return ''
+      const c = Number.isFinite(cantidad) && cantidad > 0 ? `${cantidad} × ` : ''
+      return `${c}${nombre}`
+    })
+    .filter((s) => s !== '')
+  if (lista.length <= max) return lista.join(', ')
+  return `${lista.slice(0, max).join(', ')} … +${lista.length - max} más`
+}

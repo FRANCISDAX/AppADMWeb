@@ -12,7 +12,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { avisoOtraCaja, clienteDelPedido, codigoDePedido, comprobanteDePedido, esPedido, estadoPedido, huellaPedido, nombreCaja, pedidoDuplicado, pedidoParaCarrito, pedidoPendienteCoincidente, pedidosVisiblesPara, repartirPedidos, resumenPedidos, VENTANA_DUPLICADO_MINUTOS } from './pedidos.ts'
+import { avisoOtraCaja, clienteDelPedido, codigoDePedido, comprobanteDePedido, esPedido, estadoPedido, huellaPedido, nombreCaja, pedidoDuplicado, pedidoParaCarrito, pedidoPendienteCoincidente, pedidosVisiblesPara, repartirPedidos, resumenPedidos, textoItemsPedido, VENTANA_DUPLICADO_MINUTOS } from './pedidos.ts'
 
 const p = (id: string, cajaId?: string) => ({ id, cajaId })
 
@@ -370,6 +370,32 @@ describe('pedidoPendienteCoincidente', () => {
     assert.equal(pedidoPendienteCoincidente([], { total: 0.5, items: pedidoReal.venta.items }), null)
     assert.equal(pedidoPendienteCoincidente([pedidoReal], { total: 0, items: [] }), null)
     assert.equal(pedidoPendienteCoincidente([pedidoReal], {}), null)
+  })
+})
+
+// ─── Productos de un pedido en una línea (lo que ve el vendedor) ───────────────────────────────
+
+describe('textoItemsPedido', () => {
+  it('arma cantidad × nombre, con la forma del documento y la del carrito', () => {
+    const doc = [
+      { nombre: 'Huevos', cantidad: 2 },
+      { nombre: 'Galletas', cantidad: 2 },
+    ]
+    assert.equal(textoItemsPedido(doc), '2 × Huevos, 2 × Galletas')
+    assert.equal(textoItemsPedido([{ nombre: 'Pan', quantity: 3 }]), '3 × Pan')
+  })
+
+  it('resume las líneas de más para no romper la fila', () => {
+    const cinco = Array.from({ length: 5 }, (_, i) => ({ nombre: `Producto ${i + 1}`, cantidad: 1 }))
+    assert.equal(textoItemsPedido(cinco), '1 × Producto 1, 1 × Producto 2, 1 × Producto 3, 1 × Producto 4 … +1 más')
+    assert.equal(textoItemsPedido(cinco, { max: 10 }), '1 × Producto 1, 1 × Producto 2, 1 × Producto 3, 1 × Producto 4, 1 × Producto 5')
+  })
+
+  it('aguanta pedidos sin items o con datos raros, y cae al id si no hay nombre', () => {
+    assert.equal(textoItemsPedido([]), '')
+    assert.equal(textoItemsPedido(null), '')
+    assert.equal(textoItemsPedido([{ id: 'sku-1', cantidad: 2 }]), '2 × sku-1')
+    assert.equal(textoItemsPedido([{ cantidad: 2 }]), '', 'sin nombre ni id no inventa un renglón')
   })
 })
 
