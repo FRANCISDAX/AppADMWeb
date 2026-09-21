@@ -11,6 +11,18 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### Corrección en producción: el pedido PED-000007 cobrado como NV01-000180 (21/09/2026)
+
+🔑 **El usuario reportó**: *"el pedido 7 sí fue cobrado con la nota de venta 180"*. Se verificó en **solo lectura** contra producción antes de tocar nada, y los datos lo confirman: **`PED-000007`** (`2026-9_PED-000007`, vendedor **JOHAN REYNA**, 1 × Cigarro Hamilton Fresh, **S/ 0.50**) quedó con `estado: 'pendiente'`, y **79 segundos después** (00:16:32Z → 00:17:51Z) el cajero **FRANCIS DAX** emitió **`NV01-000180`** con **el mismo ítem y el mismo total**, en el turno `cH1bYjgAoGxrhjIg0gnk`. O sea: **el cajero vendió directo en el PDV en vez de usar «Cobrar pedido»**, y el pedido quedaba pendiente en su lista para siempre.
+
+- **Corrección aplicada (mínima y auditada)**: en el pedido solo se tocó lo necesario — `estado: 'pagado'`, `serieNumero: 'NV01-000180'` (el comprobante con el que se cobró), `pedido: 'PED-000007'` (el código se conserva, como en un cobro normal), `cajero`/`cajeroId`, `fechaCobro` con **la fecha real de la NV**, y un bloque `correccion` con el motivo, el documento de cobro y quién/cuándo lo corrigió. En la NV se agregó **`pedidoVinculado: 'PED-000007'`** (nombre distinto de `pedido` a propósito: si se usara `pedido`, la NV **también** aparecería como pedido en el listado). Se registró en **`tblAuditLog`** (`accion: 'corregir_pedido_cobrado'`) con la misma forma que escribe la app.
+- ⚠️ **`tipoDoc` y `tipo` siguen en `'PENDIENTE'` a propósito**: todos los reportes fiscales filtran por `tipoDoc`, así que la corrección **no duplica la venta en ningún reporte ni en el arqueo** (la NV es el documento que cuenta la plata). El pedido tampoco tenía `turnoId`, así que el turno quedó intacto.
+- **Verificación con las funciones reales de la app** (importando `lib/pedidos.ts`, no una reimplementación): `esPedido → true`, `estadoPedido → 'cobrado'`, `codigoDePedido → 'PED-000007'`, `comprobanteDePedido → 'NV01-000180'`, y **0 pedidos pendientes** después de la corrección (era el único).
+- 🔍 **Barrido de casos similares (solo lectura)**: se listaron todos los pedidos pendientes buscando un comprobante emitido dentro de ±30 minutos con el mismo total. **No había ningún otro caso**: PED-000007 era el único pendiente.
+- 🧰 La corrección se hizo con `firebase-admin` (v14, **API modular**: `require('firebase-admin')` ya no expone `admin.credential`, hay que usar `initializeApp`/`cert` de `firebase-admin` y `getFirestore` de `firebase-admin/firestore`) desde una **carpeta temporal fuera del repo, borrada al terminar**; la clave de servicio quedó en su lugar y el repositorio no quedó con restos.
+
+**Causa raíz y prevención pendiente (ofrecida al usuario, no implementada)**: el problema no es del listado sino del flujo — el cajero puede **vender directo** los mismos productos de un pedido pendiente en vez de cobrarlo desde la lista. El control natural es el **espejo del anti-duplicado**: al cobrar una venta directa, avisar *«hay un pedido pendiente (PED-000007) con estos mismos productos, de JOHAN REYNA»* y ofrecer cobrarlo desde la lista (la huella ya existe: `huellaPedido()`).
+
 ### Listado de pedidos con su ciclo de vida (18/09/2026)
 
 🔑 **El usuario preguntó cómo ver la lista de pedidos creados y cobrados** — y la respuesta honesta era que **no existía una pantalla**: los pendientes estaban en el PDV, los cobrados solo en Reportes (sin el código `PED-…`) y los eliminados únicamente como registro en Auditoría, con las acciones en código crudo.
