@@ -468,6 +468,11 @@
     <div class="step"><strong>Toca "Valorización"</strong> (arriba de la tabla) y se descarga un Excel con <strong>código, producto, categoría, stock, costo unitario, origen del costo y valor</strong>, ordenado de mayor a menor valor y con una fila <strong>TOTAL</strong> al final.</div>
     <div class="step"><strong>Mirá la columna "Origen del costo"</strong>: dice <em>Promedio ponderado</em> cuando el producto ya tiene su promedio calculado y <em>Último costo</em> cuando todavía se usa el último precio de compra como respaldo (productos que no tuvieron una compra desde que se activó el promedio). El aviso <em>"N con último costo"</em> en pantalla cuenta esos casos.</div>
   </div>
+  <div class="warning">
+    <div class="warning-label">⚠️ Ojo con los productos sin costo</div>
+    <p>Si un producto tiene stock pero <strong>nunca se le cargó un precio de compra</strong>, en el reporte vale <strong>S/ 0</strong> y el total queda por debajo de lo real. El sistema te avisa arriba de la tabla: <em>"⚠️ N sin costo (valen S/ 0)"</em>, y en el Excel esos productos salen con <em>Sin costo (vale 0)</em> en la columna Origen del costo. Cargales el <strong>Precio Compra</strong> (Inventario → editar producto) y desde ahí la primera compra les calcula el promedio.</p>
+  </div>
+
   <div class="ejemplo">
     <div class="ejemplo-label">📋 Ejemplo real</div>
     <p>Tienes 10 unidades valorizadas a S/ 2.00 cada una (promedio S/ 2.00). Llega una compra de 10 unidades a S/ 3.00: el promedio pasa a (10 × 2.00 + 10 × 3.00) ÷ 20 = <strong>S/ 2.50</strong>. Vendes 4 unidades: salen valorizadas a S/ 2.50 y el promedio <strong>sigue</strong> en S/ 2.50. El inventario queda en 16 unidades × S/ 2.50 = <strong>S/ 40.00</strong>.</p>

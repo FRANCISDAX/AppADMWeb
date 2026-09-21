@@ -215,10 +215,22 @@ export function Inventario() {
    * cuenta los productos que todavía se valorizan con el **último costo** (nunca tuvieron una entrada
    * de mercadería desde que el promedio existe) — el dato que dice cuánto falta para que el reporte
    * esté 100% por promedio.
+   *
+   * ⚠️ `sinCosto` es el caso que **sí** distorsiona el reporte: un producto **con stock y sin ningún
+   * costo conocido** vale **S/ 0** (no hay promedio que usar ni último costo de respaldo), así que el
+   * total valorizado queda por debajo del real y nada lo avisa. No se puede arreglar solo: hay que
+   * cargarle el **Precio Compra** al producto (Inventario → editar) y, de ahí en más, la primera
+   * entrada de mercadería le calcula el promedio.
    */
   const valorizado = React.useMemo(() => {
     const { filas, total, unidades } = resumenValorizacion(lista)
-    return { filas, total, unidades, sinPromedio: filas.filter((f) => !f.usaPromedio).length }
+    return {
+      filas,
+      total,
+      unidades,
+      sinPromedio: filas.filter((f) => !f.usaPromedio).length,
+      sinCosto: filas.filter((f) => f.stock > 0 && !(f.costoPromedio > 0)).length,
+    }
   }, [lista])
 
   async function exportarExcelInv() {
@@ -269,7 +281,7 @@ export function Inventario() {
       f.categoria,
       f.stock,
       f.costoPromedio,
-      f.usaPromedio ? 'Promedio ponderado' : 'Último costo',
+      f.usaPromedio ? 'Promedio ponderado' : f.costoPromedio > 0 ? 'Último costo' : 'Sin costo (vale 0)',
       f.valor,
     ])
     rows.push(['', 'TOTAL', '', unidades, '', '', total])
@@ -813,6 +825,14 @@ export function Inventario() {
           <span>Inventario valorizado</span>
           <span className="num rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary">S/ {fmt(valorizado.total)}</span>
           <span className="num">{valorizado.unidades} u.</span>
+          {valorizado.sinCosto > 0 && (
+            <span
+              className="rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-600"
+              title="Productos con stock pero sin ningún costo cargado: en el reporte valen S/ 0, así que el total valorizado está por debajo del real. Cargales el Precio Compra (editar producto) para que el inventario valorizado sea real."
+            >
+              ⚠️ {valorizado.sinCosto} sin costo (valen S/ 0)
+            </span>
+          )}
           {valorizado.sinPromedio > 0 && (
             <span
               className="rounded-full border px-2 py-0.5"
