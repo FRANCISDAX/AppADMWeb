@@ -3,8 +3,21 @@ import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { efectivoEsperadoDe } from '@/lib/arqueo'
 import { valorizacionDeMovimiento } from '@/services/kardex'
+import { registrarCambioPrecio } from '@/services/historial-precios'
 
 type ItemCompra = { productoId: string; productoNombre: string; codigo?: string; cantidad: number; costoUnitario: number; factor?: number; presentacionId?: string; presentacionNombre?: string }
+
+/** Lo que devuelve la compra por cada producto, para poder registrar el cambio de costo. */
+export type ResultadoCompra = {
+  productoId: string
+  productoNombre: string
+  stockAnterior: number
+  nuevoStock: number
+  /** Costo por **unidad base** que tenía el producto antes de esta compra. */
+  precioCompraAnterior: number
+  /** Costo por unidad base después de la compra (el mismo, si el ítem vino sin costo). */
+  precioCompraNuevo: number
+}
 
 export async function registrarCompra({
   items,
@@ -24,7 +37,7 @@ export async function registrarCompra({
   usuario?: string
   tipoPago?: 'caja' | 'Transferencia'
   turnoId?: string | null
-}): Promise<{ success: boolean; error?: string; compraId?: string; totalPagado?: number; resultados?: unknown[] }> {
+}): Promise<{ success: boolean; error?: string; compraId?: string; totalPagado?: number; resultados?: ResultadoCompra[] }> {
   const lista = (items || []).filter((i) => i && i.cantidad > 0)
   if (lista.length === 0) return { success: false, error: 'Selecciona al menos un producto.' }
   if (!proveedor.trim()) return { success: false, error: 'Completa el proveedor.' }
@@ -65,7 +78,7 @@ export async function registrarCompra({
       }
 
       // FASE 2: Todas las escrituras.
-      const res: unknown[] = []
+      const res: ResultadoCompra[] = []
       for (const { item, prodRef, snap } of lecturas) {
         const data = snap.data() as Record<string, unknown>
         const factor = item.factor || 1
@@ -84,7 +97,20 @@ export async function registrarCompra({
           producto: data as { costoPromedio?: number | null; precioCompra?: number | null },
           costoEntrada: costoBase,
         })
-        tx.update(prodRef, { stock: nuevoStock, ...valorizado.camposProducto, ultimaActualizacion: new Date().toISOString(), updatedAt: new Date().toISOString() })
+        tx.update(prodRef, {
+          stock: nuevoStock,
+          ...valorizado.camposProducto,
+          // 🔑 **La compra también deja actualizado el último costo del producto.** `costoBase` es el
+          // costo por **unidad base** (el de la presentación dividido por su factor), que es la unidad
+          // en la que se guarda `precioCompra`. Antes **ninguna compra lo escribía** —solo el
+          // formulario manual— así que el campo quedaba viejo y lo mostraban desactualizado la columna
+          // «Precio Compra» del Inventario, la precarga del modal de compra y el respaldo de
+          // `costoDeProducto()`. ⚠️ Un ítem **sin costo** (una bonificación) **no** lo pisa: no hay
+          // costo que registrar, y pisarlo con 0 haría que el producto valga 0.
+          ...(costoBase > 0 ? { precioCompra: costoBase } : {}),
+          ultimaActualizacion: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
         const movRef = doc(collection(db, COL.MOVIMIENTOS))
         tx.set(movRef, {
           productoId: item.productoId,
@@ -116,7 +142,14 @@ export async function registrarCompra({
           fecha: new Date().toISOString(),
           timestamp: Date.now(),
         })
-        res.push({ productoId: item.productoId, stockAnterior: stockActual, nuevoStock })
+        res.push({
+          productoId: item.productoId,
+          productoNombre: (data.nombre as string) || item.productoNombre,
+          stockAnterior: stockActual,
+          nuevoStock,
+          precioCompraAnterior: Number(data.precioCompra) || 0,
+          precioCompraNuevo: costoBase > 0 ? costoBase : Number(data.precioCompra) || 0,
+        })
       }
 
       // Actualizar turno si es pago desde caja
@@ -140,6 +173,25 @@ export async function registrarCompra({
 
       return res
     })
+
+    // El cambio de costo que trajo la compra queda en el **historial de precios**, igual que cuando se
+    // edita el producto a mano (`Inventario.tsx` → `registrarCambioPrecio`). Antes la compra cambiaba
+    // el costo sin dejar rastro de cuál era el anterior, así que no se podía auditar un aumento del
+    // proveedor. Va **después** de la transacción y sin `await`: `registrarCambioPrecio` maneja sus
+    // propios errores y un fallo al escribir el historial no puede tumbar una compra ya registrada.
+    for (const r of resultados) {
+      if (r.precioCompraAnterior !== r.precioCompraNuevo) {
+        registrarCambioPrecio({
+          productoId: r.productoId,
+          productoNombre: r.productoNombre,
+          campo: 'precioCompra',
+          valorAnterior: r.precioCompraAnterior,
+          valorNuevo: r.precioCompraNuevo,
+          usuario,
+        })
+      }
+    }
+
     return { success: true, resultados, compraId, totalPagado }
   } catch (e) {
     console.error('❌ Error registrando compra:', e)

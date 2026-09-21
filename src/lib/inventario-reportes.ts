@@ -1,11 +1,18 @@
 import type { Producto } from '@/hooks/use-productos'
+import { costoDeProducto } from './valorizacion.ts'
 
 // Port de services/inventario.js → generarReporte de la app RN (misma lógica).
+//
+// ⚠️ **El costo de cada producto sale SIEMPRE de `costoDeProducto()`** (el promedio ponderado, con el
+// último costo como respaldo) y no de `p.precioCompra`: si no, estos reportes valorizan el stock y
+// calculan la utilidad con un costo distinto al del Inventario y al del kardex. `precioCompra` es el
+// **último costo**, que sirve para precargar una compra o comparar precios entre proveedores, no para
+// valorizar plata. ⚠️ La RN tiene el mismo defecto: hay que portarlo cuando se retome la móvil.
 
 export function generarReporteStockGeneral(productos: Producto[]) {
   const ordenados = [...productos].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
   const stockTotal = ordenados.reduce((s, p) => s + (p.stock || 0), 0)
-  const valorTotalInventario = ordenados.reduce((s, p) => s + (p.precioCompra || 0) * (p.stock || 0), 0)
+  const valorTotalInventario = ordenados.reduce((s, p) => s + costoDeProducto(p) * (p.stock || 0), 0)
   return {
     titulo: '📋 STOCK GENERAL - CIERRE DE TURNO',
     fechaGeneracion: new Date().toLocaleString('es-PE'),
@@ -33,7 +40,7 @@ export function generarReporteStockBajo(productos: Producto[]) {
 
 export function generarReporteMayorInversion(productos: Producto[]) {
   const ordenados = productos
-    .map((p) => ({ ...p, inversionTotal: (p.precioCompra || 0) * (p.stock || 0) }))
+    .map((p) => ({ ...p, inversionTotal: costoDeProducto(p) * (p.stock || 0) }))
     .sort((a, b) => (b.inversionTotal || 0) - (a.inversionTotal || 0))
   return {
     titulo: '💰 MAYOR INVERSIÓN EN STOCK',
@@ -51,7 +58,7 @@ export function generarReportePorCategoria(productos: Producto[]) {
     if (!resumenCategorias[cat]) resumenCategorias[cat] = { cantidadProductos: 0, stockTotal: 0, valorInventario: 0, productos: [] }
     resumenCategorias[cat].cantidadProductos++
     resumenCategorias[cat].stockTotal += p.stock || 0
-    resumenCategorias[cat].valorInventario += (p.precioCompra || 0) * (p.stock || 0)
+    resumenCategorias[cat].valorInventario += costoDeProducto(p) * (p.stock || 0)
     resumenCategorias[cat].productos.push(p)
   })
   return {
@@ -60,12 +67,12 @@ export function generarReportePorCategoria(productos: Producto[]) {
     fechaGeneracion: new Date().toLocaleString('es-PE'),
     totalProductos: productos.length,
     totalStock: productos.reduce((s, p) => s + (p.stock || 0), 0),
-    totalValorInventario: productos.reduce((s, p) => s + (p.precioCompra || 0) * (p.stock || 0), 0),
+    totalValorInventario: productos.reduce((s, p) => s + costoDeProducto(p) * (p.stock || 0), 0),
   }
 }
 
 export function generarReporteGeneral(productos: Producto[]) {
-  const totalValorCompra = productos.reduce((s, p) => s + (p.precioCompra || 0) * (p.stock || 0), 0)
+  const totalValorCompra = productos.reduce((s, p) => s + costoDeProducto(p) * (p.stock || 0), 0)
   const totalValorVenta = productos.reduce((s, p) => s + (p.precioVenta || 0) * (p.stock || 0), 0)
   const gananciaPotencial = totalValorVenta - totalValorCompra
   return {
@@ -85,7 +92,7 @@ export function generarReporteGeneral(productos: Producto[]) {
 export function generarReporteUtilidad(productos: Producto[]) {
   const conUtilidad = productos
     .map((p) => {
-      const costo = p.precioCompra || 0
+      const costo = costoDeProducto(p)
       const venta = p.precioVenta || 0
       const stock = p.stock || 0
       const utilidadUnidad = venta - costo
@@ -94,7 +101,7 @@ export function generarReporteUtilidad(productos: Producto[]) {
     })
     .sort((a, b) => (b.utilidadTotal || 0) - (a.utilidadTotal || 0))
 
-  const totalValorCompra = productos.reduce((s, p) => s + (p.precioCompra || 0) * (p.stock || 0), 0)
+  const totalValorCompra = productos.reduce((s, p) => s + costoDeProducto(p) * (p.stock || 0), 0)
   const totalValorVenta = productos.reduce((s, p) => s + (p.precioVenta || 0) * (p.stock || 0), 0)
   const utilidadGeneral = totalValorVenta - totalValorCompra
   const margenGeneral = totalValorVenta > 0 ? (utilidadGeneral / totalValorVenta) * 100 : 0

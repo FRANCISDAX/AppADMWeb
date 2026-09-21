@@ -1,5 +1,5 @@
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { costoVigente, valorDeStock } from '@/lib/valorizacion'
+import { costoDeProducto, valorDeStock } from '@/lib/valorizacion'
 import { COL } from '@/constants/colecciones'
 import { CATEGORIA_SIN_ASIGNAR } from '@/lib/categorias'
 import { db } from '@/lib/firebase'
@@ -118,7 +118,7 @@ export async function obtenerAnalisisMes(anio: number, mes: number): Promise<Ana
       porProd[pid].ingreso += ingresoT
       if (!cat) porCat[cat] = 0
       porCat[cat] = (porCat[cat] || 0) + ingresoT
-      const costo = Number(productos.get(pid)?.precioCompra) || 0
+      const costo = costoDeProducto(productos.get(pid))
       margenBruto += fmt2((precioVenta - costo) * cant)
     }
   }
@@ -129,7 +129,7 @@ export async function obtenerAnalisisMes(anio: number, mes: number): Promise<Ana
   // Productos: margen y margen%
   const allProductos = Object.entries(porProd)
     .map(([pid, o]) => {
-      const costo = (Number(productos.get(pid)?.precioCompra) || 0) * o.cantidad
+      const costo = costoDeProducto(productos.get(pid)) * o.cantidad
       const margen = fmt2(o.ingreso - costo)
       const margenPct = o.ingreso > 0 ? fmt2((margen / o.ingreso) * 100) : 0
       return { nombre: o.nombre || pid, codigo: o.codigo || pid, cantidad: o.cantidad, ingreso: fmt2(o.ingreso), costo: fmt2(costo), margen, margenPct }
@@ -160,7 +160,7 @@ export async function obtenerAnalisisMes(anio: number, mes: number): Promise<Ana
     // 🔑 Se valora con el **costo promedio ponderado movil** (`lib/valorizacion.ts`); si el
     // producto todavia no tiene promedio calculado (nunca se compro desde que existe la
     // valorizacion), cae al ultimo costo conocido, que es lo que se usaba antes.
-    const costo = costoVigente({ costoPromedio: p.costoPromedio, costoUltimo: p.precioCompra ?? p.costo })
+    const costo = costoDeProducto(p)
     const valor = valorDeStock({ stock, costo })
     const cat = p.categoria || 'General'
     totalValorizacion += valor

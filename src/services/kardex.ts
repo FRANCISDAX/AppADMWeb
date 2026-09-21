@@ -1,7 +1,7 @@
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
-import { valorizarMovimiento } from '@/lib/valorizacion'
+import { ultimoCostoDeProducto, valorizarMovimiento } from '@/lib/valorizacion'
 import type { Producto } from '@/hooks/use-productos'
 
 // Port de services/kardex.js de la app RN.
@@ -53,7 +53,9 @@ export function valorizacionDeMovimiento({
     stockNuevo,
     costoPromedioActual: producto?.costoPromedio ?? null,
     costoEntrada: costoEntrada ?? null,
-    costoUltimo: producto?.precioCompra ?? producto?.costo ?? null,
+    // El «último costo» sale de la regla única: `precioCompra` y, si está vacío o en 0, el campo viejo
+    // `costo` (un 0 significa «sin dato», no «costo cero»).
+    costoUltimo: ultimoCostoDeProducto(producto),
   })
   return {
     camposProducto: { costoPromedio: v.costoPromedioDespues, valorStock: v.stockValorizadoDespues },

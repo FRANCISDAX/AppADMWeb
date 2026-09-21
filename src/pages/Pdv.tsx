@@ -50,6 +50,7 @@ import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento } from '@/lib/ui-utils'
 import { AFECTACION_EXONERADO } from '@/lib/sunat-importes'
 import { redondear2 } from '@/lib/dinero'
+import { costoDeProducto } from '@/lib/valorizacion'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
 import { AFECTACION_POR_DEFECTO, TIPO_AFECTACION } from '@/constants/tributario'
 import { listarVentasPausadas, guardarVentaPausada, eliminarVentaPausada, type VentaPausada } from '@/lib/ventas-pausadas'
@@ -854,8 +855,10 @@ export function Pdv() {
       const expiraEn = p.fechaVencimiento ? Math.ceil((new Date(p.fechaVencimiento).getTime() - hoy.getTime()) / 86400000) : Infinity
       const porVencer = expiraEn <= 7
 
-      // ¿Debajo del costo?
-      const costo = p.precioCompra ?? 0
+      // ¿Debajo del costo? Se compara contra el **costo vigente del producto**
+      // (`costoDeProducto`: promedio ponderado con respaldo en el último costo), la misma regla con
+      // la que se valoriza el inventario: si no, el aviso compara contra un costo que puede estar viejo.
+      const costo = costoDeProducto(p)
       if (costo > 0 && precioItem < costo) {
         productosDebajoCosto.push(p.nombre ?? id)
       }
@@ -1611,12 +1614,15 @@ export function Pdv() {
                   const presSel = presentacionesSel[p.id]
                   const presActual = presSel ? presVenta.find((pr) => pr.id === presSel) : null
                   const factorActual = presActual?.factor ?? 1
+                  // El badge BAJO COSTO usa el **costo vigente** (promedio ponderado), igual que el
+                  // aviso del cobro y que la valorización del inventario.
+                  const costoActual = costoDeProducto(p)
                   return (
                   <div key={p.id} className="flex items-center gap-2 py-2.5">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="truncate text-[13px] font-semibold">{p.nombre}</span>
-                        {(p.precioCompra ?? 0) > 0 && precioFinal(p) * factorActual < (p.precioCompra ?? 0) && (
+                        {costoActual > 0 && precioFinal(p) * factorActual < costoActual && (
                           <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-600">BAJO COSTO</span>
                         )}
                         {p.fechaVencimiento && (() => {

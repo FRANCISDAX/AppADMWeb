@@ -82,6 +82,40 @@ export function costoVigente({
   return redondearCosto(Number(costoUltimo) || 0)
 }
 
+/**
+ * **Último costo conocido de un producto**: `precioCompra` y, si ese está vacío o en **0**, el campo
+ * viejo `costo` (productos que nunca se editaron desde la app web).
+ *
+ * ⚠️ El 0 **no** es un costo: significa «no hay dato». Tratarlo como valor final haría que un producto
+ * con un costo legado cargado valga **S/ 0** en el inventario y en el margen. Ojo: un producto **sin
+ * ningún** costo tampoco inventa uno — devuelve 0 y sigue valiendo 0, que es el caso real de
+ * WAFER NIK CHOCOLATE y WAFER NIK FRESA en producción.
+ */
+export function ultimoCostoDeProducto(
+  p?: { precioCompra?: number | null; costo?: number | null } | null,
+): number {
+  const compra = Number(p?.precioCompra)
+  if (compra > 0) return redondearCosto(compra)
+  return redondearCosto(Number(p?.costo) || 0)
+}
+
+/**
+ * 🔑 **El costo de un producto del catálogo, en un solo lugar**: el promedio ponderado si ya se
+ * calculó alguna vez (`costoPromedio`) y, si no, el **último costo** conocido (`ultimoCostoDeProducto`).
+ *
+ * Es la **única forma de leer el costo de un producto para plata**: valorización del inventario y del
+ * kardex, **margen bruto y utilidad**, los reportes de inventario (stock general, mayor inversión, por
+ * categoría) y el aviso **BAJO COSTO** del PDV. Leer `precioCompra` a mano fue un bug real
+ * (19/09/2026): el inventario ya valorizaba con el promedio mientras Análisis y los reportes de
+ * utilidad seguían usando el último costo tipeado, así que **dos pantallas mostraban dos costos
+ * distintos del mismo producto** — y el equivocado era el que se usaba para decidir precios.
+ */
+export function costoDeProducto(
+  p?: { costoPromedio?: number | null; precioCompra?: number | null; costo?: number | null } | null,
+): number {
+  return costoVigente({ costoPromedio: p?.costoPromedio, costoUltimo: ultimoCostoDeProducto(p) })
+}
+
 /** Valor de una salida de stock: la cantidad valorizada al **promedio vigente**. */
 export function valorDeSalida({ cantidad, costoPromedio }: { cantidad: number; costoPromedio: number }): number {
   return redondear2((Number(cantidad) || 0) * (Number(costoPromedio) || 0))
@@ -184,8 +218,7 @@ export function resumenValorizacion(
 
   for (const p of productos ?? []) {
     const stock = Number(p?.stock) || 0
-    const ultimo = Number(p?.precioCompra ?? p?.costo) || 0
-    const costoPromedio = costoVigente({ costoPromedio: p?.costoPromedio, costoUltimo: ultimo })
+    const costoPromedio = costoDeProducto(p)
     const valor = valorDeStock({ stock, costo: costoPromedio })
     total = redondear2(total + valor)
     unidades = redondear2(unidades + stock)

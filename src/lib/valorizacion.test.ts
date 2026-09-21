@@ -9,10 +9,12 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  costoDeProducto,
   costoVigente,
   promedioConEntrada,
   redondearCosto,
   resumenValorizacion,
+  ultimoCostoDeProducto,
   valorDeSalida,
   valorDeStock,
   valorizarMovimiento,
@@ -54,6 +56,43 @@ describe('costoVigente', () => {
     assert.equal(costoVigente({ costoPromedio: 2.5, costoUltimo: 9 }), 2.5)
     assert.equal(costoVigente({ costoPromedio: 0, costoUltimo: 3 }), 3)
     assert.equal(costoVigente({}), 0, 'sin ningún costo no inventa un valor')
+  })
+})
+
+describe('costoDeProducto (la regla única del costo)', () => {
+  it('prefiere el promedio ponderado por encima del último costo', () => {
+    // Es el bug del 19/09/2026: Análisis y los reportes de utilidad leían `precioCompra` a mano, así
+    // que el margen se calculaba con el último costo tipeado y no con el que valoriza el inventario.
+    assert.equal(costoDeProducto({ costoPromedio: 3.5, precioCompra: 3.17 }), 3.5)
+  })
+
+  it('cae al último costo (precioCompra) y después al campo viejo `costo`', () => {
+    assert.equal(costoDeProducto({ precioCompra: 3.17 }), 3.17)
+    assert.equal(costoDeProducto({ costo: 2.33 }), 2.33, 'productos que nunca se editaron desde la app')
+    assert.equal(costoDeProducto({ precioCompra: 0, costo: 2.33 }), 2.33, 'un precioCompra en 0 no tapa el costo viejo')
+  })
+
+  it('un producto sin costo vale 0 y no revienta con `null`/`undefined`', () => {
+    // Es el caso real de WAFER NIK CHOCOLATE (0326) y WAFER NIK FRESA (8742) en producción.
+    assert.equal(costoDeProducto({}), 0)
+    assert.equal(costoDeProducto(null), 0)
+    assert.equal(costoDeProducto(undefined), 0)
+  })
+})
+
+describe('ultimoCostoDeProducto (un 0 es «sin dato», no «costo cero»)', () => {
+  it('usa precioCompra y cae al campo viejo `costo` cuando está vacío o en 0', () => {
+    assert.equal(ultimoCostoDeProducto({ precioCompra: 3.17, costo: 9 }), 3.17)
+    assert.equal(ultimoCostoDeProducto({ costo: 2.33 }), 2.33)
+    // ⚠️ Con `??` este caso daba 0 y el producto valía S/ 0 en el inventario y en el margen.
+    assert.equal(ultimoCostoDeProducto({ precioCompra: 0, costo: 2.33 }), 2.33)
+    assert.equal(ultimoCostoDeProducto({ precioCompra: null, costo: 2.33 }), 2.33)
+  })
+
+  it('sin ningún costo conocido devuelve 0 (no inventa)', () => {
+    assert.equal(ultimoCostoDeProducto({ precioCompra: 0, costo: 0 }), 0)
+    assert.equal(ultimoCostoDeProducto({}), 0)
+    assert.equal(ultimoCostoDeProducto(null), 0)
   })
 })
 

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node --test src/lib/credito.test.ts src/lib/errores.test.ts src/lib/pagos.test.ts src/lib/descuentos.test.ts src/lib/sunat-importes.test.ts src/lib/arqueo.test.ts src/lib/contadores.test.ts src/lib/personal.test.ts src/lib/limpio.test.ts src/lib/pedidos.test.ts src/lib/consolidado.test.ts src/lib/sunat.test.ts src/lib/valorizacion.test.ts",
+    "test": "node --test src/lib/credito.test.ts src/lib/errores.test.ts src/lib/pagos.test.ts src/lib/descuentos.test.ts src/lib/sunat-importes.test.ts src/lib/arqueo.test.ts src/lib/contadores.test.ts src/lib/personal.test.ts src/lib/limpio.test.ts src/lib/pedidos.test.ts src/lib/consolidado.test.ts src/lib/sunat.test.ts src/lib/valorizacion.test.ts src/lib/inventario-reportes.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
