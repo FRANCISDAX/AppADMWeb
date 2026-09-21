@@ -1,6 +1,7 @@
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
+import { valorizarMovimiento } from '@/lib/valorizacion'
 import type { Producto } from '@/hooks/use-productos'
 
 // Port de services/kardex.js de la app RN.
@@ -10,6 +11,60 @@ import type { Producto } from '@/hooks/use-productos'
 // se escriben más; si algún movimiento viejo aparece, se clasifica bien igual.
 const esEntrada = (tipo: string) =>
   ['compra', 'ajuste_entrada', 'inventario_fisico_entrada', 'anulacion_venta', 'nota_credito', 'reposicion_venta_pendiente'].includes(tipo)
+
+/** `true` si el movimiento **suma** stock. Se exporta para que ningún servicio lo reinterprete. */
+export function movimientoEsEntrada(tipo: string): boolean {
+  return esEntrada(tipo)
+}
+
+/**
+ * **Valorización de un movimiento de stock, como regla única** (la matemática del promedio
+ * ponderado vive en `lib/valorizacion.ts`; acá solo se arma lo que hay que escribir).
+ *
+ * Devuelve dos grupos de campos:
+ *   - `camposProducto`: `costoPromedio` (el promedio después del movimiento) y `valorStock`
+ *     (unidades × promedio): así el catálogo y la valorización no recalculan nada.
+ *   - `camposMovimiento`: `costoUnitario`, `valorTotal`, `costoPromedioDespues` y
+ *     `stockValorizadoDespues`, o sea el **kardex valorizado**: cada línea queda con el costo con el
+ *     que se valorizó y con cómo quedaron el promedio y el valor del stock.
+ *
+ * ⚠️ En una entrada hay que pasar `costoEntrada` **por unidad base** (en una compra por
+ * presentación, `costoUnitario ÷ factor`): el promedio se lleva por unidad, no por caja.
+ */
+export function valorizacionDeMovimiento({
+  tipoMovimiento,
+  cantidad,
+  stockAntes,
+  stockNuevo,
+  producto,
+  costoEntrada,
+}: {
+  tipoMovimiento: string
+  cantidad: number
+  stockAntes: number
+  stockNuevo: number
+  producto?: { costoPromedio?: number | null; precioCompra?: number | null; costo?: number | null } | null
+  costoEntrada?: number | null
+}): { camposProducto: Record<string, number>; camposMovimiento: Record<string, number> } {
+  const v = valorizarMovimiento({
+    esEntrada: esEntrada(tipoMovimiento),
+    cantidad,
+    stockAntes,
+    stockNuevo,
+    costoPromedioActual: producto?.costoPromedio ?? null,
+    costoEntrada: costoEntrada ?? null,
+    costoUltimo: producto?.precioCompra ?? producto?.costo ?? null,
+  })
+  return {
+    camposProducto: { costoPromedio: v.costoPromedioDespues, valorStock: v.stockValorizadoDespues },
+    camposMovimiento: {
+      costoUnitario: v.costoUnitario,
+      valorTotal: v.valorTotal,
+      costoPromedioDespues: v.costoPromedioDespues,
+      stockValorizadoDespues: v.stockValorizadoDespues,
+    },
+  }
+}
 
 export async function cargarProductos(): Promise<Producto[]> {
   const snap = await getDocs(query(collection(db, COL.PRODUCTOS), orderBy('nombre', 'asc')))

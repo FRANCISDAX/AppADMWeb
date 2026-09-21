@@ -2,6 +2,7 @@ import { collection, doc, runTransaction, type DocumentSnapshot } from 'firebase
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { efectivoEsperadoDe } from '@/lib/arqueo'
+import { valorizacionDeMovimiento } from '@/services/kardex'
 
 type ItemCompra = { productoId: string; productoNombre: string; codigo?: string; cantidad: number; costoUnitario: number; factor?: number; presentacionId?: string; presentacionNombre?: string }
 
@@ -71,7 +72,19 @@ export async function registrarCompra({
         const cantidadBase = (item.cantidad || 0) * factor
         const stockActual = (data.stock as number) || 0
         const nuevoStock = stockActual + cantidadBase
-        tx.update(prodRef, { stock: nuevoStock, ultimaActualizacion: new Date().toISOString(), updatedAt: new Date().toISOString() })
+        // 🔑 **Comprar es lo que alimenta el costo promedio ponderado** (`lib/valorizacion.ts`).
+        // ⚠️ El costo del ítem es **por presentación** (así se calcula `totalPagado`), y el promedio
+        // se lleva **por unidad base**: por eso se divide por el factor de conversión.
+        const costoBase = factor > 0 ? (Number(item.costoUnitario) || 0) / factor : Number(item.costoUnitario) || 0
+        const valorizado = valorizacionDeMovimiento({
+          tipoMovimiento: 'compra',
+          cantidad: cantidadBase,
+          stockAntes: stockActual,
+          stockNuevo: nuevoStock,
+          producto: data as { costoPromedio?: number | null; precioCompra?: number | null },
+          costoEntrada: costoBase,
+        })
+        tx.update(prodRef, { stock: nuevoStock, ...valorizado.camposProducto, ultimaActualizacion: new Date().toISOString(), updatedAt: new Date().toISOString() })
         const movRef = doc(collection(db, COL.MOVIMIENTOS))
         tx.set(movRef, {
           productoId: item.productoId,
@@ -83,6 +96,9 @@ export async function registrarCompra({
           motivo: nota ? `Compra a ${proveedor}: ${nota}` : `Compra a ${proveedor}`,
           stockAnterior: stockActual,
           stockNuevo: nuevoStock,
+          // Kardex **valorizado**: con qué costo se valorizó esta entrada y cómo quedaron el
+          // promedio y el valor del stock.
+          ...valorizado.camposMovimiento,
           usuario,
           metadata: {
             compraId,

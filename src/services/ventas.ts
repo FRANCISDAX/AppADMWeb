@@ -7,6 +7,7 @@ import { bolsillosDeVenta, formaPagoLabel, type PagoGuardado } from '@/lib/pagos
 import { CAMPO_CONTADOR, CLAVE_PEDIDO, claveContador, codigoPedido } from '@/lib/contadores'
 import { limpiarUndefined } from '@/lib/limpio'
 import { revisarDescuentoManual } from '@/lib/descuentos'
+import { valorizacionDeMovimiento } from '@/services/kardex'
 import { VENTANA_DUPLICADO_MINUTOS, esPedido, huellaPedido, pedidoDuplicado } from '@/lib/pedidos'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
@@ -169,7 +170,16 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
       // Stock + movimientos
       for (const { item, prodRef, prod, stockActual, cantidad, kitComponente } of prods) {
         const nuevoStock = stockActual - cantidad
-        tx.update(prodRef, { stock: nuevoStock, vecesVendido: increment(1), ultimaActualizacion: f.toISOString(), updatedAt: f.toISOString() })
+        // Una venta es SALIDA: se valoriza **al costo promedio vigente** (no cambia el promedio) y
+        // el movimiento del kardex queda valorizado (`lib/valorizacion.ts`).
+        const valorizado = valorizacionDeMovimiento({
+          tipoMovimiento: 'venta',
+          cantidad,
+          stockAntes: stockActual,
+          stockNuevo: nuevoStock,
+          producto: prod as { costoPromedio?: number | null; precioCompra?: number | null },
+        })
+        tx.update(prodRef, { stock: nuevoStock, vecesVendido: increment(1), ...valorizado.camposProducto, ultimaActualizacion: f.toISOString(), updatedAt: f.toISOString() })
         const movRef = doc(collection(db, COL.MOVIMIENTOS))
         tx.set(movRef, {
           productoId: kitComponente ? prod.id : item.id,
@@ -179,6 +189,7 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
           cantidad,
           stockAnterior: stockActual,
           stockNuevo: nuevoStock,
+          ...valorizado.camposMovimiento,
           usuario: venta.cajero || 'sistema',
           fecha: f.toISOString(),
           timestamp: Date.now(),
@@ -957,13 +968,18 @@ export async function cobrarVentaPendiente({
       // kardex (`tipoMovimiento` + `cantidad` positiva; el signo lo decide `esEntrada`).
       // Un solo camino de escritura ⇒ no puede haber doble descuento ni descuento faltante.
       const stockPrevio = new Map<string, number | null>()
+      // El costo de cada producto se lee **acá**, antes de cualquier escritura (Firestore lo exige):
+      // el cobro tiene que valorizar la salida al costo promedio vigente.
+      const costoPrevio = new Map<string, { costoPromedio?: number | null; precioCompra?: number | null }>()
       for (const it of items) {
         if (it.manual) continue
         const ids = it.kitItems?.length ? it.kitItems.map((k) => k.productoId) : [it.id]
         for (const id of ids) {
           if (stockPrevio.has(id)) continue
           const s = await tx.get(doc(db, COL.PRODUCTOS, id))
-          stockPrevio.set(id, s.exists() ? (s.data().stock ?? 0) : null)
+          const d = s.exists() ? s.data() : null
+          stockPrevio.set(id, d ? (d.stock ?? 0) : null)
+          if (d) costoPrevio.set(id, { costoPromedio: d.costoPromedio ?? null, precioCompra: d.precioCompra ?? null })
         }
       }
 
@@ -997,10 +1013,20 @@ export async function cobrarVentaPendiente({
             )
           }
           const stockNuevo = stockActual - parte.cantidad
+          // El cobro de un pedido es una SALIDA más: se valoriza al costo promedio vigente, con la
+          // misma regla que una venta directa (un solo camino de valorización).
+          const valorizado = valorizacionDeMovimiento({
+            tipoMovimiento: 'venta',
+            cantidad: parte.cantidad,
+            stockAntes: stockActual,
+            stockNuevo,
+            producto: costoPrevio.get(parte.id),
+          })
           tx.update(doc(db, COL.PRODUCTOS, parte.id), {
             stock: stockNuevo,
             // Igual que una venta normal: si no, un cobro de pedido no cuenta en "más vendidos".
             vecesVendido: increment(1),
+            ...valorizado.camposProducto,
             ultimaActualizacion: f.toISOString(),
             updatedAt: f.toISOString(),
           })
@@ -1011,6 +1037,7 @@ export async function cobrarVentaPendiente({
             cantidad: parte.cantidad,
             stockAnterior: stockActual,
             stockNuevo,
+            ...valorizado.camposMovimiento,
             factorConversion: it.factorConversion || 1,
             presentacionUsada: it.presentacionNombre || 'Unidad',
             cantidadPresentacion: parte.cantidad,
