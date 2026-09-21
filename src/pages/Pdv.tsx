@@ -43,7 +43,7 @@ import {
 } from '@/lib/pagos'
 import { CreditoPanel } from '@/components/CreditoPanel'
 import { buscarTurnoAbierto } from '@/services/turnos'
-import { registrarVenta, crearVentaPendiente, cobrarVentaPendiente, obtenerDocumento, type VentaItem } from '@/services/ventas'
+import { registrarVenta, crearVentaPendiente, cobrarVentaPendiente, obtenerDocumento, obtenerVentasPendientes, type VentaItem } from '@/services/ventas'
 import { abrirPDFComprobante } from '@/lib/pdf'
 import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento } from '@/lib/ui-utils'
@@ -55,7 +55,7 @@ import { listarVentasPausadas, guardarVentaPausada, eliminarVentaPausada, type V
 import { EscanearCodigo } from '@/components/EscanearCodigo'
 import { broadcastCart, closeSession } from '@/lib/customer-display'
 import { calcularDescuentos, revisarDescuentoManual } from '@/lib/descuentos'
-import { clienteDelPedido, pedidoParaCarrito, type PedidoEnCarrito } from '@/lib/pedidos'
+import { clienteDelPedido, pedidoParaCarrito, pedidoPendienteCoincidente, type PedidoEnCarrito } from '@/lib/pedidos'
 import { promocionesAplicables, type PromocionVolumen } from '@/services/promociones-volumen'
 import QRCode from 'qrcode'
 import { PanelVentasPendientes } from '@/components/PanelVentasPendientes'
@@ -790,6 +790,28 @@ export function Pdv() {
       if (!dniConsultado) return setToast('⚠️ Presiona Consultar para validar el DNI')
     }
     if (dni && !dniConsultado) return setToast('⚠️ Presiona Consultar para validar el DNI/RUC')
+
+    // 🔑 **Control espejo del pedido colgado**: si en caja hay un pedido pendiente con estos mismos
+    // productos, se avisa ANTES de venderlo directo. Caso real (21/09/2026): el cajero vendió
+    // directo lo mismo que `PED-000007` (emitió la NV01-000180) y el pedido quedó pendiente en su
+    // lista para siempre. La comparación es una ayuda (no bloquea): si no es ese pedido, se sigue.
+    try {
+      const igual = pedidoPendienteCoincidente(await obtenerVentasPendientes(), { items: allItems, total })
+      if (igual) {
+        const usarPedido = await confirm({
+          title: 'Hay un pedido con estos mismos productos',
+          message: `El pedido ${igual.serieNumero} de ${igual.vendedorNombre || 'un vendedor'} está esperando en caja con estos mismos productos por ${fmt(Number(igual.venta?.total) || 0)}.\n\nSi es la misma venta, conviene cobrar ESE pedido: así no queda colgado en la lista de caja ni se emite dos veces.\n\n¿Traer el pedido al carrito?`,
+          okText: `Cobrar el pedido ${igual.serieNumero}`,
+        })
+        if (usarPedido) {
+          activarPedido(igual)
+          return
+        }
+      }
+    } catch (e) {
+      // Es una ayuda, no un candado: si la consulta falla, la venta sigue su curso.
+      console.warn('⚠️ No se pudo verificar si hay un pedido con los mismos productos:', e)
+    }
 
     if (pagoCredito) {
       if (!/^\d{8}$/.test(dni) && !/^\d{11}$/.test(dni)) return setToast('⚠️ El crédito requiere DNI o RUC válido')

@@ -12,7 +12,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { avisoOtraCaja, clienteDelPedido, codigoDePedido, comprobanteDePedido, esPedido, estadoPedido, huellaPedido, nombreCaja, pedidoDuplicado, pedidoParaCarrito, pedidosVisiblesPara, repartirPedidos, resumenPedidos, VENTANA_DUPLICADO_MINUTOS } from './pedidos.ts'
+import { avisoOtraCaja, clienteDelPedido, codigoDePedido, comprobanteDePedido, esPedido, estadoPedido, huellaPedido, nombreCaja, pedidoDuplicado, pedidoParaCarrito, pedidoPendienteCoincidente, pedidosVisiblesPara, repartirPedidos, resumenPedidos, VENTANA_DUPLICADO_MINUTOS } from './pedidos.ts'
 
 const p = (id: string, cajaId?: string) => ({ id, cajaId })
 
@@ -306,6 +306,70 @@ describe('resumenPedidos', () => {
     ])
     assert.deepEqual(resumen, { pendiente: 2, cobrado: 1, eliminado: 1 })
     assert.deepEqual(resumenPedidos(null), { pendiente: 0, cobrado: 0, eliminado: 0 })
+  })
+})
+
+// ─── Control espejo: la venta directa del cajero contra los pedidos pendientes ────────────────
+// Caso real (21/09/2026): PED-000007 quedó pendiente mientras el cajero emitía NV01-000180 con el
+// mismo producto y el mismo total, 79 segundos después.
+
+describe('pedidoPendienteCoincidente', () => {
+  // El pedido guarda la forma del DOCUMENTO (unidades base); el carrito, la del carrito.
+  const pedidoReal = {
+    id: '2026-9_PED-000007',
+    serieNumero: 'PED-000007',
+    estado: 'pendiente',
+    vendedorId: 'vendedor-1',
+    venta: { total: 0.5, items: [{ id: 'cigarro-hamilton', nombre: 'Cigarro Hamilton Fresh', cantidad: 1, precioVenta: 0.5 }] },
+  }
+
+  it('detecta la venta directa del mismo producto por el mismo total', () => {
+    const encontrado = pedidoPendienteCoincidente([pedidoReal], {
+      total: 0.5,
+      items: [{ id: 'cigarro-hamilton', nombre: 'Cigarro Hamilton Fresh', quantity: 1, precioVenta: 0.5 }],
+    })
+    assert.equal(encontrado?.serieNumero, 'PED-000007')
+  })
+
+  it('no depende del vendedor: la venta directa la cobra el cajero, no el vendedor del pedido', () => {
+    // La huella de duplicados SÍ incluye al vendedor; esta comparación no, a propósito.
+    assert.notEqual(
+      huellaPedido({ vendedorId: 'cajero-9', items: pedidoReal.venta.items, total: 0.5 }),
+      huellaPedido({ vendedorId: 'vendedor-1', items: pedidoReal.venta.items, total: 0.5 }),
+    )
+    assert.equal(
+      pedidoPendienteCoincidente([pedidoReal], { total: 0.5, items: pedidoReal.venta.items })?.serieNumero,
+      'PED-000007',
+    )
+  })
+
+  it('detecta una venta por presentación: compara productos y total, no cantidades ni precios', () => {
+    const porPaquete = {
+      ...pedidoReal,
+      venta: { total: 6, items: [{ id: 'gaseosa', nombre: 'Gaseosa', cantidad: 6, precioVenta: 1 }] },
+    }
+    const carrito = { total: 6, items: [{ id: 'gaseosa', nombre: 'Gaseosa', quantity: 1, precioVenta: 6 }] }
+    assert.equal(pedidoPendienteCoincidente([porPaquete], carrito)?.serieNumero, 'PED-000007')
+  })
+
+  it('no avisa si el total o los productos son distintos', () => {
+    assert.equal(pedidoPendienteCoincidente([pedidoReal], { total: 3, items: pedidoReal.venta.items }), null)
+    assert.equal(
+      pedidoPendienteCoincidente([pedidoReal], { total: 0.5, items: [{ id: 'pan', nombre: 'Pan', quantity: 1, precioVenta: 0.5 }] }),
+      null,
+    )
+  })
+
+  it('solo mira los pedidos pendientes: uno cobrado o eliminado no genera el aviso', () => {
+    for (const estado of ['pagado', 'cancelado']) {
+      assert.equal(pedidoPendienteCoincidente([{ ...pedidoReal, estado }], { total: 0.5, items: pedidoReal.venta.items }), null)
+    }
+  })
+
+  it('con la lista vacía o datos incompletos no avisa nada', () => {
+    assert.equal(pedidoPendienteCoincidente([], { total: 0.5, items: pedidoReal.venta.items }), null)
+    assert.equal(pedidoPendienteCoincidente([pedidoReal], { total: 0, items: [] }), null)
+    assert.equal(pedidoPendienteCoincidente([pedidoReal], {}), null)
   })
 })
 

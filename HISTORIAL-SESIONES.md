@@ -11,6 +11,14 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### Control espejo: avisar cuando el cajero vende algo que ya está pedido (21/09/2026)
+
+🔑 **Causa raíz del caso PED-000007 corregido arriba**: el problema no era el listado sino el flujo — el cajero puede **vender directo** los mismos productos de un pedido pendiente en vez de cobrarlo desde la lista, y el pedido queda colgado para siempre. Se implementó el **espejo del anti-duplicado**: al cobrar una venta directa, si hay un pedido pendiente con **los mismos productos y el mismo total**, el PDV avisa y ofrece traerlo al carrito (*"¿Cobrar el pedido PED-000007?"*). Si el cajero ignora el aviso, la venta directa sigue igual.
+
+- 🔑 **No usa el vendedor en la comparación** (a diferencia de la huella de duplicados, que sí lo incluye): la venta directa la cobra el **cajero**, no el vendedor del pedido. Y compara **total + productos**, no cantidades ni precios exactos, porque el carrito guarda unidades de venta y el pedido unidades base: una compra por presentación nunca coincidiría línea por línea. Es una **ayuda, no un candado** (misma filosofía que el anti-duplicado): puede no detectar un caso raro, y eso es preferible a bloquear un cobro legítimo.
+- Reglas puras en **`lib/pedidos.ts`**: `huellaVenta()` (huella sin vendedor; `huellaPedido()` ahora se compone con ella **sin cambiar su formato**, así las huellas ya guardadas siguen valiendo) y `pedidoPendienteCoincidente()`. **6 pruebas nuevas** (misma venta con otro vendedor, venta por presentación, total o productos distintos, pedido ya cobrado/eliminado, y listas vacías).
+- **Verificado**: **221/221 pruebas** ✓, `npx tsc -b` ✓, `npm run lint` **0 errores / 80 advertencias (baseline intacto)** ✓, `npm run build` ✓. Manual de usuario: aviso nuevo en la sección del flujo vendedor→cajero.
+
 ### Corrección en producción: el pedido PED-000007 cobrado como NV01-000180 (21/09/2026)
 
 🔑 **El usuario reportó**: *"el pedido 7 sí fue cobrado con la nota de venta 180"*. Se verificó en **solo lectura** contra producción antes de tocar nada, y los datos lo confirman: **`PED-000007`** (`2026-9_PED-000007`, vendedor **JOHAN REYNA**, 1 × Cigarro Hamilton Fresh, **S/ 0.50**) quedó con `estado: 'pendiente'`, y **79 segundos después** (00:16:32Z → 00:17:51Z) el cajero **FRANCIS DAX** emitió **`NV01-000180`** con **el mismo ítem y el mismo total**, en el turno `cH1bYjgAoGxrhjIg0gnk`. O sea: **el cajero vendió directo en el PDV en vez de usar «Cobrar pedido»**, y el pedido quedaba pendiente en su lista para siempre.

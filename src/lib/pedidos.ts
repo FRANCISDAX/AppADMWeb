@@ -164,6 +164,72 @@ function norm(v: unknown): string {
   return ''
 }
 
+/** Líneas normalizadas y **ordenadas** de una venta: la base de las dos huellas. */
+function lineasDe(items?: readonly ItemParaHuella[] | null): string[] {
+  return (items ?? [])
+    .map((it) =>
+      [
+        norm(it?.id) || norm(it?.nombre),
+        norm(it?.cantidad) || norm(it?.quantity),
+        norm(it?.precioVenta),
+      ].join('~'),
+    )
+    .filter((linea) => linea.replace(/~/g, '') !== '')
+    .sort()
+}
+
+/** Huella de la venta **sin el vendedor** (total + líneas): reconoce la misma venta aunque la cobre otra persona. */
+export function huellaVenta({
+  items,
+  total,
+}: {
+  items?: readonly ItemParaHuella[] | null
+  total?: number | null
+}): string {
+  return [norm(total), ...lineasDe(items)].join('|')
+}
+
+/** Identificadores de los productos de una venta (id, o el nombre si no hay id), ordenados. */
+function productosDe(items?: readonly (ItemParaHuella & { nombre?: unknown })[] | null): string[] {
+  return (items ?? [])
+    .map((it) => norm(it?.id) || norm(it?.nombre))
+    .filter((s) => s !== '')
+    .sort()
+}
+
+/**
+ * **¿La venta que está cobrando el cajero es un pedido que está esperando en caja?**
+ *
+ * Es el espejo del control de duplicados: si un cajero **vende directo** los mismos productos de un
+ * pedido pendiente (en vez de usar «Cobrar pedido»), el pedido queda colgado en la lista para
+ * siempre. 📌 **Caso real (21/09/2026)**: `PED-000007` (vendedor JOHAN REYNA, 1 cigarro, S/ 0.50)
+ * quedó pendiente mientras el cajero emitía `NV01-000180` con el mismo ítem **79 segundos después**.
+ *
+ * 🔑 **La comparación NO usa el vendedor** (la venta directa la cobra el cajero, no el vendedor del
+ * pedido) y **se apoya en el total más los productos**, no en cantidades y precios exactos: el
+ * carrito guarda unidades de venta y el pedido unidades base, así que una compra por presentación
+ * nunca coincidiría línea por línea. Es una **ayuda, no una certeza**: puede no detectar el caso
+ * raro (dos ventas distintas con el mismo total y los mismos productos) y eso es preferible a
+ * bloquear un cobro legítimo.
+ */
+export function pedidoPendienteCoincidente(
+  pendientes: readonly PedidoParaDuplicado[] | null | undefined,
+  venta: { items?: readonly ItemParaHuella[] | null; total?: number | null },
+): PedidoParaDuplicado | null {
+  const total = norm(venta.total)
+  const productos = productosDe(venta.items).join('+')
+  if (!total || !productos) return null
+
+  for (const pedido of pendientes ?? []) {
+    if ((pedido?.estado || 'pendiente') !== 'pendiente') continue
+    const items = (Array.isArray(pedido?.venta?.items) ? pedido?.venta?.items : []) as ItemParaHuella[]
+    if (norm(pedido?.venta?.total) !== total) continue
+    if (productosDe(items).join('+') !== productos) continue
+    return pedido
+  }
+  return null
+}
+
 /**
  * **Huella de un pedido**: identifica la misma venta enviada por el mismo vendedor, con
  * independencia de la hora y del orden en que se cargaron los productos.
@@ -181,23 +247,17 @@ export function huellaPedido({
   items?: readonly ItemParaHuella[] | null
   total?: number | null
 }): string {
-  const lineas = (items ?? [])
-    .map((it) =>
-      [
-        norm(it?.id) || norm(it?.nombre),
-        norm(it?.cantidad) || norm(it?.quantity),
-        norm(it?.precioVenta),
-      ].join('~'),
-    )
-    .filter((linea) => linea.replace(/~/g, '') !== '')
-    .sort()
-  return [norm(vendedorId), norm(total), ...lineas].join('|')
+  // Mismo formato de siempre (`vendedor|total|líneas…`): se compone con `huellaVenta` para no
+  // duplicar el armado de las líneas. Las huellas ya guardadas en los pedidos siguen valiendo.
+  return [norm(vendedorId), huellaVenta({ items, total })].join('|')
 }
 
 /** Pedido pendiente, con lo mínimo para compararlo contra uno nuevo. */
 export type PedidoParaDuplicado = {  id?: string
   serieNumero?: string
   vendedorId?: string
+  /** Solo para el aviso al cajero ("el pedido de JOHAN REYNA"). */
+  vendedorNombre?: string
   estado?: string
   fecha?: string
   /** Huella guardada al crear el pedido (los pedidos viejos no la tienen). */

@@ -340,6 +340,17 @@
     <li style="padding:3px 0; font-size:13px; color:#475569;">• En el arqueo, cada comprobante agrega <code>· Vend: Carlos</code> cuando el vendedor no es el cajero del turno.</li>
   </ul>
 
+  <div class="tip">
+    <div class="tip-label">🧭 Si vas a vender algo que ya está pedido</div>
+    <p>Cuando un <strong>cajero cobra una venta directa</strong> (armada por él en el PDV) y en la lista hay un <strong>pedido pendiente con los mismos productos y el mismo total</strong>, el sistema avisa antes de cobrar:</p>
+    <p><em>"Hay un pedido con estos mismos productos — El pedido PED-000007 de JOHAN REYNA está esperando en caja con estos mismos productos por S/ 0.50. Si es la misma venta, conviene cobrar ESE pedido… ¿Traer el pedido al carrito?"</em></p>
+    <ul style="list-style:none; padding:0; margin: 8px 0;">
+      <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Cobrar el pedido</strong>: lo trae al carrito y lo cobrás normalmente (recomendado si es la misma venta).</li>
+      <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Ignorar el aviso</strong>: la venta directa sigue su curso, sin cambios.</li>
+    </ul>
+    <p>¿Por qué importa? Si el cajero vende directo lo mismo que un vendedor ya mandó a caja, <strong>el pedido queda pendiente para siempre</strong> en la lista: la venta se cobra una sola vez (la del cajero), pero el pedido viejo confunde a la caja y ensucia el seguimiento del vendedor.</p>
+  </div>
+
   <h3>3.4 Cajas</h3>
   <p>Cada caja define sus propias series de comprobante. En <code>Configuración → Cajas</code> el admin puede crear cajas con series distintas:</p>
   <table>
