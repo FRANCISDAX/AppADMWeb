@@ -12,7 +12,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { avisoOtraCaja, clienteDelPedido, huellaPedido, nombreCaja, pedidoDuplicado, pedidoParaCarrito, repartirPedidos, VENTANA_DUPLICADO_MINUTOS } from './pedidos.ts'
+import { avisoOtraCaja, clienteDelPedido, codigoDePedido, comprobanteDePedido, esPedido, estadoPedido, huellaPedido, nombreCaja, pedidoDuplicado, pedidoParaCarrito, pedidosVisiblesPara, repartirPedidos, resumenPedidos, VENTANA_DUPLICADO_MINUTOS } from './pedidos.ts'
 
 const p = (id: string, cajaId?: string) => ({ id, cajaId })
 
@@ -222,6 +222,90 @@ describe('pedidoDuplicado', () => {
       pedidoDuplicado([pedido()], { vendedorId: 'vendedor-1', huella: huellaPedido({ vendedorId: 'vendedor-1', items: [{ id: 'pan', cantidad: 1, precioVenta: 3 }], total: 3 }), ahora }),
       null,
     )
+  })
+})
+
+// ─── Listado de pedidos: estado y visibilidad ────────────────────────────────────────────────
+
+describe('esPedido y estadoPedido', () => {
+  it('reconoce un pedido pendiente', () => {
+    const pendiente = { tipoDoc: 'PENDIENTE', estado: 'pendiente', serieNumero: 'PED-000123' }
+    assert.equal(esPedido(pendiente), true)
+    assert.equal(estadoPedido(pendiente), 'pendiente')
+    assert.equal(codigoDePedido(pendiente), 'PED-000123')
+    assert.equal(comprobanteDePedido(pendiente), '', 'todavía no hay comprobante')
+  })
+
+  it('reconoce un pedido cobrado porque conserva el código del pedido', () => {
+    // Así lo escribe `cobrarVentaPendiente`: el comprobante reemplaza al tipo y al serieNumero,
+    // pero el código PED queda en el campo `pedido`.
+    const cobrado = { tipoDoc: 'BOLETA', estado: 'pagado', serieNumero: 'B001-000061', pedido: 'PED-000123' }
+    assert.equal(esPedido(cobrado), true)
+    assert.equal(estadoPedido(cobrado), 'cobrado')
+    assert.equal(codigoDePedido(cobrado), 'PED-000123')
+    assert.equal(comprobanteDePedido(cobrado), 'B001-000061')
+  })
+
+  it('reconoce un pedido eliminado y guarda su motivo', () => {
+    const cancelado = { tipoDoc: 'PENDIENTE', estado: 'cancelado', serieNumero: 'PED-000124', motivoCancelacion: 'El cliente se arrepintió' }
+    assert.equal(esPedido(cancelado), true)
+    assert.equal(estadoPedido(cancelado), 'eliminado')
+    assert.equal(codigoDePedido(cancelado), 'PED-000124')
+    assert.equal(comprobanteDePedido(cancelado), '', 'un pedido eliminado no tiene comprobante')
+  })
+
+  it('una venta directa del cajero NO es un pedido', () => {
+    const venta = { tipoDoc: 'BOLETA', estado: 'pagado', serieNumero: 'B001-000062' }
+    assert.equal(esPedido(venta), false)
+  })
+
+  it('una venta directa anulada tampoco se cuela como pedido eliminado', () => {
+    assert.equal(esPedido({ tipoDoc: 'BOLETA', estado: 'anulada', serieNumero: 'B001-000063' }), false)
+  })
+
+  it('un estado desconocido se muestra como pendiente (ante la duda, mostrar)', () => {
+    assert.equal(estadoPedido({ tipoDoc: 'PENDIENTE' }), 'pendiente')
+    assert.equal(estadoPedido(null), 'pendiente')
+  })
+})
+
+describe('pedidosVisiblesPara', () => {
+  const lista = [
+    { id: 'a', vendedorId: 'v1', cajeroId: 'c1' },
+    { id: 'b', vendedorId: 'v2', cajeroId: 'c1' },
+    { id: 'c', vendedorId: 'v2', cajeroId: 'c2' },
+  ]
+
+  it('un supervisor (verTodo) ve todos', () => {
+    assert.equal(pedidosVisiblesPara(lista, { uid: 'admin', verTodo: true }).length, 3)
+  })
+
+  it('el vendedor ve solo los que él armó', () => {
+    assert.deepEqual(pedidosVisiblesPara(lista, { uid: 'v1' }).map((p) => p.id), ['a'])
+    assert.deepEqual(pedidosVisiblesPara(lista, { uid: 'v2' }).map((p) => p.id), ['b', 'c'])
+  })
+
+  it('el cajero ve los que él cobró, además de los que haya armado', () => {
+    assert.deepEqual(pedidosVisiblesPara(lista, { uid: 'c1' }).map((p) => p.id), ['a', 'b'])
+  })
+
+  it('sin identificador no ve nada, y una lista vacía o nula no rompe', () => {
+    assert.deepEqual(pedidosVisiblesPara(lista, {}), [])
+    assert.deepEqual(pedidosVisiblesPara(null, { uid: 'v1' }), [])
+    assert.deepEqual(pedidosVisiblesPara(lista, { uid: null, verTodo: true }).length, 3)
+  })
+})
+
+describe('resumenPedidos', () => {
+  it('cuenta por estado', () => {
+    const resumen = resumenPedidos([
+      { tipoDoc: 'PENDIENTE', estado: 'pendiente' },
+      { tipoDoc: 'PENDIENTE', estado: 'pendiente' },
+      { tipoDoc: 'BOLETA', estado: 'pagado', pedido: 'PED-1' },
+      { tipoDoc: 'PENDIENTE', estado: 'cancelado' },
+    ])
+    assert.deepEqual(resumen, { pendiente: 2, cobrado: 1, eliminado: 1 })
+    assert.deepEqual(resumenPedidos(null), { pendiente: 0, cobrado: 0, eliminado: 0 })
   })
 })
 

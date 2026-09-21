@@ -1,4 +1,4 @@
-import { CloudUpload, Download, FileText, Loader2, Printer, Receipt, Send, Trash2, Wallet } from 'lucide-react'
+import { ClipboardList, CloudUpload, Download, FileText, Loader2, Printer, Receipt, Send, Trash2, Wallet } from 'lucide-react'
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import * as React from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -11,7 +11,8 @@ import { abrirPDFComprobante } from '@/lib/pdf'
 import { exportarExcel } from '@/lib/excel'
 import { useNotifications } from '@/components/notifications'
 import { enviarDocumentoASunat, enviarNotaASunat } from '@/services/sunat'
-import { anularNotaVenta } from '@/services/ventas'
+import { anularNotaVenta, obtenerPedidosDelMes } from '@/services/ventas'
+import { codigoDePedido, comprobanteDePedido, estadoPedido, pedidosVisiblesPara, resumenPedidos, type PedidoEnLista } from '@/lib/pedidos'
 import { corregirTipoPago } from '@/services/reportes'
 import { TIPOS_NOTA_SUNAT } from '@/constants/tributario'
 import { crearNotaCreditoDebito } from '@/services/notas'
@@ -83,7 +84,7 @@ export function Reportes() {
   // Scope por usuario: si no tiene 'verTodo', solo ve sus propios documentos.
   const verTodo = tienePermiso('verTodo')
   const miUid = verTodo ? '' : (user?.uid || '')
-  const [tab, setTab] = React.useState<'nv' | 'consolidado' | 'sunat'>('nv')
+  const [tab, setTab] = React.useState<'nv' | 'consolidado' | 'sunat' | 'pedidos'>('nv')
   const [filtroTipo, setFiltroTipo] = React.useState<'BOLETA' | 'FACTURA' | 'NC' | 'ND'>('BOLETA')
   const [mes, setMes] = React.useState(mesDeHoy())
   const [notaDoc, setNotaDoc] = React.useState<Doc | null>(null)
@@ -101,6 +102,10 @@ export function Reportes() {
   const [procesando, setProcesando] = React.useState(false)
   const [consolidando, setConsolidando] = React.useState(false)
   const [refreshConsol, setRefreshConsol] = React.useState(0)
+  // ─── Pedidos: listado con su ciclo de vida (creado → cobrado / eliminado) ───
+  const [pedidos, setPedidos] = React.useState<PedidoEnLista[]>([])
+  const [cargandoPedidos, setCargandoPedidos] = React.useState(false)
+  const [filtroEstadoPedido, setFiltroEstadoPedido] = React.useState<'todos' | 'pendiente' | 'cobrado' | 'eliminado'>('todos')
 
   const [añoMesTarget] = React.useMemo(() => {
     const [y, m] = mes.split('-')
@@ -142,6 +147,34 @@ export function Reportes() {
   }, [tab, refreshConsol, miUid])
 
   const sumPaginaNv = nvPag.items.reduce((s, d) => s + (d.venta?.total ?? 0), 0)
+
+  // ─── Pedidos del mes (todos los estados) ───────────────────────────────────────────────────
+  // 🔑 **Quién ve qué**: un supervisor (`verTodo`) ve todos los pedidos; cualquier otro usuario ve
+  // los que él armó (vendedor) y los que él cobró (cajero). La regla vive en `lib/pedidos.ts`
+  // (`pedidosVisiblesPara`, pura y testeada) para que la pantalla no la reinterprete.
+  React.useEffect(() => {
+    if (tab !== 'pedidos') return
+    let activo = true
+    setCargandoPedidos(true)
+    ;(async () => {
+      try {
+        const delMes = (await obtenerPedidosDelMes(añoMesTarget)) as unknown as PedidoEnLista[]
+        if (!activo) return
+        setPedidos(pedidosVisiblesPara(delMes, { uid: user?.uid, verTodo }))
+      } finally {
+        if (activo) setCargandoPedidos(false)
+      }
+    })()
+    return () => {
+      activo = false
+    }
+  }, [tab, añoMesTarget, user?.uid, verTodo, refreshConsol])
+
+  const pedidosFiltrados = React.useMemo(
+    () => (filtroEstadoPedido === 'todos' ? pedidos : pedidos.filter((p) => estadoPedido(p) === filtroEstadoPedido)),
+    [pedidos, filtroEstadoPedido],
+  )
+  const conteoPedidos = React.useMemo(() => resumenPedidos(pedidos), [pedidos])
   const sumPaginaSunat = sunatPag.items.reduce((s, d) => s + (d.tipoDoc === 'NC' ? -Math.abs(d.venta?.total ?? 0) : d.venta?.total ?? 0), 0)
 
   const totalConsolidado = nvsDelDia.reduce((s, d) => s + (d.venta?.total ?? 0), 0)
@@ -455,6 +488,7 @@ export function Reportes() {
       <div className="flex gap-1.5 overflow-x-auto rounded-xl bg-muted p-1 scrollbar-none">
         {([
           { id: 'nv', label: 'Notas de Venta', icon: FileText },
+          { id: 'pedidos', label: 'Pedidos', icon: ClipboardList },
           { id: 'consolidado', label: 'Consolidado de Boletas', icon: Receipt },
           { id: 'sunat', label: 'Registro SUNAT', icon: CloudUpload },
         ] as const).map((t) => (
@@ -481,6 +515,70 @@ export function Reportes() {
               <span className="num text-sm text-muted-foreground">{nvPag.total} doc · {fmt(sumPaginaNv)}</span>
             </div>
             <ListaHooked pag={nvPag} renderItem={(d) => <Row key={d.id} d={d} mostrarAcciones />} empty={<p className="py-16 text-center text-sm text-muted-foreground">Sin notas de venta en este mes</p>} />
+          </div>
+        </div>
+      ) : tab === 'pedidos' ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm text-muted-foreground">
+              {verTodo ? 'Todos los pedidos del mes' : 'Tus pedidos del mes'}
+            </span>
+            <div className="flex items-center gap-2">
+              <select
+                value={filtroEstadoPedido}
+                onChange={(e) => setFiltroEstadoPedido(e.target.value as typeof filtroEstadoPedido)}
+                className="h-9 rounded-lg border bg-background px-3 text-sm"
+              >
+                <option value="todos">Todos ({pedidos.length})</option>
+                <option value="pendiente">En caja ({conteoPedidos.pendiente})</option>
+                <option value="cobrado">Cobrados ({conteoPedidos.cobrado})</option>
+                <option value="eliminado">Eliminados ({conteoPedidos.eliminado})</option>
+              </select>
+              <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="h-9 rounded-lg border px-3 text-sm" />
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-xl border bg-card shadow-card">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <span className="text-sm font-bold">Pedidos</span>
+              <span className="num text-sm text-muted-foreground">{pedidosFiltrados.length} pedido(s)</span>
+            </div>
+            {cargandoPedidos ? (
+              <p className="py-16 text-center text-sm text-muted-foreground">
+                <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />Cargando pedidos…
+              </p>
+            ) : pedidosFiltrados.length === 0 ? (
+              <p className="py-16 text-center text-sm text-muted-foreground">Sin pedidos en este mes</p>
+            ) : (
+              <div className="divide-y">
+                {pedidosFiltrados.map((p) => {
+                  const estado = estadoPedido(p)
+                  const comprobante = comprobanteDePedido(p)
+                  const total = Number((p.venta as { total?: unknown } | null | undefined)?.total) || 0
+                  return (
+                    <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold">{codigoDePedido(p)}</span>
+                          <Badge variant={estado === 'cobrado' ? 'success' : estado === 'eliminado' ? 'destructive' : 'warning'}>
+                            {estado === 'cobrado'
+                              ? `Cobrado${comprobante ? ` · ${comprobante}` : ''}`
+                              : estado === 'eliminado' ? 'Eliminado' : 'En caja'}
+                          </Badge>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {p.fecha ? new Date(p.fecha).toLocaleString('es-PE') : ''} · Vendedor: {p.vendedorNombre || '—'}
+                          {p.cajero ? ` · Cobró: ${p.cajero}` : ''}
+                        </div>
+                        {estado === 'eliminado' && p.motivoCancelacion && (
+                          <div className="text-[11px] text-destructive">Motivo de eliminación: {p.motivoCancelacion}</div>
+                        )}
+                      </div>
+                      <span className="num shrink-0 text-sm font-bold">{fmt(total)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       ) : tab === 'consolidado' ? (

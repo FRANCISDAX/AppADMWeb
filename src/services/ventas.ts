@@ -7,7 +7,7 @@ import { bolsillosDeVenta, formaPagoLabel, type PagoGuardado } from '@/lib/pagos
 import { CAMPO_CONTADOR, CLAVE_PEDIDO, claveContador, codigoPedido } from '@/lib/contadores'
 import { limpiarUndefined } from '@/lib/limpio'
 import { revisarDescuentoManual } from '@/lib/descuentos'
-import { VENTANA_DUPLICADO_MINUTOS, huellaPedido, pedidoDuplicado } from '@/lib/pedidos'
+import { VENTANA_DUPLICADO_MINUTOS, esPedido, huellaPedido, pedidoDuplicado } from '@/lib/pedidos'
 import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
@@ -753,6 +753,33 @@ export async function obtenerVentasPendientes(): Promise<DocumentoVenta[]> {
       .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
   } catch (e) {
     console.error('❌ Error obteniendo ventas pendientes:', e)
+    return []
+  }
+}
+
+/**
+ * Pedidos de un mes **en cualquier estado** (pendientes, cobrados y eliminados), para el listado de
+ * `Reportes → Pedidos`.
+ *
+ * 🔑 **Sin índice compuesto**: se consulta por una sola igualdad (`anioMes`) y el filtro de "esto
+ * es un pedido" se hace en JavaScript con `esPedido()` (`lib/pedidos.ts`), que reconoce tanto el
+ * `tipoDoc: 'PENDIENTE'` como el campo `pedido` que sobrevive al cobro. Ordenar por fecha en la
+ * consulta exigiría un índice compuesto (igualdad + orderBy) y no hace falta: se ordena acá.
+ *
+ * ⚠️ El límite es alto a propósito (un mes de operación real son unos cientos de documentos); si el
+ * negocio crece mucho, conviene paginar por `fecha` en vez de subir el límite.
+ */
+export async function obtenerPedidosDelMes(anioMes: string): Promise<DocumentoVenta[]> {
+  try {
+    const snap = await getDocs(
+      query(collection(db, COL.DOCUMENTOS), where('anioMes', '==', anioMes), limit(500)),
+    )
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as unknown as DocumentoVenta)
+      .filter((d) => esPedido(d as unknown as Parameters<typeof esPedido>[0]))
+      .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
+  } catch (e) {
+    console.error('❌ Error obteniendo los pedidos del mes:', e)
     return []
   }
 }

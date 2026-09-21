@@ -24,6 +24,10 @@ const ACCION_LABELS: Record<string, string> = {
   eliminar_producto: 'Eliminar Producto',
   ajuste_stock: 'Ajuste de Stock',
   toma_inventario: 'Toma de Inventario',
+  // Pedidos (venta enviada a caja): el ciclo completo queda en la auditoría con quién y por qué.
+  crear_venta_pendiente: 'Enviar pedido a caja',
+  cobrar_venta_pendiente: 'Cobrar pedido',
+  eliminar_venta_pendiente: 'Eliminar pedido',
 }
 
 const ACCION_COLORS: Record<string, string> = {
@@ -42,6 +46,9 @@ const ACCION_COLORS: Record<string, string> = {
   eliminar_producto: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
   ajuste_stock: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
   toma_inventario: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+  crear_venta_pendiente: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  cobrar_venta_pendiente: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  eliminar_venta_pendiente: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
 }
 
 const ACCION_MODULO: Record<string, string> = {
@@ -60,6 +67,9 @@ const ACCION_MODULO: Record<string, string> = {
   eliminar_producto: 'Inventario',
   ajuste_stock: 'Inventario',
   toma_inventario: 'Inventario',
+  crear_venta_pendiente: 'Pedidos',
+  cobrar_venta_pendiente: 'Pedidos',
+  eliminar_venta_pendiente: 'Pedidos',
 }
 
 export default function Auditoria() {

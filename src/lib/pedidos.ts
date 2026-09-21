@@ -195,8 +195,7 @@ export function huellaPedido({
 }
 
 /** Pedido pendiente, con lo mínimo para compararlo contra uno nuevo. */
-export type PedidoParaDuplicado = {
-  id?: string
+export type PedidoParaDuplicado = {  id?: string
   serieNumero?: string
   vendedorId?: string
   estado?: string
@@ -241,4 +240,85 @@ export function pedidoDuplicado(
     return pedido
   }
   return null
+}
+
+// ─── Listado de pedidos: estado y visibilidad ────────────────────────────────────────────────
+//
+// 🔑 **Un pedido se reconoce en cualquier estado por dos marcas que sobreviven al cobro**: mientras
+// no se cobró tiene `tipoDoc: 'PENDIENTE'` y cuando se cobra el comprobante real lo reemplaza, pero
+// el documento **conserva el código del pedido** en el campo `pedido` (así lo escribe
+// `cobrarVentaPendiente`). Sin esa segunda marca, un pedido cobrado sería indistinguible de una
+// venta directa del cajero.
+
+/** Proyección mínima de un pedido para listarlo con su ciclo de vida. */
+export type PedidoEnLista = {
+  id?: string
+  tipoDoc?: string
+  estado?: string
+  serieNumero?: string
+  fecha?: string
+  /** Código `PED-…` con el que nació el pedido (lo conserva el documento al cobrarse). */
+  pedido?: string
+  vendedorId?: string
+  vendedorNombre?: string
+  cajeroId?: string
+  cajero?: string
+  motivoCancelacion?: string
+  venta?: { total?: unknown; items?: unknown } | null
+}
+
+/** Estado del pedido en su ciclo de vida. */
+export type EstadoPedido = 'pendiente' | 'cobrado' | 'eliminado'
+
+/** `true` si el documento nació como pedido (pendiente, cobrado o eliminado). */
+export function esPedido(doc: PedidoEnLista | null | undefined): boolean {
+  if (!doc) return false
+  if (texto(doc.tipoDoc) === 'PENDIENTE') return true
+  return texto(doc.pedido) !== ''   // cobrado: el comprobante reemplazó al tipo, pero queda el código
+}
+
+/**
+ * Estado del pedido: `pendiente` mientras espera en caja, `eliminado` si el cajero lo descartó y
+ * `cobrado` cuando ya tiene comprobante. Un estado desconocido se trata como pendiente (ante la
+ * duda, mostrarlo: un pedido que no se ve es una venta perdida).
+ */
+export function estadoPedido(doc: PedidoEnLista | null | undefined): EstadoPedido {
+  const estado = texto(doc?.estado).toLowerCase()
+  if (estado === 'cancelado' || estado === 'anulada') return 'eliminado'
+  if (estado === 'pagado') return 'cobrado'
+  if (texto(doc?.pedido) !== '') return 'cobrado'
+  return 'pendiente'
+}
+
+/** Código del pedido (`PED-000123`), tanto si sigue pendiente como si ya se cobró. */
+export function codigoDePedido(doc: PedidoEnLista | null | undefined): string {
+  return texto(doc?.pedido) || texto(doc?.serieNumero) || texto(doc?.id)
+}
+
+/** Número del comprobante emitido al cobrar (`NV01-000174`), o `''` si todavía no se cobró. */
+export function comprobanteDePedido(doc: PedidoEnLista | null | undefined): string {
+  return estadoPedido(doc) === 'cobrado' ? texto(doc?.serieNumero) : ''
+}
+
+/**
+ * **Quién ve qué pedidos**: un supervisor (`verTodo`) ve **todos**; cualquier otro usuario ve los
+ * pedidos **que él armó** (vendedor) y los que **él cobró** (cajero) — así el vendedor sigue sus
+ * pedidos y el cajero encuentra los que atendió, sin que ninguno vea los del resto.
+ */
+export function pedidosVisiblesPara<T extends PedidoEnLista>(
+  pedidos: readonly T[] | null | undefined,
+  { uid, verTodo }: { uid?: string | null; verTodo?: boolean },
+): T[] {
+  const lista = Array.isArray(pedidos) ? pedidos : []
+  if (verTodo) return [...lista]
+  const mio = texto(uid)
+  if (!mio) return []
+  return lista.filter((p) => texto(p?.vendedorId) === mio || texto(p?.cajeroId) === mio)
+}
+
+/** Cantidad de pedidos por estado, para el encabezado del listado. */
+export function resumenPedidos(pedidos: readonly PedidoEnLista[] | null | undefined): Record<EstadoPedido, number> {
+  const resumen: Record<EstadoPedido, number> = { pendiente: 0, cobrado: 0, eliminado: 0 }
+  for (const p of pedidos ?? []) resumen[estadoPedido(p)]++
+  return resumen
 }

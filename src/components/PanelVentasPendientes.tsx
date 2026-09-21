@@ -56,19 +56,23 @@ export function PanelVentasPendientes({
   React.useEffect(() => {
     // 🔑 La lista se escucha **en vivo** (`onSnapshot`): un pedido que se cobra o se elimina sale al
     // instante, acá o desde otra caja. Antes se refrescaba cada 30 s y el pedido ya procesado podía
-    // seguir a la vista, pareciendo pendiente. Si el canal en vivo no se puede abrir, se cae al
-    // refresco periódico: la lista nunca queda congelada.
-    try {
-      const soltar = suscribirVentasPendientes((lista) => {
+    // seguir a la vista, pareciendo pendiente. Si el canal se corta, se cae al refresco periódico
+    // para que la lista nunca quede congelada.
+    let timer: ReturnType<typeof setInterval> | null = null
+    const soltar = suscribirVentasPendientes(
+      (lista) => {
         setVentas(lista)
         setCargando(false)
-      })
-      return soltar
-    } catch (e) {
-      console.warn('⚠️ No se pudo abrir el canal en vivo de pedidos: se refresca cada 30 s', e)
-      cargar()
-      const timer = setInterval(() => { cargar() }, 30000)
-      return () => clearInterval(timer)
+      },
+      () => {
+        console.warn('⚠️ Se perdió el canal en vivo de pedidos: se refresca cada 30 s')
+        cargar()
+        timer = setInterval(() => { cargar() }, 30000)
+      },
+    )
+    return () => {
+      soltar()
+      if (timer) clearInterval(timer)
     }
   }, [cargar])
 
