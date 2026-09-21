@@ -1,4 +1,4 @@
-import { ClipboardList, CloudUpload, Download, FileText, Loader2, Printer, Receipt, Send, Trash2, Wallet } from 'lucide-react'
+import { ClipboardList, CloudUpload, Download, FileDown, FileText, Loader2, Printer, Receipt, Send, Share2, Trash2, Wallet } from 'lucide-react'
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import * as React from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,7 @@ import { usePermisos } from '@/context/permisos'
 import { useAuth } from '@/context/auth'
 import { usePaginacionFirestore } from '@/hooks/use-paginacion-firestore'
 import { abrirPDFComprobante } from '@/lib/pdf'
+import { abrirPDFComprobanteA4, compartirPDFComprobanteA4 } from '@/lib/comprobante-a4'
 import { exportarExcel } from '@/lib/excel'
 import { useNotifications } from '@/components/notifications'
 import { enviarDocumentoASunat, enviarNotaASunat } from '@/services/sunat'
@@ -93,6 +94,8 @@ export function Reportes() {
   const [notaAfectaStock, setNotaAfectaStock] = React.useState(true)
   const [creandoNota, setCreandoNota] = React.useState(false)
   const [enviandoId, setEnviandoId] = React.useState<string | null>(null)
+  /** Documento cuyo A4 se está generando (deshabilita los dos botones de A4 mientras trabaja). */
+  const [a4Id, setA4Id] = React.useState<string | null>(null)
   const [nvsDelDia, setNvsDelDia] = React.useState<Doc[]>([])
   const [anularDoc, setAnularDoc] = React.useState<Doc | null>(null)
   const [anularMotivo, setAnularMotivo] = React.useState('')
@@ -187,6 +190,33 @@ export function Reportes() {
   const totalTransferencia = nvsDelDia.reduce((s, d) => s + montoDe(d, 'transferencia'), 0)
 
   const verPDF = (d: Doc) => abrirPDFComprobante(d, cfg)
+
+  /**
+   * **A4 del comprobante** (hoja normal) para el cliente que no tiene ticketera: se abre en una
+   * pestaña para imprimir/guardar, o se comparte con el PDF adjunto (WhatsApp, correo).
+   * ⚠️ Es un documento **aparte**: el botón *PDF* de al lado sigue mandando el ticket de 72 mm.
+   */
+  const verPDFA4 = async (d: Doc) => {
+    setA4Id(d.id)
+    try {
+      await abrirPDFComprobanteA4(d, cfg)
+    } catch (e) {
+      console.error('❌ Error generando el A4:', e)
+    } finally {
+      setA4Id(null)
+    }
+  }
+
+  const enviarPDFA4 = async (d: Doc) => {
+    setA4Id(d.id)
+    try {
+      await compartirPDFComprobanteA4(d, cfg)
+    } catch (e) {
+      console.error('❌ Error compartiendo el A4:', e)
+    } finally {
+      setA4Id(null)
+    }
+  }
 
   async function exportarExcelNv() {
     const items = nvPag.items
@@ -422,6 +452,12 @@ export function Reportes() {
           <Badge variant={badgeSunat(d).variant} title={badgeSunat(d).tooltip || undefined}>{badgeSunat(d).label}</Badge>
           <div className="flex min-w-0 flex-wrap justify-end gap-1.5">
             <Button variant="outline" size="sm" onClick={() => verPDF(d)}><Printer className="h-3.5 w-3.5" /> PDF</Button>
+            <Button variant="outline" size="sm" onClick={() => verPDFA4(d)} disabled={a4Id === d.id} title="A4 para enviar por correo o WhatsApp">
+              {a4Id === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />} A4
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => enviarPDFA4(d)} disabled={a4Id === d.id} title="Compartir el A4 (WhatsApp, correo)">
+              <Share2 className="h-3.5 w-3.5" /> Enviar
+            </Button>
             {(d.tipoDoc === 'BOLETA' || d.tipoDoc === 'FACTURA') && d.sunat?.estado === 'aceptado' && (
               <>
                 <Button variant="outline" size="sm" className="text-amber-600" onClick={() => abrirNota(d, 'NC')}>NC</Button>
@@ -456,6 +492,12 @@ export function Reportes() {
             </span>
           )}
           <Button variant="outline" size="sm" onClick={() => verPDF(d)}><Printer className="h-3.5 w-3.5" /> PDF</Button>
+          <Button variant="outline" size="sm" onClick={() => verPDFA4(d)} disabled={a4Id === d.id} title="A4 para enviar por correo o WhatsApp">
+            {a4Id === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />} A4
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => enviarPDFA4(d)} disabled={a4Id === d.id} title="Compartir el A4 (WhatsApp, correo)">
+            <Share2 className="h-3.5 w-3.5" /> Enviar
+          </Button>
           {d.estado !== 'anulada' && mostrarAcciones && puedeCorregir(d) && (
             <Button variant="outline" size="sm" onClick={() => abrirCorregir(d)}><Wallet className="h-3.5 w-3.5" /> Pago</Button>
           )}

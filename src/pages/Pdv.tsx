@@ -1,6 +1,7 @@
 import {
   Check,
   ChevronDown,
+  FileDown,
   FileText,
   Landmark,
   Loader2,
@@ -12,6 +13,7 @@ import {
   QrCode,
   ScanBarcode,
   Search,
+  Share2,
   ShoppingCart,
   Trash2,
   UserRound,
@@ -46,6 +48,9 @@ import { CreditoPanel } from '@/components/CreditoPanel'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { registrarVenta, crearVentaPendiente, cobrarVentaPendiente, obtenerDocumento, obtenerVentasPendientes, type VentaItem } from '@/services/ventas'
 import { abrirPDFComprobante } from '@/lib/pdf'
+// 📄 A4 (hoja normal) para mandar el comprobante por correo o WhatsApp. Es un documento **aparte** del
+// ticket de 72 mm: la impresión de la ticketera no cambia.
+import { abrirPDFComprobanteA4, compartirPDFComprobanteA4 } from '@/lib/comprobante-a4'
 import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento } from '@/lib/ui-utils'
 import { AFECTACION_EXONERADO } from '@/lib/sunat-importes'
@@ -116,6 +121,8 @@ export function Pdv() {
   const [cobrando, setCobrando] = React.useState(false)
   const { toast, setToast } = useToast()
   const [ventaOk, setVentaOk] = React.useState<{ correlativo: string; total: number; vuelto: number; documento: Record<string, unknown> } | null>(null)
+  /** Estado del A4 del comprobante (`ver` = abrir, `enviar` = compartir): deshabilita los dos botones. */
+  const [a4Cargando, setA4Cargando] = React.useState<'ver' | 'enviar' | null>(null)
   const [imprimiendo, setImprimiendo] = React.useState(false)
   const [manualOpen, setManualOpen] = React.useState(false)
   const [manualItems, setManualItems] = React.useState<Record<string, { nombre: string; precio: number; qty: number; afectacion?: string }>>({})
@@ -1153,6 +1160,38 @@ export function Pdv() {
     }
   }
 
+  /**
+   * **A4**: el mismo comprobante en hoja normal, para el cliente que no tiene ticketera (lo manda por
+   * correo o WhatsApp, o lo imprime en A4). Es **otro documento**: la ticketera sigue saliendo en 72 mm
+   * con el botón *Imprimir* de arriba.
+   */
+  async function verComprobanteA4() {
+    if (!ventaOk?.documento) return
+    setA4Cargando('ver')
+    try {
+      await abrirPDFComprobanteA4(ventaOk.documento, cfg)
+    } catch (e) {
+      setToast('❌ ' + (e as Error).message)
+    } finally {
+      setA4Cargando(null)
+    }
+  }
+
+  /** Compartir el A4: abre la hoja del dispositivo con el PDF adjunto (WhatsApp, correo, etc.). */
+  async function enviarComprobanteA4() {
+    if (!ventaOk?.documento) return
+    setA4Cargando('enviar')
+    try {
+      const r = await compartirPDFComprobanteA4(ventaOk.documento, cfg)
+      if (r === 'descargado') setToast('📄 PDF A4 descargado: adjuntalo en WhatsApp o en el correo')
+      else if (r === 'compartido') setToast('✅ Comprobante enviado')
+    } catch (e) {
+      setToast('❌ ' + (e as Error).message)
+    } finally {
+      setA4Cargando(null)
+    }
+  }
+
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_440px] items-start">
       {/* ===== Catálogo ===== */}
@@ -2065,6 +2104,19 @@ export function Pdv() {
                   {imprimiendo ? 'Imprimiendo…' : 'Imprimir'}
                 </Button>
               </div>
+              {/* A4 para el cliente que no tiene ticketera: se lo manda por correo o WhatsApp. */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" onClick={verComprobanteA4} disabled={a4Cargando !== null}>
+                  {a4Cargando === 'ver' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />} A4
+                </Button>
+                <Button variant="outline" onClick={enviarComprobanteA4} disabled={a4Cargando !== null}>
+                  {a4Cargando === 'enviar' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} Enviar
+                </Button>
+              </div>
+              <p className="text-center text-[11px] leading-snug text-muted-foreground">
+                <strong>A4</strong> abre el comprobante en hoja normal (imprimir o guardar) y <strong>Enviar</strong> lo
+                comparte por WhatsApp, correo o el medio que uses.
+              </p>
             </div>
           </div>
         </div>

@@ -1,101 +1,25 @@
-import QRCode from 'qrcode'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { etiquetaPago, formaPagoLabel } from '@/lib/pagos'
-import { afectacionDe, cantidadDe, descuentoDeVenta, importeBrutoDe, itemsConDescuento } from '@/lib/sunat-importes'
+import { cantidadDe, descuentoDeVenta, importeBrutoDe, itemsConDescuento } from '@/lib/sunat-importes'
 import { esc } from '@/lib/ui-utils'
 import { desglosarTurno, lineasDeOrigen, type ConciliacionMedios, type DesgloseTurno, type ItemTurno } from '@/lib/arqueo'
 import { lineasPersonal, personalDeVenta } from '@/lib/personal'
+// 🔑 Lo que este ticket comparte con el **A4** (`lib/comprobante-a4.ts`): los totales SUNAT, los datos
+// del QR, el título del documento y la serie/montos de una NC/ND. Vive en `lib/comprobante-comun.ts`
+// (puro y testeado) para que los dos formatos **no puedan** mostrar importes distintos del mismo
+// documento. El diseño de la ticketera sigue acá abajo, intacto.
+import { TITULOS, calcularTotales, construirQRData, generarQRDataUrl, normalizarMontosNota } from '@/lib/comprobante-comun'
 
-const TITULOS: Record<string, string> = {
-  NV: 'NOTA DE VENTA',
-  BOLETA: 'BOLETA DE VENTA ELECTRÓNICA',
-  FACTURA: 'FACTURA ELECTRÓNICA',
-  NC: 'NOTA DE CRÉDITO ELECTRÓNICA',
-  ND: 'NOTA DE DÉBITO ELECTRÓNICA',
-}
-
-// Afectación: mismas tasas/tipos que constants/Tributario.js (RN).
-function obtenerInfoAfectacion(codigo: string) {
-  if (['10', '11', '12', '13', '14', '15', '16', '17'].includes(codigo)) return { tasa: 0.18, tipo: 'gravado' }
-  if (['18', '19'].includes(codigo)) return { tasa: 0.04, tipo: 'gravado' }
-  if (['20', '21', '22'].includes(codigo)) return { tasa: 0, tipo: 'exonerado' }
-  return { tasa: 0, tipo: 'inafecto' }
-}
-
-export function calcularTotales(items: any[], opts?: { regionExonerada?: boolean }) {
-  let opGravadas = 0
-  let opExoneradas = 0
-  let opInafectas = 0
-  let igvTotal = 0
-  for (const it of items || []) {
-    const cod = afectacionDe(it, opts)
-    const info = obtenerInfoAfectacion(cod)
-    const subtotal = (it.precioVenta || it.precio_unitario || 0) * (it.cantidad || it.quantity || 1)
-    if (info.tasa > 0) {
-      opGravadas += subtotal / (1 + info.tasa)
-      igvTotal += subtotal - subtotal / (1 + info.tasa)
-    } else if (info.tipo === 'exonerado') {
-      opExoneradas += subtotal
-    } else {
-      opInafectas += subtotal
-    }
-  }
-  return {
-    opGravadas: Number(opGravadas.toFixed(2)),
-    opExoneradas: Number(opExoneradas.toFixed(2)),
-    opInafectas: Number(opInafectas.toFixed(2)),
-    igv: Number(igvTotal.toFixed(2)),
-    total: Number((opGravadas + opExoneradas + opInafectas + igvTotal).toFixed(2)),
-  }
-}
-
-function serieNota(config: Record<string, any>, venta: any, tipoDoc: string) {
-  const ref = venta?.docReferencia || venta?.documentoReferencia || ''
-  const esBoleta = ref.startsWith('B')
-  if (tipoDoc === 'NC') return esBoleta ? config.serieBoletaNC || 'BC01' : config.serieFacturaNC || 'FC01'
-  if (tipoDoc === 'ND') return esBoleta ? config.serieBoletaND || 'BD01' : config.serieFacturaND || 'FD01'
-  return 'B001'
-}
-
-function construirQRData(venta: any, correlativo: any, config: Record<string, any>, tipoDoc: string, sunat: any) {
-  const cliDni = (venta.cliente_dni || '') === '-' ? '' : venta.cliente_dni || ''
-  const tipoDocCliente = cliDni.length === 11 ? '6' : '1'
-  const tipoComprobante = tipoDoc === 'FACTURA' ? '01' : tipoDoc === 'NC' ? '07' : tipoDoc === 'ND' ? '08' : '03'
-  const serie = sunat?.serie || (tipoDoc === 'FACTURA' ? 'F001' : tipoDoc === 'BOLETA' ? 'B001' : serieNota(config, venta, tipoDoc))
-  const numero = sunat?.numero || correlativo
-  const totales = calcularTotales(venta.items || [], { regionExonerada: config?.regionExonerada })
-  const fecha = new Date(venta.fecha || venta.createdAt)
-  const fechaStr = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
-  return [config.ruc || '', tipoComprobante, serie, String(numero), Math.abs(totales.igv).toFixed(2), Math.abs(totales.total).toFixed(2), fechaStr, tipoDocCliente, cliDni || '00000000', sunat?.hash || ''].join('|')
-}
-
-async function generarQRDataUrl(data: string) {
-  try {
-    return await QRCode.toDataURL(data, { margin: 1, width: 200, color: { dark: '#000', light: '#fff' } })
-  } catch (e) {
-    console.warn('⚠️ Error generando QR:', e)
-    return ''
-  }
-}
+// ⚠️ Los títulos, las tasas de afectación, `calcularTotales`, `serieNota`, `construirQRData` y
+// `generarQRDataUrl` se movieron a **`lib/comprobante-comun.ts`** (arriba está el import): son las
+// reglas que el ticket y el A4 tienen que calcular **igual**. Acá abajo queda solo el diseño del
+// ticket de 72 mm.
 
 export async function construirHTMLComprobante({ venta, correlativo, config, tipoDoc = 'NV', sunat = null, anulacion = null }: { venta: any; correlativo: any; config: Record<string, any>; tipoDoc?: string; sunat?: any; anulacion?: any }) {
-  // NC/ND: montos positivos (modelo SUNAT).
-  if (tipoDoc === 'NC' || tipoDoc === 'ND') {
-    venta = {
-      ...venta,
-      items: (venta.items || []).map((it: any) => ({
-        ...it,
-        precioVenta: Math.abs(Number(it.precioVenta || 0)),
-        precio_unitario: Math.abs(Number(it.precio_unitario || it.precioVenta || 0)),
-        subtotal: Math.abs(Number(it.subtotal || it.total || 0)),
-      })),
-    }
-    venta.total = Math.abs(Number(venta.total || 0))
-    venta.importe_total = Math.abs(Number(venta.importe_total || venta.total || 0))
-    venta.efectivo = Math.abs(Number(venta.efectivo || 0))
-    venta.montoRecibido = Math.abs(Number(venta.montoRecibido || 0))
-    venta.cambio = Math.abs(Number(venta.cambio || 0))
-  }
+  // NC/ND: montos positivos (modelo SUNAT). La regla vive en `lib/comprobante-comun.ts` porque el A4
+  // la necesita **igual**: si el ticket la aplicara y el A4 no, el mismo documento mostraría dos
+  // importes distintos según cómo se mande al cliente.
+  venta = normalizarMontosNota(venta, tipoDoc)
 
   const fecha = new Date(venta.fecha || venta.createdAt)
   const fechaStr = `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')}/${fecha.getFullYear()}`
