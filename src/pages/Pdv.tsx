@@ -1337,10 +1337,12 @@ export function Pdv() {
 
       <aside className="lg:self-start">
         <div className="rounded-2xl border bg-card shadow-card lg:min-h-[560px] flex flex-col">
-          <div className="flex items-center gap-2 border-b px-5 py-4">
-            <ShoppingCart className="h-5 w-5 text-primary" />
-            <span className="text-[15px] font-bold">Nueva Venta</span>
-            <Button variant="ghost" size="sm" onClick={abrirPausadas} className="gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground">
+          {/* Cabecera flexible: con el botón de pedidos del vendedor la fila se llenaba y el contador
+              de items salía del recuadro. Ahora envuelve y el contador queda anclado a la derecha. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-5 py-4">
+            <ShoppingCart className="h-5 w-5 shrink-0 text-primary" />
+            <span className="whitespace-nowrap text-[15px] font-bold">Nueva Venta</span>
+            <Button variant="ghost" size="sm" onClick={abrirPausadas} className="gap-1.5 whitespace-nowrap text-xs font-semibold text-muted-foreground hover:text-foreground">
               <Pause className="h-3.5 w-3.5" />
               Pausadas
             </Button>
@@ -1351,7 +1353,7 @@ export function Pdv() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setMisPedidosAbierto(true)}
-                className="gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                className="gap-1.5 whitespace-nowrap text-xs font-semibold text-muted-foreground hover:text-foreground"
               >
                 <ClipboardList className="h-3.5 w-3.5" />
                 Pedidos enviados
@@ -1374,12 +1376,12 @@ export function Pdv() {
                   toggleDisplay()
                 }
               }}
-              className={cn('gap-1.5 text-xs font-semibold', displaySession ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'text-muted-foreground hover:text-foreground')}
+              className={cn('gap-1.5 whitespace-nowrap text-xs font-semibold', displaySession ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'text-muted-foreground hover:text-foreground')}
             >
               {displaySession ? <Monitor className="h-3.5 w-3.5" /> : <QrCode className="h-3.5 w-3.5" />}
               {displaySession ? 'En vivo' : 'Pantalla'}
             </Button>
-            <span className="num text-xs font-semibold text-muted-foreground">
+            <span className="num ml-auto whitespace-nowrap text-xs font-semibold text-muted-foreground">
               {allItems.length} item{allItems.length !== 1 ? 's' : ''}
             </span>
           </div>
