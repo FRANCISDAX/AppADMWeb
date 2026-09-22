@@ -9,6 +9,8 @@ import { CierreCaja } from '@/components/CierreCaja'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { abrirTurno, buscarTurnoAbierto, cerrarTurno, editarMontoInicial, type Turno } from '@/services/turnos'
 import { obtenerEnviosPendientesAnteriores, actualizarEstadoEnvio, type EnvioPendiente, type EnvioEstado } from '@/services/envios'
+import { obtenerPagosYapeDelTurno } from '@/services/yape'
+import type { PagoYape } from '@/lib/yape'
 import { cn } from '@/lib/utils'
 import { desglosarTurno, lineasDeOrigen, type DesgloseTurno } from '@/lib/arqueo'
 
@@ -31,6 +33,8 @@ export function Turnos() {
   const [editandoMonto, setEditandoMonto] = React.useState(false)
   const [nuevoMontoInicial, setNuevoMontoInicial] = React.useState('')
   const [enviosAnteriores, setEnviosAnteriores] = React.useState<EnvioPendiente[]>([])
+  /** Avisos de Yape **confirmados en este turno** (para el cruce del cierre). `null` = leyendo. */
+  const [pagosYapeTurno, setPagosYapeTurno] = React.useState<PagoYape[] | null>(null)
   const [mostrarEnvios, setMostrarEnvios] = React.useState(false)
   const [cargandoEnvios, setCargandoEnvios] = React.useState(false)
   const [envioActualizando, setEnvioActualizando] = React.useState<string | null>(null)
@@ -59,6 +63,20 @@ export function Turnos() {
     })()
     return () => { cancel = true }
   }, [turno])
+
+  // 🔑 Avisos de Yape confirmados en este turno: es lo que el sistema puede afirmar que entró por
+  // Yape **con un aviso detrás**, para cruzarlo contra los cobros por Yape del turno al cerrar.
+  // Se leen al abrir el turno (no en vivo): el cierre es una foto del momento.
+  React.useEffect(() => {
+    if (!turno?.id) return
+    let cancel = false
+    ;(async () => {
+      setPagosYapeTurno(null) // «leyendo»: el cierre no puede decir «no llegó ningún aviso» antes de saber
+      const avisos = await obtenerPagosYapeDelTurno(turno.fechaApertura)
+      if (!cancel) setPagosYapeTurno(avisos)
+    })()
+    return () => { cancel = true }
+  }, [turno?.id, turno?.fechaApertura])
 
   async function onCambiarEstadoEnvio(envio: EnvioPendiente | { docId: string; turnoId?: string; serieNumero: string }, nuevoEstado: EnvioEstado) {
     setEnvioActualizando(envio.docId)
@@ -391,6 +409,7 @@ export function Turnos() {
                   ventasDelTurno: turno.ventasDelTurno ?? [],
                 }}
                 conteoCiego={config.conteoCiego === true}
+                pagosYape={pagosYapeTurno}
                 onConfirm={async (montoFinal, obs, conciliacion) => {
                   setProcesando(true)
                   const r = await cerrarTurno({ turnoId: turno.id!, montoFinalEfectivo: montoFinal, observaciones: obs, usuarioId: user?.uid || '', esSupervisor, conciliacion })

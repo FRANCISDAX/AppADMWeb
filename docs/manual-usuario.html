@@ -121,7 +121,7 @@
   <h1>JorFel</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.8 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.9 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -313,6 +313,31 @@
   <div class="warning">
     <div class="warning-label">⚠️ El ticket de la ticketera no cambia</div>
     <p>Los dos formatos salen del mismo documento y <strong>dicen lo mismo</strong> (mismos ítems, mismo descuento, mismo total, mismo QR). Si el cliente te pide el papel de la ticketera, es el botón <strong>"Imprimir"</strong> de siempre.</p>
+  </div>
+
+  <h3>2.14 Avisos de pago de Yape</h3>
+  <p>Cuando el cliente yapea, al negocio le llega el aviso al celular. Si el <strong>puente de Yape</strong> está instalado (ver <em>Configuración → Yape</em>), ese aviso aparece <strong>arriba del carrito, en el PDV</strong>, con el monto y el nombre de quien yapeó: el cajero ya no tiene que mirar el teléfono ni preguntar "¿ya yapeaste?".</p>
+
+  <div class="steps">
+    <div class="step"><strong>Llega el aviso</strong> al PDV con el monto, el nombre y la hora. Suena (si está activado) y el aviso que <strong>coincide con el total</strong> de la venta se marca con <em>"coincide con el total"</em>.</div>
+    <div class="step"><strong>Tocá "Usar en esta venta"</strong>: el sistema carga la forma de pago <strong>Yape</strong> con el monto del aviso y su <strong>N° de operación</strong>; después cobrás normalmente.</div>
+    <div class="step"><strong>Si no corresponde</strong>, tocá <strong>"Ignorar"</strong>: el aviso deja de aparecer y queda registrado quién lo ignoró.</div>
+    <div class="step"><strong>El aviso no se puede usar dos veces</strong>: al tocarlo queda <em>tomado</em> para esa venta, así que otra caja no lo puede aplicar. Si quitás el pago (o vaciás el carrito), el aviso se libera solo.</div>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">💡 Cómo se lee cada aviso</div>
+    <ul style="list-style:none; padding:0; margin: 8px 0;">
+      <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Contorno verde + "coincide con el total"</strong>: ese aviso es por el monto exacto de la venta que estás armando.</li>
+      <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>"vence en N min"</strong>: el aviso vale unos minutos (se configura). Pasado ese rato deja de aparecer.</li>
+      <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>"en uso por …"</strong>: otra caja lo está aplicando en este momento.</li>
+      <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>"usado en B001-000123"</strong>: ya se aplicó a esa venta (queda unos minutos a la vista, como confirmación).</li>
+    </ul>
+  </div>
+
+  <div class="warning">
+    <div class="warning-label">⚠️ Un aviso dice un monto, no una venta</div>
+    <p>Yape no informa <em>a qué venta</em> corresponde el pago: solo dice cuánto y quién. Por eso el sistema te muestra el aviso y <strong>vos</strong> decidís si es el de esta venta (con el monto que coincide como ayuda) y por eso, al cerrar el turno, el sistema <strong>cruza</strong> los avisos usados contra los cobros por Yape del turno (ver <em>6.6 Cerrar turno</em>). Si un aviso es por <strong>más</strong> plata que la venta, se aplica el total y el resto queda a favor del cliente (Yape no da vuelto).</p>
   </div>
 </div>
 
@@ -555,6 +580,7 @@
     <div class="step"><strong>Si conteo ciego está activado</strong>: escribes el conteo sin ver el esperado. El sistema calcula la diferencia después.</div>
     <div class="step"><strong>Si conteo ciego está desactivado</strong>: ves "Debería haber S/ X.XX" y escribes cuánto contaste.</div>
     <div class="step"><strong>Conciliación (opcional)</strong>: escribe cuánto recibiste por Yape, Plin, tarjeta, etc.</div>
+    <div class="step"><strong>Cruce de Yape</strong>: el sistema muestra <strong>qué avisos de Yape se confirmaron</strong> en el turno (monto, nombre y comprobante) y los compara con lo que dice el turno. Si hubo cobros por Yape y <strong>ningún aviso</strong>, te lo avisa: o el puente no está andando, o esos cobros se cargaron a mano. No bloquea el cierre: informa.</div>
     <div class="step"><strong>Escribe observaciones</strong> si hay diferencia.</div>
     <div class="step"><strong>Toca "Cerrar Turno"</strong>.</div>
   </div>
@@ -771,6 +797,23 @@
 
   <h3>12.8 Cajas</h3>
   <p>Crear cajas con series de comprobante propias. Cada caja puede tener: Serie Boleta, Serie Factura, Serie NV, Series NC/ND.</p>
+
+  <h3>12.9 Yape</h3>
+  <p>Los <strong>avisos de pago de Yape</strong> que aparecen en el PDV (ver <em>2.14</em>). Todo se configura en esta pestaña:</p>
+  <table>
+    <thead><tr><th>Opción</th><th>Qué hace</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Mostrar los avisos en el PDV</strong></td><td>Prende o apaga el panel de avisos. Apagado, la venta por Yape se sigue cobrando a mano, como siempre.</td></tr>
+      <tr><td><strong>Vigencia (minutos)</strong></td><td>Cuánto tiempo sirve un aviso para usarse (por defecto 10). Pasado ese rato deja de aparecer: un aviso viejo aplicado a una venta de ahora es más un riesgo que una ayuda. <em>No admite 0</em>: si lo dejás en 0, se usan 10.</td></tr>
+      <tr><td><strong>Sonar cuando llega un aviso</strong></td><td>Un pitido en el PDV, para no tener que mirar la pantalla.</td></tr>
+      <tr><td><strong>Número de Yape del negocio</strong></td><td>Opcional: se muestra en el panel para dictárselo al cliente que todavía no yapeó.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="warning">
+    <div class="warning-label">⚠️ Los avisos los escribe el "puente de Yape"</div>
+    <p>La app <strong>no inventa</strong> avisos: los escribe el <strong>puente</strong>, el programa que lee el aviso real de Yape (la notificación del celular del negocio) y lo deja en el sistema. Hasta que el puente esté instalado, esta pantalla se configura pero el PDV no muestra nada. Todo lo que el puente escribe queda guardado con <strong>quién usó cada aviso</strong>, en qué comprobante y qué se ignoró — y el cierre del turno los cruza contra los cobros por Yape.</p>
+  </div>
 
   <div class="ejemplo">
     <div class="ejemplo-label">📋 Ejemplo: Crear promoción "3×2 Cerveza"</div>
@@ -1120,6 +1163,7 @@
       <tr><td><strong>Impresora A4</strong> (opcional)</td><td>Cualquier láser o multifunción</td><td>Para el comprobante en hoja normal que se manda por correo o WhatsApp</td></tr>
       <tr><td><strong>Balanza</strong> (si se vende por peso)</td><td>La que escriba en el teclado</td><td>La app maneja la unidad <code>KGM</code> y cantidades con decimales</td></tr>
       <tr><td><strong>Estabilizador / UPS</strong></td><td>600 a 1000 VA</td><td>Para la computadora <strong>y el router</strong>: evita perder un ticket a mitad de impresión por un corte</td></tr>
+      <tr><td><strong>Celular del Yape</strong> (si se usan avisos)</td><td>Android que ya tenga instalado el Yape del negocio</td><td>Corre el <strong>puente de Yape</strong> (ver A.6): lee el aviso de pago y lo manda al PDV. Necesita estar encendido, con las <strong>notificaciones de Yape permitidas</strong> y con internet</td></tr>
     </tbody>
   </table>
 
@@ -1193,6 +1237,7 @@
       <tr><td>6</td><td>Probar el lector de códigos en el buscador del PDV</td><td>El código aparece escrito al escanear</td></tr>
       <tr><td>7</td><td>Prueba de corte: desconectar el cable de red</td><td>La app avisa que está sin conexión y bloquea el cobro (es lo correcto)</td></tr>
       <tr><td>8</td><td>Revisar <em>Auditoría → Errores</em> al final del primer día</td><td>Sin errores repetidos de ningún equipo</td></tr>
+      <tr><td>9</td><td><strong>Solo si se usan avisos de Yape</strong>: dejar el celular del negocio encendido, cargando, con las notificaciones de Yape permitidas y el puente corriendo</td><td>Hacer un <strong>yapeo de prueba</strong> y ver el aviso aparecer en el PDV; después cargarlo en una venta y comprobar en <em>Cerrar turno</em> que el aviso aparece en el <strong>Cruce de Yape</strong></td></tr>
     </tbody>
   </table>
 
@@ -1241,7 +1286,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.8</p>
+  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.9</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

@@ -1,4 +1,4 @@
-import { AlertTriangle, Building2, Check, CloudUpload, CreditCard, Loader2, Package, Percent, Printer, Receipt, Tag, Truck, Users, X } from 'lucide-react'
+import { AlertTriangle, Building2, Check, CloudUpload, CreditCard, Loader2, Package, Percent, Printer, Receipt, Smartphone, Tag, Truck, Users, X } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,7 @@ import { AFECTACION_POR_DEFECTO, CONFIG_POR_DEFECTO, TIPO_AFECTACION, TIPOS_REGI
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos } from '@/hooks/use-productos'
 import { validarSeriesEmpresa, type SerieOcupada } from '@/lib/series'
+import { vigenciaYapeMinutos } from '@/lib/yape'
 import { cn } from '@/lib/utils'
 import { obtenerSeriesOcupadas } from '@/services/usuarios'
 import { guardarPromocionVolumen, eliminarPromocionVolumen, listarPromocionesVolumen, type PromocionVolumen } from '@/services/promociones-volumen'
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'plantillas', label: 'Plantillas', icon: Package },
   { id: 'listas', label: 'Listas de Precio', icon: Tag },
   { id: 'promos', label: 'Promociones', icon: Percent },
+  { id: 'yape', label: 'Yape', icon: Smartphone },
   { id: 'cajas', label: 'Cajas', icon: CreditCard },
 ] as const
 
@@ -56,7 +58,7 @@ type Cfg = typeof CONFIG_POR_DEFECTO
 export function Configuracion() {
   const { tienePermiso } = usePermisos()
   const { config, setConfig, loading, saving, guardar } = useConfiguracion()
-  const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora' | 'envio' | 'plantillas' | 'listas' | 'promos' | 'cajas'>('empresa')
+  const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora' | 'envio' | 'plantillas' | 'listas' | 'promos' | 'yape' | 'cajas'>('empresa')
   const [toast, setToast] = React.useState<string | null>(null)
   const [probando, setProbando] = React.useState(false)
   const [seriesOcupadas, setSeriesOcupadas] = React.useState<SerieOcupada[]>([])
@@ -560,6 +562,113 @@ export function Configuracion() {
       )}
 
       {tab === 'promos' && <PromocionesTab />}
+
+      {/* 🔑 **Avisos de pago de Yape.** Cuando el cliente yapea, el celular del negocio recibe el
+          aviso: acá se define si el PDV lo muestra, cuánto vale ese aviso y si suena. Los avisos
+          los escribe el **puente** (el que lee el aviso real); el PDV solo los usa. */}
+      {tab === 'yape' && (
+        <div className="space-y-4">
+          <div className="rounded-xl border bg-card p-5 shadow-card">
+            <div className="mb-3 flex items-center gap-2">
+              <Smartphone className="h-5 w-5 text-primary" />
+              <h2 className="font-bold">Avisos de pago de Yape</h2>
+            </div>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Cuando el cliente yapea, el PDV muestra un aviso con el monto y el nombre, y desde ahí
+              el cajero lo aplica a la venta con <span className="font-semibold">«Usar en esta venta»</span> —
+              sin mirar el celular y sin escribir el monto a mano.
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => set('yapeAvisoActivo', !config.yapeAvisoActivo)}
+                className={cn(
+                  'flex w-full items-start justify-between gap-3 rounded-lg border p-3 text-left text-sm cursor-pointer',
+                  config.yapeAvisoActivo ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950' : 'border-input'
+                )}
+              >
+                <span>
+                  <span className={cn('font-medium', config.yapeAvisoActivo && 'text-emerald-700 dark:text-emerald-300')}>
+                    Mostrar los avisos en el PDV
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                    Si está apagado, el PDV no muestra ningún aviso (la venta por Yape se sigue cobrando
+                    a mano, como siempre).
+                  </span>
+                </span>
+                <span className={cn('shrink-0 rounded-md px-2.5 py-1 text-xs font-bold text-white', config.yapeAvisoActivo ? 'bg-emerald-600' : 'bg-slate-400')}>
+                  {config.yapeAvisoActivo ? 'SÍ' : 'NO'}
+                </span>
+              </button>
+
+              <div className="rounded-lg border p-3">
+                <Label className="font-medium">Vigencia de un aviso (minutos)</Label>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Cuánto tiempo sirve un aviso para usarlo. Pasado ese rato deja de aparecer: un aviso
+                  viejo aplicado a una venta de ahora es más un riesgo que una ayuda.
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={120}
+                    placeholder="10"
+                    value={String(config.yapeVigenciaMinutos ?? '')}
+                    onChange={(e) => set('yapeVigenciaMinutos', Math.max(0, Math.min(120, Number(e.target.value) || 0)))}
+                    className="h-8 w-24 text-xs"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {(Number(config.yapeVigenciaMinutos) || 0) <= 0 ? 'Se usa 10 min (0 no es válido acá)' : `${vigenciaYapeMinutos(config)} minutos`}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => set('yapeSonido', !config.yapeSonido)}
+                className={cn(
+                  'flex w-full items-start justify-between gap-3 rounded-lg border p-3 text-left text-sm cursor-pointer',
+                  config.yapeSonido ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950' : 'border-input'
+                )}
+              >
+                <span>
+                  <span className={cn('font-medium', config.yapeSonido && 'text-amber-700 dark:text-amber-300')}>
+                    Sonar cuando llega un aviso
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                    Un pitido en el PDV. Sirve para no tener que mirar la pantalla cuando hay gente en el mostrador.
+                  </span>
+                </span>
+                <span className={cn('shrink-0 rounded-md px-2.5 py-1 text-xs font-bold text-white', config.yapeSonido ? 'bg-amber-600' : 'bg-slate-400')}>
+                  {config.yapeSonido ? 'SÍ' : 'NO'}
+                </span>
+              </button>
+
+              <div className="rounded-lg border p-3">
+                <Label className="font-medium">Número de Yape del negocio</Label>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Se muestra en el aviso para dictárselo al cliente que todavía no yapeó (opcional).
+                </p>
+                <Input
+                  value={String(config.yapeNumero ?? '')}
+                  onChange={(e) => set('yapeNumero', e.target.value.replace(/[^\d\s+-]/g, '').slice(0, 20))}
+                  placeholder="999 888 777"
+                  inputMode="tel"
+                  className="mt-2"
+                />
+              </div>
+
+              <div className="rounded-lg border border-dashed p-3 text-[11px] text-muted-foreground">
+                <b>Cómo llegan los avisos.</b> Los escribe el <b>puente</b>: el programa que lee el aviso
+                real de Yape (la notificación del celular del negocio). Hasta que el puente esté
+                instalado, esta pantalla se configura pero el PDV no muestra nada. Los avisos quedan
+                guardados en <span className="font-mono">tblPagosYape</span> con quién usó cada uno y en
+                qué comprobante, y el cierre del turno los cruza contra los cobros por Yape.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {tab === 'cajas' && <CajasTab />}
 

@@ -16,4 +16,7 @@ export const COL = {
   CATEGORIAS: 'tblCategorias',
   ERRORES: 'tblErrores',
   CAJAS: 'tblCajas',
+  /** Avisos de pago de Yape: los **crea el puente** (notificación del celular o pasarela) y el
+   *  POS solo los lee y avanza su estado. Ver `services/yape.ts`. */
+  PAGOS_YAPE: 'tblPagosYape',
 } as const

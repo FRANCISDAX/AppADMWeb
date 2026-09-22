@@ -12,6 +12,7 @@ import { VENTANA_DUPLICADO_MINUTOS, esPedido, huellaPedido, pedidoDuplicado } fr
 import { puntoEmisionDe } from '@/lib/sunat'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
+import { anularPagoYapeDeVenta } from '@/services/yape'
 import { exigirRateLimit } from '@/lib/rate-limit'
 
 // Precio efectivo de venta: usa el precio especial (promoción) si el item lo pidió
@@ -74,7 +75,7 @@ export type VentaData = {
 
 type Config = Record<string, any>
 
-export async function registrarVenta({ items, venta, config }: { items: VentaItem[]; venta: VentaData; config: Config }): Promise<{ success: boolean; correlativo?: string; ventaId?: string; documento?: any; error?: string }> {
+export async function registrarVenta({ items, venta, config }: { items: VentaItem[]; venta: VentaData; config: Config }): Promise<{ success: boolean; correlativo?: string; ventaId?: string; documentoId?: string; documento?: any; error?: string }> {
   const accionRL = venta.tipoDoc === 'NV' ? 'crear_venta' : venta.tipoDoc === 'BOLETA' ? 'emitir_boleta' : 'emitir_factura'
   exigirRateLimit(accionRL)
 
@@ -344,7 +345,7 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
         })
       }
 
-      return { success: true, correlativo: serieNumero, ventaId, documento: docData }
+      return { success: true, correlativo: serieNumero, ventaId, documentoId: docId, documento: docData }
     })
 
     if (res.success) {
@@ -508,6 +509,11 @@ export async function anularNotaVenta({ documentoId, motivo, usuario = 'sistema'
         entidadId: documentoId,
         detalle: { motivo },
       })
+      // 🔑 Si la venta se cobró con un **aviso de Yape**, ese aviso deja de ser un cobro: la plata
+      // volvió al cliente, así que no puede contar como confirmado en el cruce del cierre.
+      // Best-effort y sin `await` bloqueante: anular la venta no puede fallar por esto (si falla,
+      // el descuadre se ve igual en el cruce, que es para lo que está).
+      void anularPagoYapeDeVenta({ ventaId: documentoId, motivo, usuario }).catch(() => {})
     }
     return res
   } catch (e) {

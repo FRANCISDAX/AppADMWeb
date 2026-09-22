@@ -47,6 +47,8 @@ import {
 import { CreditoPanel } from '@/components/CreditoPanel'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { registrarVenta, crearVentaPendiente, cobrarVentaPendiente, obtenerDocumento, obtenerVentasPendientes, type VentaItem } from '@/services/ventas'
+import { confirmarPagoYapeEnVenta, reservarPagoYape, soltarPagoYape } from '@/services/yape'
+import { aplicarYapeEnVenta, operacionDePagoYape, vigenciaYapeMinutos, type PagoYape } from '@/lib/yape'
 import { abrirPDFComprobante } from '@/lib/pdf'
 // 📄 A4 (hoja normal) para mandar el comprobante por correo o WhatsApp. Es un documento **aparte** del
 // ticket de 72 mm: la impresión de la ticketera no cambia.
@@ -67,6 +69,7 @@ import { PanelMisPedidos } from '@/components/PanelMisPedidos'
 import { promocionesAplicables, type PromocionVolumen } from '@/services/promociones-volumen'
 import QRCode from 'qrcode'
 import { PanelVentasPendientes } from '@/components/PanelVentasPendientes'
+import { PanelPagosYape } from '@/components/PanelPagosYape'
 import { InfiniteScroll } from '@/components/ui/infinite-scroll'
 
 // Un producto tiene precio especial (promo) si su valor es > 0.
@@ -161,6 +164,14 @@ export function Pdv() {
   const [pedidoActivo, setPedidoActivo] = React.useState<PedidoEnCarrito | null>(null)
   /** Modal de «Pedidos enviados» (solo vendedores). */
   const [misPedidosAbierto, setMisPedidosAbierto] = React.useState(false)
+  /**
+   * **Aviso de Yape aplicado a la venta en curso** (`filaId` = la fila de «Formas de pago» que lo
+   * representa). El aviso queda **reservado** en `tblPagosYape` mientras esté aplicado, así que
+   * ninguna otra caja puede usarlo; al cobrar se confirma, y si la fila desaparece se suelta.
+   */
+  const [avisoYape, setAvisoYape] = React.useState<{ pago: PagoYape; filaId: string } | null>(null)
+  /** Avisos ya resueltos (confirmados o soltados): evita repetir la transacción sobre el mismo. */
+  const yapeResuelto = React.useRef<string | null>(null)
 
   const handleBarcodeDetectado = React.useCallback((codigo: string) => {
     const codigoLimpio = codigo.replace(/[\s-]/g, '').trim()
@@ -431,6 +442,84 @@ export function Pdv() {
     setPagos((prev) => prev.filter((p) => p.id !== id))
   }
 
+  // ─── Avisos de Yape ────────────────────────────────────────────────────────
+  /** El aviso vale mientras su fila de pago siga en la venta: es lo que se usa en todo el cobro. */
+  const avisoActivo = avisoYape && pagos.some((p) => p.id === avisoYape.filaId) ? avisoYape : null
+
+  /**
+   * 🔑 **Una sola regla para soltar la reserva**: si la fila del aviso desaparece de la venta
+   * (se quitó a mano, se vació el carrito, se cambió a crédito, se cargó un pedido), el aviso
+   * vuelve a estar disponible para cualquiera. Antes que repetir el «soltar» en cada camino que
+   * limpia `pagos` —y olvidarse del próximo que aparezca—, se deriva del estado: **si ya no está
+   * en la venta, no está reservado**.
+   */
+  React.useEffect(() => {
+    if (!avisoYape) return
+    if (pagos.some((p) => p.id === avisoYape.filaId)) return
+    // Ya resuelto a propósito: si la venta se cobró, el aviso queda **usado** y no se libera.
+    if (yapeResuelto.current === avisoYape.pago.id) return
+    yapeResuelto.current = avisoYape.pago.id
+    void soltarPagoYape({ pagoId: avisoYape.pago.id })
+  }, [pagos, avisoYape])
+
+  /**
+   * Aplica un aviso de Yape a la venta en curso: **reserva** el aviso (transaccional: si otra caja
+   * lo tomó primero, esto falla y no se carga nada) y lo agrega como forma de pago con su N° de
+   * operación, así queda en el comprobante y en el cruce del cierre.
+   */
+  async function usarAvisoYape(pago: PagoYape) {
+    const revision = aplicarYapeEnVenta(pago, total)
+    if (!revision.ok) return setToast(`⚠️ ${revision.motivo}`)
+
+    const r = await reservarPagoYape({
+      pagoId: pago.id,
+      vigenciaMin: vigenciaYapeMinutos(cfg),
+      usuario: nombreUsuario || user?.email || 'sistema',
+      usuarioId: user?.uid || '',
+    })
+    if (!r.success) return setToast(`⚠️ ${r.error ?? 'No se pudo usar ese aviso'}`)
+
+    // Si había otro aviso aplicado, se suelta el anterior (ya no está en la venta).
+    if (avisoActivo && avisoActivo.pago.id !== pago.id) {
+      yapeResuelto.current = avisoActivo.pago.id
+      void soltarPagoYape({ pagoId: avisoActivo.pago.id })
+    }
+
+    // ⚠️ Se descarta cualquier fila de Yape **sin N° de operación** (la que el cajero había
+    // cargado a mano): si no, quedarían dos filas de Yape y el mismo cobro contado dos veces.
+    const otras = pagos.filter((p) => !(p.medio === 'yape' && !p.operacion.trim()))
+    const fila = nuevoPago('yape', String(revision.monto))
+    fila.operacion = operacionDePagoYape(pago)
+    yapeResuelto.current = null
+    setPagos([...otras, fila])
+    setAvisoYape({ pago, filaId: fila.id })
+    setPagoCredito(false)
+    setGrupoTransf(false)
+    setToast(`✅ Aviso de Yape aplicado: ${fmt(revision.monto)}`)
+    if (revision.aviso) setToast(`⚠️ ${revision.aviso}`)
+  }
+
+  /**
+   * Confirma en el aviso que la venta se cobró (queda `usado`, apuntando al comprobante).
+   * ⚠️ **La venta NO se puede deshacer** si esto falla: se avisa al cajero y el descuadre se ve
+   * en el cruce de Yape del cierre, que es para lo que está.
+   */
+  async function confirmarAvisoYape(aviso: { pago: PagoYape }, ventaId?: string, documento?: string) {
+    // Se marca como «ya resuelto» para que el efecto de soltado no lo libere al limpiar el carrito.
+    yapeResuelto.current = aviso.pago.id
+    const r = await confirmarPagoYapeEnVenta({
+      pagoId: aviso.pago.id,
+      ventaId,
+      documento,
+      vigenciaMin: vigenciaYapeMinutos(cfg),
+      usuario: nombreUsuario || user?.email || 'sistema',
+      usuarioId: user?.uid || '',
+    })
+    if (!r.success) {
+      setToast(`⚠️ La venta se guardó, pero el aviso de Yape no se pudo confirmar: ${r.error ?? ''} Revisá el cruce de Yape en el cierre.`)
+    }
+  }
+
   /** Cambiar a crédito: la venta entera va a la cuenta del cliente. */
   function elegirCredito() {
     if (!hayProductos) return
@@ -643,12 +732,15 @@ export function Pdv() {
       const correlativo = res.correlativo || pedidoActivo.codigo
       // Se relee el documento cobrado para ofrecer la impresión, igual que una venta normal.
       const documento = await obtenerDocumento(pedidoActivo.id)
+      const avisoCobrado = avisoActivo
       setVentaOk({ correlativo, total: pedidoActivo.total, vuelto: resumen.vuelto, documento: (documento ?? {}) as Record<string, unknown> })
       setPedidoActivo(null)
       setPagos([])
       // El panel de pendientes no se refresca a mano: escucha la colección en vivo (`onSnapshot`),
       // así que el pedido cobrado sale de la lista por sí solo, en este equipo y en los demás.
       setToast(`✅ Pedido ${pedidoActivo.codigo} cobrado · ${correlativo}`)
+      // El aviso de Yape se confirma recién acá: la venta existe y el comprobante ya tiene número.
+      if (avisoCobrado) await confirmarAvisoYape(avisoCobrado, pedidoActivo.id, correlativo)
     } catch (e) {
       setToast(`❌ ${(e as Error).message}`)
     } finally {
@@ -1006,6 +1098,7 @@ export function Pdv() {
         },
       })
       if (res.success) {
+        const avisoCobrado = avisoActivo
         setToast(`✅ Venta ${res.correlativo ?? ''} registrada`)
         setVentaOk({ correlativo: res.correlativo ?? '', total, vuelto: resumen.vuelto, documento: res.documento })
         setCart({})
@@ -1019,6 +1112,11 @@ export function Pdv() {
         setEnvio({ tipo: 'tienda', direccion: '', referencia: '', zonaId: '', costo: 0, notas: '' })
         setDescuentoGlobalValor('')
         setListaPrecioSel('')
+        // El aviso de Yape se confirma recién acá: la venta está guardada y ya tiene comprobante.
+        // ⚠️ Se guarda el **id del documento** (`2026-9_BOLETA-B001-000001`), no `ventaId` (que es
+        // el id interno `V-…` de la venta): es lo que permite encontrar la venta desde el aviso y
+        // lo que recibe `anularNotaVenta` cuando la venta se anula.
+        if (avisoCobrado) await confirmarAvisoYape(avisoCobrado, res.documentoId, res.correlativo)
       } else {
         setToast('❌ ' + (res.error || 'Error al registrar la venta'))
       }
@@ -1483,6 +1581,17 @@ export function Pdv() {
               {allItems.length} item{allItems.length !== 1 ? 's' : ''}
             </span>
           </div>
+
+          {/* 🔑 Los avisos de Yape van **arriba de todo** (y antes que los pedidos): un aviso vale
+              minutos, así que se tiene que ver sin buscar. El panel no ocupa lugar cuando no hay
+              nada que mostrar (se dibuja solo si tiene algo y está activo en Configuración → Yape). */}
+          {!esVendedor && (
+            <PanelPagosYape
+              total={total}
+              pagoEnVentaId={avisoActivo?.pago.id ?? null}
+              onUsar={usarAvisoYape}
+            />
+          )}
 
           {tienePermiso('verVentasPendientes') && (
             <div className="border-b px-5 py-3">

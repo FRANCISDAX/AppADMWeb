@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { analizarCierre, type ResultadoAuditoria } from '@/lib/auditoria-caja'
 import { efectivoEsperadoDe, mediosDelTurno, type ConciliacionMedios } from '@/lib/arqueo'
+import { etiquetaYape, totalYape, type PagoYape } from '@/lib/yape'
 import { cn } from '@/lib/utils'
 
 const fmt = (n: number) => 'S/ ' + n.toFixed(2)
@@ -20,6 +21,16 @@ type Props = {
   }
   /** Conteo ciego: no muestra el "Debería haber" hasta que el cajero registre el conteo. */
   conteoCiego?: boolean
+  /**
+   * Avisos de Yape **confirmados en este turno** (`tblPagosYape` con `estado: 'usado'`): es lo que
+   * el sistema puede afirmar que entró por Yape con un aviso detrás. Lo trae quien monta el cierre
+   * (`Turnos.tsx`), porque este componente no lee Firestore.
+   *
+   * ⚠️ `null` = **todavía no llegaron** (la consulta está en vuelo), `[]` = llegaron y no hay
+   * ninguno. La diferencia importa: con `[]` por defecto, al abrir el cierre el bloque mostraba un
+   * segundo el aviso rojo de «no llegó ningún aviso» **antes** de que la consulta terminara.
+   */
+  pagosYape?: PagoYape[] | null
   onConfirm: (montoFinal: number, observaciones: string, conciliacion: ConciliacionMedios) => Promise<void>
   onCancel: () => void
   procesando: boolean
@@ -28,7 +39,7 @@ type Props = {
 /** Lo que el cajero declara que le llegó por cada billetera, y la diferencia contra el sistema. */
 export type { ConciliacionMedios }
 
-export function CierreCaja({ turno, conteoCiego = false, onConfirm, onCancel, procesando }: Props) {
+export function CierreCaja({ turno, conteoCiego = false, pagosYape, onConfirm, onCancel, procesando }: Props) {
   const [montoFinal, setMontoFinal] = React.useState('')
   const [observaciones, setObservaciones] = React.useState('')
   const [paso, setPaso] = React.useState<'conteo' | 'analisis'>('conteo')
@@ -47,8 +58,21 @@ export function CierreCaja({ turno, conteoCiego = false, onConfirm, onCancel, pr
     [turno.ventasDelTurno],
   )
 
-  function armarConciliacion(): ConciliacionMedios {
-    const res: ConciliacionMedios = {}
+  /**
+   * 🔑 **Cruce de Yape**: lo que el sistema dice que entró por Yape (ventas, cobros y notas del
+   * turno) contra los **avisos confirmados** (`tblPagosYape` usados en este turno).
+   *
+   * Para qué: un aviso es la prueba de que al negocio le llegó la plata. Si hubo cobros por Yape
+   * y **ningún aviso**, o el puente no está andando o el cajero los cargó a mano — y eso hay que
+   * verlo al cerrar, no en una revisión de la semana siguiente. **No bloquea el cierre**: informa.
+   */
+  const yapeSistema = medios.find((m) => m.medio === 'yape')?.monto ?? 0
+  const avisosYape = pagosYape ?? []
+  const cargandoYape = pagosYape == null
+  const avisosYapeTotal = totalYape(avisosYape)
+  const cruceYape = Math.round((yapeSistema - avisosYapeTotal) * 100) / 100
+
+  function armarConciliacion(): ConciliacionMedios {    const res: ConciliacionMedios = {}
     for (const m of medios) {
       const declarado = parseFloat(String(declarados[m.medio] ?? '').replace(',', '.')) || 0
       res[m.medio] = { sistema: m.monto, declarado, diferencia: Math.round((declarado - m.monto) * 100) / 100 }
@@ -256,6 +280,49 @@ export function CierreCaja({ turno, conteoCiego = false, onConfirm, onCancel, pr
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* 🔑 Cruce de Yape: los avisos que el sistema confirmó, contra los cobros por Yape del turno.
+          No bloquea el cierre: si algo no cuadra, se explica acá y se decide con el cajero. */}
+      {(avisosYape.length > 0 || yapeSistema > 0) && (
+        <div className="rounded-xl border p-3">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-bold">📱 Cruce de Yape</div>
+            <span className="num text-xs font-bold">
+              {cargandoYape ? 'leyendo…' : `${avisosYape.length} aviso(s) · ${fmt(avisosYapeTotal)}`}
+            </span>
+          </div>
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Avisos que llegaron al PDV y se aplicaron a una venta (lo que el sistema puede afirmar
+            que entró por Yape), contra lo que dice el turno.
+          </p>
+
+          {avisosYape.length > 0 && (
+            <ul className="space-y-1">
+              {avisosYape.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="min-w-0 truncate">{etiquetaYape(p)}</span>
+                  <span className="shrink-0 text-muted-foreground">{p.documento || '—'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {!cargandoYape && avisosYape.length === 0 && yapeSistema > 0 && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              ⚠️ El turno tiene <b>{fmt(yapeSistema)}</b> cobrados por Yape pero <b>no llegó ningún aviso</b> al
+              PDV: revisá que el puente de Yape esté andando (y que los avisos no hayan quedado vencidos sin
+              usarse). Si los cobros por Yape se cargaron a mano, es normal y esta línea no marca ningún error.
+            </p>
+          )}
+
+          {avisosYape.length > 0 && cruceYape !== 0 && (            <p className="mt-2 rounded-lg bg-muted/40 p-2 text-[11px] text-muted-foreground">
+              Diferencia: <b className="num">{fmt(cruceYape)}</b>. Son cobros por Yape cargados a mano (sin aviso)
+              o avisos que no se llegaron a usar. Revisalos antes de cerrar: si son ventas por Yape que no tienen
+              aviso detrás, no hay prueba de que la plata haya llegado.
+            </p>
+          )}
         </div>
       )}
 

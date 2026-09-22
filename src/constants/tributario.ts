@@ -108,6 +108,21 @@ export const CONFIG_POR_DEFECTO = {
   // (doc. no domina): cambiarlo es una decisión fiscal, hablarlo con el contador.
   clienteDefaultNombre: 'CONSUMIDOR FINAL',
   clienteDefaultDni: '00000000',
+  // 🔑 **Avisos de pago de Yape** (ver `lib/yape.ts` y `services/yape.ts`): cuando el cliente
+  // yapea, el negocio recibe el aviso y el cajero tiene que enterarse **en el PDV**, sin mirar
+  // el teléfono. Los avisos los escribe el **puente** (el que lee el aviso real: la notificación
+  // del celular o, más adelante, el webhook de una pasarela); este app solo los lee y los marca
+  // como usados. `yapeAvisoActivo` **apagado** = el PDV no muestra el panel.
+  yapeAvisoActivo: true,
+  // Minutos que un aviso sirve para usarse. ⚠️ Acá 0 **no** significa "sin tope" (esa convención
+  // es de `descuentoMaximoPorcentaje` y `limiteCredito`): una vigencia de 0 dejaría todos los
+  // avisos vencidos y el panel vacío sin explicación, así que se ignora y se usa el valor por
+  // defecto de `lib/yape.ts`.
+  yapeVigenciaMinutos: 10,
+  /** Sonar en el PDV cuando llega un aviso nuevo. */
+  yapeSonido: true,
+  /** Número de Yape del negocio: se muestra en el aviso para dictárselo al cliente. */
+  yapeNumero: '',
   plantillasManuales: [] as { id: string; nombre: string; precio: number }[],
   listasPrecios: [
     { id: 'general', nombre: 'General', defecto: true },
