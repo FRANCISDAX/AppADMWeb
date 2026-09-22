@@ -11,6 +11,25 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 22 — Plan de Firebase: cuándo hace falta Blaze y qué optimizar al crecer)
+
+🔑 **Pregunta del usuario**: *"¿y si quisiera poner más cajas y más vendedores, de qué depende pasarme al plan Blaze?"* → **no depende de las cajas ni de los vendedores, depende del CONSUMO diario**, y el primero que se rompe son las **lecturas**.
+
+- 🔑 **El modelo (lo que hay que tener claro)**: cada **dispositivo** que abre la app carga el **catálogo completo** ⇒ **2.000 lecturas** por apertura en frío; además **recibe en vivo cada cambio** que hacen las otras cajas ⇒ cada producto modificado en una venta se factura **a cada dispositivo que lo escucha**; y un **reporte del mes son 4.500 lecturas**. Las **escrituras** en cambio dependen de las ventas, no de las cajas: son **8 por venta** (medido: 2.880 en 360 ventas).
+- 📊 **Puntos de quiebre del plan gratuito (Spark)**: **50.000 lecturas/día** ⇒ se llega con **~12-15 dispositivos** o con un día de varios reportes; **20.000 escrituras/día** ⇒ **~2.000-2.500 ventas/día**; 1 GiB de almacenamiento ⇒ ~15 años a 360 ventas/día; y ⚠️ **Hosting tiene su propio tope diario de 360 MB** (con 30-40 equipos re-descargando la app se roza). ⚠️ **En Spark, pasarse CORTA el servicio hasta la medianoche** (hora del Pacífico): la caja deja de cobrar. Por eso **Blaze va antes de necesitarlo**, no cuando se pasa.
+- 📌 **La configuración estándar (3 cajas · 9-15 cuentas · 360 ventas/día) ya está en el filo**: ~35.000-45.000 lecturas/día estimadas. **Blaze conviene hoy**, y con **6 cajas o más deja de ser opcional** (~80.000-100.000 lecturas/día). Las **escrituras** recién aprietan a las ~2.000 ventas/día.
+- 💰 **Costo**: en Blaze **los niveles gratuitos se siguen aplicando** (se paga solo el exceso). Estimado con las tarifas publicadas: **menos de US$1/mes** con la config actual, **~US$1-2** con 6 cajas y **~US$3-5** con 12 cajas. ⚠️ **En Blaze no hay tope automático de gasto**: las alertas de presupuesto **avisan, no cortan** ⇒ alertas a US$5 y US$20 y revisar el uso semanalmente.
+- 🔓 **Lo que además habilita Blaze** (y que son justo las deudas abiertas del sistema): **respaldos automáticos** (exportación programada), **alertas y monitoreo**, **funciones en la nube** para el futuro (resumen diario por correo, alertas de stock), **App Check con reCAPTCHA Enterprise** y **export a BigQuery**. La actualización **no interrumpe nada**: se agrega la cuenta de facturación al proyecto, sin migración ni caída de servicio.
+- **Next Move (lo que hay que hacer al crecer, no pagar más)**:
+  1. 🔴 **Resúmenes diarios precalculados** (`tblResumenDiario`): que un reporte del mes deje de ser **4.500 lecturas** ⇒ es la optimización que más lecturas ahorra.
+  2. 🟡 **Catálogo más liviano para el PDV**: hoy cada equipo lee los **2.000 SKU completos** al abrir; escuchar solo lo necesario para vender (código, nombre, precio, stock, afectación) baja las lecturas y el arranque.
+  3. 🟡 **Mapear el `ABORTED` a un mensaje claro + un reintento** (ver bloque ·20).
+  4. 🔴 **Reglas por rol + respaldo diario** (ver bloque ·18/·19): sin esto, ni Blaze alcanza para decir «100%».
+- ⚠️ **Honestidad de método**: las **escrituras están medidas** (8 por venta); las **lecturas por dispositivo son una estimación** a partir del tamaño del catálogo y de los cambios por venta — el emulador no factura lecturas. **El número real se lee en la Consola → Firestore → Uso después de una semana de operación normal**, y ahí se decide si alguna optimización ya hace falta.
+
+**Relevant Files**: `AGENTS.md` (sección *Pruebas de carga*: línea de plan/consumo), `HISTORIAL-SESIONES.md`, `src/hooks/use-productos.ts` (el listener del catálogo, origen de las lecturas), `firebase.json` (hosting y CSP).
+
+
 ### (2026-09 · 21 — La configuración estándar queda documentada en el manual y en el resumen)
 
 🔑 **Pedido del usuario**: *"que quede documentado la configuración ideal o estándar para que el app funcione estable"* — y, al proponerle un documento aparte, **corrigió el destino**: *"eso podrías ponerlo dentro del manual y el resumen"*. Se hizo así: **nada de archivo nuevo**, la sección entra en los dos documentos que ya se le entregan al cliente.
@@ -541,4 +560,115 @@ Los subagentes devolvieron, además de sus anexos, tres observaciones que obliga
 **Next Move**: a definir — (a) validar **series duplicadas** entre usuarios al guardar; (b) campo **`puntoEmision`** explícito en comprobante/hash SUNAT; (c) detectar correlativos perdidos por serie; (d) portar estas features a la app RN (que está atrasada).
 
 **Relevant Files**: `src/pages/Pdv.tsx`, `src/services/ventas.ts`, `src/services/notas.ts`, `src/services/sunat.ts`, `src/lib/sunat.ts`, `src/lib/pdf.ts`, `src/pages/Reportes.tsx`, `src/context/permisos.tsx`, `src/pages/UsuarioDetalle.tsx`, `src/services/turnos.ts`, `src/services/reportes.ts`, `src/pages/ReporteFechas.tsx`, `src/pages/Dashboard.tsx`, `src/pages/ClienteDetalle.tsx`, `src/pages/Turnos.tsx`.
+
+---
+
+## Apéndice — Referencia de funciones y colecciones
+
+⚠️ **Movido acá desde `AGENTS.md`** (21/09/2026): es **referencia descriptiva**, no reglas que gobiernen el trabajo, y el presupuesto de instrucciones (~64 KB) estaba en el límite y truncaba el archivo. Lo que **obliga** sigue en `AGENTS.md` (invariantes, convenciones, comandos). Nada de esta sección se perdió: solo cambió de lugar.
+
+### Feature Reference
+
+#### Discount System (`src/lib/descuentos.ts`)
+Central engine that calculates all discount types in order:
+1. **Product discount** — `descuentoPorcentaje` field on `Producto` type (0-100%)
+2. **Volume promotions** — rules in `tblPromocionesVolumen` (3×2, 2da al 50%, "Llevá 4 pagá 3", % por volumen, monto fijo)
+3. **Client discount** — `descuentoPorcentaje` field on `Cliente` (frequent customer discount)
+4. **Global discount** — manual input in PDV (percentage or fixed amount), sujeto al permiso `aplicarDescuento` y al tope `config.descuentoMaximoPorcentaje` (ver invariante de Descuentos)
+
+Calculation order: product → volume → client → global. Each layer applies on the subtotal from the previous layer. **Los cupones se eliminaron** (17/09/2026) — ver el invariante de Descuentos.
+
+#### Volume Promotions (`src/services/promociones-volumen.ts`)
+- Types: `3x2`, `2da_50`, `lleva_paga`, `por_volumen`, `monto_fijo`
+- `monto_fijo`: `valor` = units required, `descuento` = fixed total price
+- CRUD: `src/services/promociones-volumen.ts` — guardar, eliminar, listar
+- Config UI: `src/pages/Configuracion.tsx` → Promociones tab
+- Firestore: `tblPromocionesVolumen`
+
+#### Price Lists
+- Config: `listasPrecios[]` in company config (`tblConfiguracion/empresa`)
+- Per-product: `Producto.precios` map `{ listaId: number }`
+- Client assignment: `Cliente.listaPrecio`
+- PDV override: buttons for each price list when client is selected
+- Admin CRUD: Configuración → Listas de Precio tab
+
+#### Margin Protection
+- Per-product: `Producto.precioMinimo` (cost floor)
+- Auto-exception: products ≤7 days to expiry bypass minimum price
+- PDV alerts: "BAJO COSTO" (below min), "VENCIDO" (expired), days-to-expiry badge
+
+#### Supplier System
+- **Collection**: `tblProveedores` (renamed from `Proveedor`)
+- **Type**: `Proveedor` in `src/services/proveedores.ts` — contactos, notas, activo, credito, saldo
+- **CRUD**: `src/services/proveedores.ts` — guardar, obtener, eliminar, buscar, cargar
+- **Payments**: `src/services/pagos-proveedores.ts` — registro de pagos, historial
+- **Pages**: `src/pages/Proveedores.tsx` (5 tabs: Lista, Dashboard, Compras, Precios, Ranking), `src/pages/ProveedorDetalle.tsx`
+- **Reports**: `src/components/reportes/` — ComprasPorProveedor, EvolucionPrecios, DashboardProveedores, RankingConfiabilidad
+- **Product link**: `Producto.proveedorId` / `Producto.proveedorNombre`
+- **Delete protection**: Cannot delete supplier with registered purchases
+- **Matching**: Case-insensitive + accent-normalized
+
+#### Customer Display
+- **Service**: `src/lib/customer-display.ts` — Firestore-based cross-device sync via `tblDisplaySessions`
+- **Page**: `src/pages/PantallaCliente.tsx` — standalone page, no auth, `?session=XXX` URL param
+- **QR**: `qrcode` library for QR generation in PDV
+- **App.tsx**: intercepts `?session=XXX` before auth/loading checks
+- **Note**: QR URL must NOT be uppercased — `URLSearchParams.get('session')` is case-sensitive
+
+#### Smart Arqueo
+- **Diagnostics**: `src/lib/diagnosticos.ts` — 9 diagnostic rules for cash register
+- **UI**: `DiagnosticoPanel` in `src/pages/ArqueoCaja.tsx`
+- **Comprobantes display**: Shows payment type + operation number for cobros (`📱 Yape · Op: 12345`)
+
+#### Cobro Operación
+- When collecting credit payments via Yape/Transferencia/Plin, "N° de operación" field appears
+- Stored in `pago.operacion` and `turno.ventasDelTurno[].operacion`
+- Shows in Arqueo as `tipoLabel · Op: N` (or `SN` if missing)
+- Labels: 💵 Efectivo, 📲 Transferencia, 📱 Yape, 📱 Plin
+
+#### Client Balance
+- `calcularSaldoCredito` in `src/services/clientes.ts`
+- `corregirCobrosExcedidos()` — caps cobrado at total for documents where cobrado > total
+- "Recalcular saldo" button in `ClienteDetalle.tsx`
+- Clientes page: "Todos" button with infinite scroll (25/page, cursor-based pagination)
+
+#### Shipping/Delivery
+- **Config**: `envioHabilitado`, `zonasEnvio` in company config
+- **PDV**: shipping fields (address, reference, zone, cost, notes)
+- **Service**: `src/services/envios.ts`
+- **Turnos**: delivery tracking UI
+
+#### Plantillas Manuales (shared)
+- Stored in `tblConfiguracion/empresa` as `plantillasManuales[]`
+- Admin creates in Configuración → Plantillas tab
+- Used in PDV for "Embalaje y Otros" quick-add
+
+#### Quick Sale (PDV)
+- `Producto.esFavorito` — marks products as favorites
+- `Producto.vecesVendido` — sales counter
+- Top 12 auto-populated in PDV quick-sale section
+
+#### Camera Barcode Scanner
+- `html5-qrcode` library in `src/pages/EscanearCodigo.tsx`
+- Rear camera default, camera switch support
+
+### Firestore Collections
+
+| Key | Collection | Description |
+|-----|-----------|-------------|
+| PRODUCTOS | tblProductos | Products with pricing, stock, promotions, precioMinimo, esFavorito, vecesVendido |
+| MOVIMIENTOS | tblMovimientos | Stock movements (ventas, compras, ajustes) |
+| DOCUMENTOS | tblDocumentos | Sales documents (boletas, facturas, NV) |
+| CONTADORES | tblContadores | Correlative counters |
+| TURNOS | tblTurnos | Cash register shifts (ventasDelTurno[].operacion for cobros) |
+| CIERRES | tblCierresCaja | Shift closing records |
+| CLIENTES | tblClientes | Customers with credit, discount %, listaPrecio, montoTotal |
+| USUARIO | tblUsuarios | Users with roles and permissions |
+| PROVEEDOR | tblProveedores | Suppliers with contacts, credit |
+| EGRESOS | tblEgresos | Expenses and payments |
+| HISTORIAL_PRECIOS | tblHistorialPrecios | Price history |
+| PROMOCIONES_VOLUMEN | tblPromocionesVolumen | Volume-based promotions (incl. monto_fijo) |
+| ERRORES | tblErrores | Errores de la app web: `{ mensaje, stack, contexto, ruta, dispositivo, usuario, fecha }` (ver Auditoría → Errores) |
+| CATEGORIAS | tblCategorias | Categorías de producto administradas: `{ nombre, orden, activo, icono }` (id = slug; el producto guarda el nombre en `categoria`) |
+
 
