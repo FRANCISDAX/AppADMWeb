@@ -1,4 +1,4 @@
-import { AlertTriangle, Building2, Check, CloudUpload, CreditCard, Loader2, Package, Percent, Printer, Receipt, Smartphone, Tag, Truck, Users, X } from 'lucide-react'
+import { AlertTriangle, Building2, Check, CloudUpload, CreditCard, FlaskConical, Loader2, Package, Percent, Printer, Receipt, Smartphone, Tag, Trash2, Truck, Users, X } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ import { validarSeriesEmpresa, type SerieOcupada } from '@/lib/series'
 import { vigenciaYapeMinutos } from '@/lib/yape'
 import { cn } from '@/lib/utils'
 import { obtenerSeriesOcupadas } from '@/services/usuarios'
+import { borrarAvisosDePrueba, crearAvisoDePrueba } from '@/services/yape'
 import { guardarPromocionVolumen, eliminarPromocionVolumen, listarPromocionesVolumen, type PromocionVolumen } from '@/services/promociones-volumen'
 import { cargarCajas, guardarCaja, eliminarCaja, CAJA_POR_DEFECTO, type Caja } from '@/services/cajas'
 import { moverPedidosDeCaja } from '@/services/ventas'
@@ -56,12 +57,15 @@ function readImageAsDataUrl(file: File): Promise<string> {
 type Cfg = typeof CONFIG_POR_DEFECTO
 
 export function Configuracion() {
-  const { tienePermiso } = usePermisos()
+  const { tienePermiso, nombre: nombreUsuario } = usePermisos()
   const { config, setConfig, loading, saving, guardar } = useConfiguracion()
   const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora' | 'envio' | 'plantillas' | 'listas' | 'promos' | 'yape' | 'cajas'>('empresa')
   const [toast, setToast] = React.useState<string | null>(null)
   const [probando, setProbando] = React.useState(false)
   const [seriesOcupadas, setSeriesOcupadas] = React.useState<SerieOcupada[]>([])
+  /** Aviso de prueba de Yape (pestaña Yape): monto y estado del botón. */
+  const [montoPrueba, setMontoPrueba] = React.useState('0.10')
+  const [creandoPrueba, setCreandoPrueba] = React.useState(false)
 
   // Series globales vs. series por caja: las cajas sin serie propia numeran con
   // la global, así que un choque significa compartir contador de correlativos.
@@ -664,6 +668,77 @@ export function Configuracion() {
                 instalado, esta pantalla se configura pero el PDV no muestra nada. Los avisos quedan
                 guardados en <span className="font-mono">tblPagosYape</span> con quién usó cada uno y en
                 qué comprobante, y el cierre del turno los cruza contra los cobros por Yape.
+              </div>
+
+              {/* 🔑 Aviso de PRUEBA: la única excepción a «los avisos los crea el puente». Sirve para
+                  comprobar el circuito completo (panel → usar → cobro → cruce del cierre) sin que
+                  alguien yapee de verdad, y para la puesta en marcha del puente. Va marcado
+                  `origen: 'prueba'` y se ve como PRUEBA en el PDV y en el cierre. */}
+              <div className="rounded-lg border p-3">
+                <div className="flex items-center gap-2">
+                  <FlaskConical className="h-4 w-4 text-primary" />
+                  <Label className="font-medium">Probar con un aviso de prueba</Label>
+                </div>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Crea un aviso <b>como si hubiera yapeado alguien</b>, para ver el circuito completo en
+                  el PDV (aparece arriba del carrito, se aplica a una venta y queda en el cruce del
+                  cierre). ⚠️ <b>No entra plata</b>: el aviso va marcado como PRUEBA en el PDV y en el
+                  cierre, y se puede borrar cuando termines.
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min={0.1}
+                    step={0.1}
+                    placeholder="0.10"
+                    value={montoPrueba}
+                    onChange={(e) => setMontoPrueba(e.target.value)}
+                    className="h-8 w-24 text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={creandoPrueba || !(Number(montoPrueba) > 0)}
+                    onClick={async () => {
+                      setCreandoPrueba(true)
+                      try {
+                        const r = await crearAvisoDePrueba({
+                          monto: Number(montoPrueba),
+                          usuario: nombreUsuario || 'sistema',
+                        })
+                        setToast(r.success ? '✅ Aviso de prueba enviado al PDV' : `❌ ${r.error ?? 'Error'}`)
+                      } finally {
+                        setCreandoPrueba(false)
+                      }
+                    }}
+                  >
+                    {creandoPrueba ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
+                    Enviar aviso de prueba
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={creandoPrueba}
+                    onClick={async () => {
+                      setCreandoPrueba(true)
+                      try {
+                        const r = await borrarAvisosDePrueba()
+                        setToast(r.success ? (r.borrados > 0 ? `🧹 ${r.borrados} aviso(s) de prueba borrado(s)` : 'No había avisos de prueba') : `❌ ${r.error ?? 'Error'}`)
+                      } finally {
+                        setCreandoPrueba(false)
+                      }
+                    }}
+                    title="Borra SOLO los avisos de prueba: los avisos reales (del puente) no se tocan"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Borrar los de prueba
+                  </Button>
+                </div>
+                <p className="mt-1.5 text-[10px] text-muted-foreground">
+                  Para verlo tenés que estar en el PDV (el aviso sale en el panel «Yape», arriba del
+                  carrito) y con los avisos encendidos acá arriba.
+                </p>
               </div>
             </div>
           </div>

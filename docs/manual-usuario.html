@@ -121,7 +121,7 @@
   <h1>JorFel</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.9 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.10 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -317,6 +317,7 @@
 
   <h3>2.14 Avisos de pago de Yape</h3>
   <p>Cuando el cliente yapea, al negocio le llega el aviso al celular. Si el <strong>puente de Yape</strong> está instalado (ver <em>Configuración → Yape</em>), ese aviso aparece <strong>arriba del carrito, en el PDV</strong>, con el monto y el nombre de quien yapeó: el cajero ya no tiene que mirar el teléfono ni preguntar "¿ya yapeaste?".</p>
+  <p>⚠️ Un aviso con la etiqueta <span class="badge">PRUEBA</span> <strong>no es un pago</strong>: lo mandó el administrador desde <em>Configuración → Yape</em> para comprobar que el circuito funciona (ver <em>12.9</em>). Se puede usar igual, pero el sistema avisa y queda marcado como prueba en el cierre.</p>
 
   <div class="steps">
     <div class="step"><strong>Llega el aviso</strong> al PDV con el monto, el nombre y la hora. Suena (si está activado) y el aviso que <strong>coincide con el total</strong> de la venta se marca con <em>"coincide con el total"</em>.</div>
@@ -815,6 +816,19 @@
     <p>La app <strong>no inventa</strong> avisos: los escribe el <strong>puente</strong>, el programa que lee el aviso real de Yape (la notificación del celular del negocio) y lo deja en el sistema. Hasta que el puente esté instalado, esta pantalla se configura pero el PDV no muestra nada. Todo lo que el puente escribe queda guardado con <strong>quién usó cada aviso</strong>, en qué comprobante y qué se ignoró — y el cierre del turno los cruza contra los cobros por Yape.</p>
   </div>
 
+  <h4 style="font-size:14px; margin:16px 0 6px;">Probar que funciona (aviso de prueba)</h4>
+  <p>Para comprobar el circuito completo <strong>sin que nadie yapee de verdad</strong> —y para dejar probado el puente el día que se instala— esta pantalla tiene un bloque de <strong>aviso de prueba</strong>:</p>
+  <div class="steps">
+    <div class="step"><strong>Elegí un monto</strong> (por defecto S/ 0.10) y tocá <strong>"Enviar aviso de prueba"</strong>.</div>
+    <div class="step"><strong>Andá al PDV</strong>: el aviso aparece arriba del carrito igual que uno real, pero con la etiqueta <span class="badge">PRUEBA</span> y la aclaración de que <strong>no entró plata</strong>.</div>
+    <div class="step"><strong>Usalo en una venta</strong>: el sistema te pide confirmación (es una prueba), lo aplica y, al cobrar, el <strong>cierre del turno lo muestra marcado como PRUEBA</strong>.</div>
+    <div class="step"><strong>Cuando termines, tocá "Borrar los de prueba"</strong>: borra <strong>solo</strong> los avisos de prueba. Los avisos reales (los del puente) no se tocan nunca: son el respaldo de por qué una venta se cobró por Yape.</div>
+  </div>
+  <div class="tip">
+    <div class="tip-label">💡 Para qué sirve de verdad</div>
+    <p>Sirve para tres cosas: <strong>probar el circuito</strong> antes de tener el puente, <strong>capacitar al personal</strong> (ver cómo se ve un aviso y qué hace cada botón) y <strong>verificar la instalación del puente</strong> — si el aviso de prueba aparece y un yapeo real no, el problema está en el puente, no en la app.</p>
+  </div>
+
   <div class="ejemplo">
     <div class="ejemplo-label">📋 Ejemplo: Crear promoción "3×2 Cerveza"</div>
     <p>En <code>Configuración → Promociones → + Nueva</code>:<br>Nombre: "3×2 Cerveza Pilsen Callao". Tipo: 3×2. Lleva: 3. Paga: 2. Vigencia: 01/09 al 30/09. Producto: "Cerveza Pilsen Callao 330ml". Activa: ✓.<br><strong>En el PDV:</strong> Si el cliente lleva 3, el sistema aplica descuento de 1 unidad automáticamente.</p>
@@ -1286,7 +1300,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.9</p>
+  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.10</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

@@ -10,6 +10,7 @@ import {
   aplicarYapeEnVenta,
   avisoYapeActivo,
   coincideConTotal,
+  esAvisoDePrueba,
   etiquetaYape,
   haceCuantoYape,
   minutosRestantesYape,
@@ -151,6 +152,17 @@ export function PanelPagosYape({
   async function usar(pago: PagoYape) {
     const revision = aplicarYapeEnVenta(pago, total)
     if (!revision.ok) return toast(`⚠️ ${revision.motivo}`)
+    // ⚠️ Un aviso de PRUEBA no es un pago: si se aplica a una venta, esa venta queda registrada
+    // como pagada por Yape sin que haya entrado plata. Se puede hacer (es para probar el circuito),
+    // pero nunca por accidente.
+    if (esAvisoDePrueba(pago)) {
+      const ok = await confirm({
+        title: 'Es un aviso de PRUEBA',
+        message: `${etiquetaYape(pago)}\n\nLo creaste desde Configuración → Yape: NO entró plata. Si lo aplicás, la venta va a quedar registrada como pagada por Yape (y en el cruce del cierre va a figurar como PRUEBA).\n\n¿Seguir?`,
+        okText: 'Usar igual',
+      })
+      if (!ok) return
+    }
     setProcesandoId(pago.id)
     try {
       // El PDV reserva el aviso (transaccional) y lo carga como pago: si la reserva falla, el
@@ -214,25 +226,33 @@ export function PanelPagosYape({
         const revision = aplicarYapeEnVenta(pago, total)
         const procesando = procesandoId === pago.id
         const restantes = minutosRestantesYape(pago, { ahora, vigenciaMin })
+        const esPrueba = esAvisoDePrueba(pago)
 
         return (
           <div
             key={pago.id}
             className={cn(
               'rounded-xl border p-3 space-y-2',
-              situacion === 'usado'
-                ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950'
-                : enEstaVenta
-                  ? 'border-primary bg-primary/5'
-                  : coincide
-                    ? 'border-emerald-400 bg-card'
-                    : 'bg-card',
+              esPrueba
+                ? 'border-dashed border-slate-400 bg-muted/30'
+                : situacion === 'usado'
+                  ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950'
+                  : enEstaVenta
+                    ? 'border-primary bg-primary/5'
+                    : coincide
+                      ? 'border-emerald-400 bg-card'
+                      : 'bg-card',
             )}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-extrabold num">{fmt(pago.monto)}</span>
+                  {esPrueba && (
+                    <span className="rounded bg-slate-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      PRUEBA
+                    </span>
+                  )}
                   {coincide && situacion !== 'usado' && (
                     <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
                       coincide con el total
@@ -261,6 +281,13 @@ export function PanelPagosYape({
                 </span>
               )}
             </div>
+
+            {esPrueba && situacion !== 'usado' && (
+              <p className="text-[11px] text-muted-foreground">
+                Aviso de <b>prueba</b> (creado en Configuración → Yape): <b>no entró plata</b>. Sirve
+                para comprobar que el circuito funciona.
+              </p>
+            )}
 
             {situacion === 'usado' ? (
               <p className="text-[11px] text-emerald-700 dark:text-emerald-300">

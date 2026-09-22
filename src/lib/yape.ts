@@ -44,6 +44,17 @@ export const YAPE_USADO_RECIENTE_MINUTOS = 5
 /** Tolerancia para comparar montos (un céntimo, igual que en `lib/pagos.ts`). */
 const TOLERANCIA = 0.01
 
+/**
+ * Marca de un aviso **de prueba**.
+ *
+ * 🔑 El puente escribe los avisos reales; esto es la **única** excepción: un aviso que se crea
+ * desde **Configuración → Yape** para comprobar que el circuito funciona (panel → usar → cobro →
+ * cruce del cierre) sin depender de que alguien yapee de verdad. ⚠️ **No es un pago**: la plata no
+ * entró, así que se marca en todos lados donde aparece (panel del PDV y cruce del cierre) y se
+ * puede borrar de un toque. Está fijado por una guarda: `lib/yape-creacion.test.ts`.
+ */
+export const ORIGEN_PRUEBA = 'prueba'
+
 /** Lo que el negocio configura (todos opcionales: una config vieja no trae ninguno). */
 export type ConfigYape = {
   /** Mostrar los avisos en el PDV (por defecto **sí**: sin avisos igual no se ve nada). */
@@ -165,6 +176,11 @@ export function minutosRestantesYape(pago: PagoYape, opciones: OpcionesYape = {}
   const vigenciaMin = opciones.vigenciaMin ?? VIGENCIA_YAPE_MINUTOS_POR_DEFECTO
   const vence = Number(pago.fecha) + vigenciaMin * 60000
   return Math.max(0, Math.ceil((vence - ahora) / 60000))
+}
+
+/** ¿Es un aviso de prueba (creado desde Configuración → Yape)? No corresponde a un pago real. */
+export function esAvisoDePrueba(pago: PagoYape): boolean {
+  return String(pago.origen ?? '').trim().toLowerCase() === ORIGEN_PRUEBA
 }
 
 /** ¿El monto del aviso es exactamente el total de la venta? (se destaca en el panel). */

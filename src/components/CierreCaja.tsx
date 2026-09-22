@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { analizarCierre, type ResultadoAuditoria } from '@/lib/auditoria-caja'
 import { efectivoEsperadoDe, mediosDelTurno, type ConciliacionMedios } from '@/lib/arqueo'
-import { etiquetaYape, totalYape, type PagoYape } from '@/lib/yape'
+import { esAvisoDePrueba, etiquetaYape, totalYape, type PagoYape } from '@/lib/yape'
 import { cn } from '@/lib/utils'
 
 const fmt = (n: number) => 'S/ ' + n.toFixed(2)
@@ -302,7 +302,12 @@ export function CierreCaja({ turno, conteoCiego = false, pagosYape, onConfirm, o
             <ul className="space-y-1">
               {avisosYape.map((p) => (
                 <li key={p.id} className="flex items-center justify-between gap-2 text-[11px]">
-                  <span className="min-w-0 truncate">{etiquetaYape(p)}</span>
+                  <span className="min-w-0 truncate">
+                    {etiquetaYape(p)}
+                    {/* ⚠️ Un aviso de PRUEBA no es plata que entró: se dice acá también, porque este
+                        bloque es el que se mira para saber si lo de Yape cuadra. */}
+                    {esAvisoDePrueba(p) && <b className="ml-1 text-slate-600 dark:text-slate-300">· PRUEBA (no entró plata)</b>}
+                  </span>
                   <span className="shrink-0 text-muted-foreground">{p.documento || '—'}</span>
                 </li>
               ))}

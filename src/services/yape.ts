@@ -34,7 +34,9 @@
  */
 
 import {
+  addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   limit as fsLimit,
@@ -49,6 +51,7 @@ import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
 import { limpiarUndefined } from '@/lib/limpio'
 import {
+  ORIGEN_PRUEBA,
   RESERVA_YAPE_MINUTOS,
   VIGENCIA_YAPE_MINUTOS_POR_DEFECTO,
   situacionPagoYape,
@@ -180,6 +183,77 @@ export async function obtenerPagosYapeDelDia(): Promise<PagoYape[]> {
   const snap = await getDocs(consultaDelDia())
   const pagos = snap.docs.map((d) => aPagoYape(d.id, d.data() as Record<string, unknown>))
   return pagos.sort((a, b) => b.fecha - a.fecha)
+}
+
+// ─── El aviso de PRUEBA (la única puerta por la que la app crea un aviso) ───
+
+/**
+ * Crea un **aviso de prueba** desde `Configuración → Yape`: sirve para comprobar que el circuito
+ * completo funciona (el aviso aparece en el PDV → se aplica a una venta → el cierre lo cruza)
+ * **sin depender de que alguien yapee de verdad**, y para la puesta en marcha del puente.
+ *
+ * ⚠️ **Es la ÚNICA escritura de la app en `tblPagosYape`**, y va marcada `origen: 'prueba'`: la
+ * plata **no entró**, así que el aviso se marca como PRUEBA en el panel del PDV y en el cruce del
+ * cierre, y se borra con [`borrarAvisosDePrueba`]. Todo lo demás lo escribe el **puente**.
+ * 🛡️ Una guarda (`lib/yape-creacion.test.ts`) falla si aparece otro camino de creación.
+ */
+export async function crearAvisoDePrueba({
+  monto,
+  usuario,
+  pagadorNombre = 'PRUEBA DEL SISTEMA',
+}: {
+  monto: number
+  usuario: string
+  pagadorNombre?: string
+}): Promise<{ success: boolean; id?: string; error?: string }> {
+  const limpio = Math.round((Number(monto) || 0) * 100) / 100
+  if (!(limpio > 0)) return { success: false, error: 'Poné un monto mayor a 0 para el aviso de prueba.' }
+  try {
+    const ref = await addDoc(collection(db, COL.PAGOS_YAPE), limpiarUndefined({
+      monto: limpio,
+      nroOperacion: `PRUEBA-${Date.now()}`,
+      pagadorNombre,
+      fecha: new Date(),
+      estado: 'disponible',
+      origen: ORIGEN_PRUEBA,
+      creadoPor: usuario,
+    }))
+    logActividad({
+      accion: 'crear_aviso_prueba',
+      entidad: COL.PAGOS_YAPE,
+      entidadId: ref.id,
+      detalle: { monto: limpio },
+    })
+    return { success: true, id: ref.id }
+  } catch (e) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Borra **solo** los avisos de prueba (nunca uno real: los del puente son el respaldo de por qué
+ * una venta se cobró por Yape y no se tocan). Devuelve cuántos borró de verdad.
+ */
+export async function borrarAvisosDePrueba(): Promise<{ success: boolean; borrados: number; error?: string }> {
+  try {
+    const snap = await getDocs(query(collection(db, COL.PAGOS_YAPE), where('origen', '==', ORIGEN_PRUEBA)))
+    let borrados = 0
+    for (const d of snap.docs) {
+      await deleteDoc(d.ref)
+      borrados++
+    }
+    if (borrados > 0) {
+      logActividad({
+        accion: 'borrar_avisos_prueba',
+        entidad: COL.PAGOS_YAPE,
+        entidadId: 'prueba',
+        detalle: { borrados },
+      })
+    }
+    return { success: true, borrados }
+  } catch (e) {
+    return { success: false, borrados: 0, error: (e as Error).message }
+  }
 }
 
 // ─── Los tres pasos del ciclo de vida (siempre por transacción) ─────────────
