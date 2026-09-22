@@ -121,7 +121,7 @@
   <h1>JorFel</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.6 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.7 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -1023,7 +1023,8 @@
         <li><strong>Internet estable</strong> (cualquier plan de 10 Mbps o más alcanza: el sistema mueve muy pocos
           datos).</li>
         <li><strong>Respaldo móvil (4G) con conmutación automática</strong>: las ventas necesitan conexión; sin
-          internet <strong>no se puede cobrar</strong> (la app sí permite consultar lo que ya está en el equipo).</li>
+          internet <strong>no se puede cobrar</strong> (la app sí permite consultar lo que ya está en el equipo).
+          📎 El procedimiento completo está en el <strong>Anexo A.7</strong>.</li>
         <li><strong>Cable de red en las cajas</strong>; el Wi-Fi queda para tablets y para la pantalla del cliente.</li>
         <li><strong>Reloj del equipo en hora automática</strong>: las fechas del turno y de los reportes usan la hora
           del equipo.</li>
@@ -1167,7 +1168,7 @@
   <table>
     <thead><tr><th>Situación</th><th>Qué ocurre</th><th>Qué hacer</th></tr></thead>
     <tbody>
-      <tr><td><strong>Se corta internet</strong></td><td>La app permite <strong>consultar</strong> el catálogo y las últimas ventas del equipo, pero <strong>no se puede cobrar</strong> (las ventas se numeran contra la base)</td><td>Tener <strong>respaldo móvil (4G) con conmutación automática</strong>: es la inversión de continuidad más rentable</td></tr>
+      <tr><td><strong>Se corta internet</strong></td><td>La app permite <strong>consultar</strong> el catálogo y las últimas ventas del equipo, pero <strong>no se puede cobrar</strong> (las ventas se numeran contra la base)</td><td>Tener <strong>respaldo móvil (4G) con conmutación automática</strong>: es la inversión de continuidad más rentable. Paso a paso, en el <strong>A.7</strong></td></tr>
       <tr><td><strong>Corte de luz</strong></td><td>Se pierde el ticket que se estaba cobrando</td><td>Estabilizador / UPS en el router, el switch y la computadora de caja</td></tr>
       <tr><td><strong>Se cae una caja</strong></td><td>Sus pedidos pueden pasar a otra caja</td><td><em>Configuración → Cajas → Transferir pedidos</em>, o cobrarlos desde la otra caja (el sistema avisa que se emitirán con la serie de esa caja)</td></tr>
       <tr><td><strong>Se cae la nube del proveedor</strong></td><td>No se puede cobrar; el servicio está replicado y con garantía de disponibilidad</td><td>Esperar el restablecimiento; los datos no se pierden</td></tr>
@@ -1189,6 +1190,41 @@
     </tbody>
   </table>
 
+  <h3>A.7 Trabajar cuando se corta el internet</h3>
+
+  <p>Sin conexión la app <strong>sigue abierta y sirve para consultar</strong>, pero <strong>no se puede cobrar</strong>.
+    Esto es lo que pasa, en orden, y cómo seguir vendiendo mientras tanto.</p>
+
+  <table>
+    <thead><tr><th>Situación</th><th>Qué ocurre</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Se corta internet estando dentro de la app</strong></td><td>Aparece el aviso <em>«Sin conexión a internet»</em>. Podés <strong>consultar</strong> productos, precios, stock y clientes (la app los guarda en el equipo) y <strong>tus datos no se pierden</strong>. <strong>No se puede cobrar, ni emitir comprobantes, ni cerrar caja.</strong></td></tr>
+      <tr><td><strong>Tu sesión NO se cierra sola</strong></td><td>El bloqueo automático de 15 minutos por inactividad <strong>queda en pausa mientras no haya conexión</strong> (si no, te dejaría afuera y no podrías volver a entrar hasta que vuelva el internet). Cuando la conexión regresa, el bloqueo se reactiva normalmente.</td></tr>
+      <tr><td><strong>Si te deslogueaste o es un equipo nuevo</strong></td><td><strong>No vas a poder entrar</strong>: el inicio de sesión necesita internet. Esperá a que vuelva la conexión (o usá el celular, ver abajo).</td></tr>
+      <tr><td><strong>Cortaron la luz y volvió</strong></td><td>Si el equipo mantiene su sesión, podés consultar. Cobrar requiere internet de vuelta.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="alert">
+    <h3>La regla que evita quedarte afuera</h3>
+    <p><strong>Nunca borres el perfil ni los datos del navegador de una caja</strong> (no uses «modo incógnito» ni programas
+      de limpieza): ahí vive la sesión que permite abrir la app sin internet. Cada caja debe tener <strong>su propio
+      perfil</strong>, y nadie debe compartir la cuenta de otra persona.</p>
+  </div>
+
+  <h3>El plan B: el celular (los datos móviles son otra conexión)</h3>
+  <p>Si se cae el internet del local, el <strong>celular con datos móviles sigue teniendo internet</strong>. Hay dos formas
+    de aprovecharlo, en este orden:</p>
+  <table>
+    <thead><tr><th style="width:26%">Opción</th><th>Cómo se hace</th><th>Qué tener en cuenta</th></tr></thead>
+    <tbody>
+      <tr><td><strong>1. Compartir los datos del celular</strong> <span class="badge badge-green">Recomendado</span></td><td>Activá el <strong>punto de acceso / hotspot</strong> en el celular y conectá la <strong>computadora de la caja</strong>. Al volver la conexión, la app se sincroniza sola.</td><td>Es la opción más simple: la caja sigue trabajando <strong>igual que siempre</strong>, con su impresora de tickets, su cajón y su serie de comprobantes. Ojo con el consumo de datos.</td></tr>
+      <tr><td><strong>2. Vender desde el celular</strong></td><td>Instalá la app en el celular (Chrome → <em>Instalar aplicación</em>) y vendé desde ahí con <strong>datos móviles</strong>.</td><td>Necesita <strong>su propia cuenta</strong>: si usás la del cajero que está en la caja, <strong>esa caja se desloguea</strong>. Para imprimir el ticket hace falta una impresora <strong>de red o Bluetooth</strong> (una impresora USB conectada a la PC no sirve). La venta queda registrada con su número.</td></tr>
+    </tbody>
+  </table>
+  <p>❌ <strong>Lo que no sirve</strong>: el celular conectado al <strong>Wi-Fi del local</strong> cuando lo que se cayó es
+    justamente la salida a internet de ese router — tiene que estar en <strong>datos móviles</strong>.</p>
+
   <div class="alert blue">
     <h3>Resumen para el técnico</h3>
     <p>Computadora modesta + navegador actualizado + cable de red + impresora térmica configurada a 72 mm +
@@ -1199,7 +1235,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.6</p>
+  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.7</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>
