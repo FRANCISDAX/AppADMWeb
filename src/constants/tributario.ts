@@ -100,6 +100,14 @@ export const CONFIG_POR_DEFECTO = {
     { id: 'este', nombre: 'Este', costo: 7 },
     { id: 'fuera', nombre: 'Fuera de la ciudad', costo: 10 },
   ],
+  // 🔑 **Receptor de la BOLETA CONSOLIDADA** (la que agrupa las notas de venta del día): no hay un
+  // cliente real, así que el nombre es un rótulo que se imprime en el papel y se declara a SUNAT.
+  // Estaba fijo en 'CONSUMIDOR FINAL' (el consolidador ya leía estos campos, pero no había dónde
+  // configurarlos). Ahora se editan en **Configuración → SUNAT**; vacío vuelve al valor por defecto
+  // (`lib/consolidado.ts` es la regla única). ⚠️ El documento del receptor es `00000000`
+  // (doc. no domina): cambiarlo es una decisión fiscal, hablarlo con el contador.
+  clienteDefaultNombre: 'CONSUMIDOR FINAL',
+  clienteDefaultDni: '00000000',
   plantillasManuales: [] as { id: string; nombre: string; precio: number }[],
   listasPrecios: [
     { id: 'general', nombre: 'General', defecto: true },

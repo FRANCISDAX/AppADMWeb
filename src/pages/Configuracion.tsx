@@ -1,4 +1,4 @@
-import { AlertTriangle, Building2, Check, CloudUpload, CreditCard, Loader2, Package, Percent, Printer, Receipt, Tag, Truck, X } from 'lucide-react'
+import { AlertTriangle, Building2, Check, CloudUpload, CreditCard, Loader2, Package, Percent, Printer, Receipt, Tag, Truck, Users, X } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -345,6 +345,50 @@ export function Configuracion() {
               className="mt-1"
             />
             <p className="mt-1 text-xs text-muted-foreground">Boletas con total mayor a este tope exigen DNI (norma SUNAT).</p>
+          </div>
+
+          {/* 🔑 Receptor de la BOLETA CONSOLIDADA: una consolidada agrupa las notas de venta del
+              día, así que no tiene un cliente real — el nombre es un rótulo que se imprime en el
+              papel y se declara a SUNAT. Antes estaba fijo en 'CONSUMIDOR FINAL' (el consolidador
+              ya leía estos campos, pero no había dónde configurarlos). */}
+          <div className="rounded-xl border bg-card p-5 shadow-card">
+            <div className="mb-2 flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              <h2 className="font-bold">Boleta consolidada</h2>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Con qué <span className="font-semibold">receptor</span> sale la boleta que agrupa las notas de venta del día
+              (<em>Reportes → Consolidado de Boletas</em>). Algunos negocios prefieren «VENTAS DEL DÍA», «CLIENTES VARIOS» u otro rótulo.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <Label>Nombre del receptor</Label>
+                <Input
+                  value={String(config.clienteDefaultNombre ?? '')}
+                  onChange={(e) => set('clienteDefaultNombre', e.target.value)}
+                  placeholder="CONSUMIDOR FINAL"
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Se imprime en la boleta y se declara a SUNAT. Si lo dejás vacío, vuelve a
+                  <span className="font-semibold"> «CONSUMIDOR FINAL»</span>.
+                </p>
+              </div>
+              <div>
+                <Label>Documento del receptor</Label>
+                <Input
+                  value={String(config.clienteDefaultDni ?? '')}
+                  onChange={(e) => set('clienteDefaultDni', e.target.value.replace(/\D/g, '').slice(0, 11))}
+                  placeholder="00000000"
+                  inputMode="numeric"
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  <span className="font-semibold">00000000</span> = documento que no domina (lo habitual en una consolidada).
+                  ⚠️ Cambiar el nombre o el documento es una decisión fiscal: confirmalo con tu contador.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="rounded-xl border bg-card p-5 shadow-card">

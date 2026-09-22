@@ -11,6 +11,19 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 25 — El receptor de la boleta consolidada ahora es configurable)
+
+🔑 **Pedido del usuario**: *"cuando se consolidan las boletas de venta en nombre de clientes sale como CONSUMIDOR FINAL; abrí un campo más en la configuración de la empresa o SUNAT para poder cambiar esa palabra, porque otros admin a veces quieren que las boletas consolidadas digan VENTAS DEL DÍA"*.
+
+- 📌 **Estaba a medias**: `services/consolidado.ts` **ya leía** `config.clienteDefaultNombre` (con respaldo `'CONSUMIDOR FINAL'`) y `config.clienteDefaultDni` — pero **esos campos no existían en ningún lado**: no estaban en `CONFIG_POR_DEFECTO` ni en ninguna pantalla (un `grep` de `clienteDefaultNombre` daba **una sola aparición**, la del propio consolidador). O sea: la intención estaba en el código y **no había forma de configurarla**.
+- ✅ **Implementado**: la regla vive en **`lib/consolidado.ts`** (`nombreClienteConsolidado()` / `documentoClienteConsolidado()`, puras y testeadas) y se usa en el consolidador; los dos campos entraron en `CONFIG_POR_DEFECTO` y se editan en **Configuración → SUNAT → «Boleta consolidada»** (nombre del receptor + documento, con la ayuda de qué significa cada uno).
+- 🔑 **Decisiones**: (a) **un nombre vacío vuelve al valor por defecto** (`CONSUMIDOR FINAL`) — nunca se imprime ni se declara un receptor en blanco; (b) el **documento** del receptor también es editable (`00000000` = doc. no domina, lo habitual en una consolidada) porque los dos describen al mismo receptor; (c) como ese rótulo **se declara a SUNAT**, la pantalla avisa que cambiarlo es una decisión fiscal (confirmar con el contador); (d) **no hace falta migración**: sin el campo guardado, la función devuelve el respaldo y todo sigue igual que antes.
+- 🧪 **Tests**: 4 casos nuevos en `lib/consolidado.test.ts` — sin config → `CONSUMIDOR FINAL`; nombre configurado (con espacios recortados) → se usa tal cual; vacío/espacios/`null` → vuelve al defensor; documento configurable con `00000000` de respaldo.
+- 📄 **Manual (v2.8)**: la sección **11.7 Consolidado de Boletas** ahora explica que la consolidada no tiene cliente real, que el rótulo se cambia en *Configuración → SUNAT* y que vacío vuelve a *CONSUMIDOR FINAL*. PDF regenerado en **A4 (39 páginas)**.
+- ✅ **Verificado y desplegado**: `npm test` **299/299**, `tsc -b` ✓, lint **80/0** (baseline intacto), `npm run build` ✓ y `npx firebase deploy --only hosting`.
+
+**Relevant Files**: `src/lib/consolidado.ts` + `consolidado.test.ts` (regla pura + tests), `src/services/consolidado.ts` (usa la regla), `src/constants/tributario.ts` (`clienteDefaultNombre` / `clienteDefaultDni`), `src/pages/Configuracion.tsx` (bloque «Boleta consolidada» en la pestaña SUNAT), `docs/manual-usuario.html` + `.pdf` (11.7, v2.8), `AGENTS.md` (invariante fiscal), `HISTORIAL-SESIONES.md`.
+
 ### (2026-09 · 24 — Un guardado bloqueado que no decía por qué (Plantillas))
 
 🔑 **Reporte del usuario**: *"he notado que en plantillas no puedo agregar más producto de embalaje"* — y minutos después: *"disculpame, ya está funcionando"*. O sea: **el síntoma no se reprodujo**, pero la investigación encontró un defecto real y latente en el mismo camino.

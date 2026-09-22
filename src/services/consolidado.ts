@@ -1,7 +1,13 @@
 import { doc, setDoc, updateDoc } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { obtenerProximoCorrelativoSunat } from '@/services/notas'
-import { consolidarItems, descuentoConsolidado, totalConsolidado as totalDe } from '@/lib/consolidado'
+import {
+  consolidarItems,
+  descuentoConsolidado,
+  documentoClienteConsolidado,
+  nombreClienteConsolidado,
+  totalConsolidado as totalDe,
+} from '@/lib/consolidado'
 import { db } from '@/lib/firebase'
 
 // Port de helper/ConsolidadoHelper.js → generarConsolidado (RN): crea una BOLETA
@@ -45,8 +51,11 @@ export async function generarConsolidado(nvs: any[], config: Record<string, any>
     efectivo: total,
     montoRecibido: total,
     cambio: 0,
-    cliente_nombre: config.clienteDefaultNombre || 'CONSUMIDOR FINAL',
-    cliente_dni: config.clienteDefaultDni || '00000000',
+    // 🔑 El nombre y el documento del receptor salen de la configuración (Configuración → SUNAT):
+    // una consolidada no tiene cliente real, es un rótulo → `lib/consolidado.ts` es la regla única
+    // y vacío vuelve al valor por defecto (nunca se declara un nombre en blanco).
+    cliente_nombre: nombreClienteConsolidado(config),
+    cliente_dni: documentoClienteConsolidado(config),
     serie_numero: correlativoStr,
     sucursal: config.sucursal || '',
     mensaje: config.mensaje || '',

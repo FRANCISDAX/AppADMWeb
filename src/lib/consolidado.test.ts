@@ -1,6 +1,43 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { consolidarItems, descuentoConsolidado, totalConsolidado } from './consolidado.ts'
+import {
+  CLIENTE_CONSOLIDADO_POR_DEFECTO,
+  DNI_CONSOLIDADO_POR_DEFECTO,
+  consolidarItems,
+  descuentoConsolidado,
+  documentoClienteConsolidado,
+  nombreClienteConsolidado,
+  totalConsolidado,
+} from './consolidado.ts'
+
+// 🔑 Receptor de la boleta consolidada (21/09/2026): una consolidada agrupa las notas de venta del
+// día y **no tiene un cliente real** — el nombre es un rótulo que se imprime y se declara a SUNAT.
+// El nombre estaba fijo en 'CONSUMIDOR FINAL' (y ahora es configurable desde Configuración → SUNAT).
+
+test('sin configuración, el receptor de la consolidada sigue siendo el de siempre', () => {
+  assert.equal(nombreClienteConsolidado(undefined), CLIENTE_CONSOLIDADO_POR_DEFECTO)
+  assert.equal(nombreClienteConsolidado({}), 'CONSUMIDOR FINAL')
+  assert.equal(nombreClienteConsolidado(null), 'CONSUMIDOR FINAL')
+})
+
+test('el nombre configurado se usa tal cual (con los espacios de los bordes recortados)', () => {
+  assert.equal(nombreClienteConsolidado({ clienteDefaultNombre: 'VENTAS DEL DÍA' }), 'VENTAS DEL DÍA')
+  assert.equal(nombreClienteConsolidado({ clienteDefaultNombre: '  CLIENTES VARIOS  ' }), 'CLIENTES VARIOS')
+})
+
+test('un nombre en blanco NO se declara: vuelve al valor por defecto', () => {
+  // ⚠️ Nunca se manda un receptor sin nombre a SUNAT ni se imprime una boleta con el campo vacío.
+  assert.equal(nombreClienteConsolidado({ clienteDefaultNombre: '' }), 'CONSUMIDOR FINAL')
+  assert.equal(nombreClienteConsolidado({ clienteDefaultNombre: '   ' }), 'CONSUMIDOR FINAL')
+  assert.equal(nombreClienteConsolidado({ clienteDefaultNombre: null }), 'CONSUMIDOR FINAL')
+})
+
+test('el documento del receptor también es configurable, con 00000000 como respaldo', () => {
+  assert.equal(documentoClienteConsolidado(undefined), DNI_CONSOLIDADO_POR_DEFECTO)
+  assert.equal(documentoClienteConsolidado({ clienteDefaultDni: '00000000' }), '00000000')
+  assert.equal(documentoClienteConsolidado({ clienteDefaultDni: ' ' }), '00000000')
+  assert.equal(documentoClienteConsolidado({ clienteDefaultDni: '20123456789' }), '20123456789')
+})
 
 // 📌 Caso real (18/09/2026): la boleta consolidada de una NV con promoción salía con las líneas
 // a precio de lista, el total neto y **sin ninguna fila de descuento** que lo explicara.

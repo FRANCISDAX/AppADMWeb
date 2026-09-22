@@ -121,7 +121,7 @@
   <h1>JorFel</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.7 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.8 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -720,6 +720,12 @@
 
   <h3>11.7 Consolidado de Boletas</h3>
   <p>Agrupación de boletas para declaración mensual. Incluye IGV y totales.</p>
+  <p>Una boleta consolidada agrupa las <strong>notas de venta del día</strong>, así que <strong>no tiene un cliente
+    real</strong>: sale con documento <code>00000000</code> y un <strong>nombre de receptor</strong> que es un rótulo (por defecto,
+    <em>CONSUMIDOR FINAL</em>). Ese nombre <strong>se puede cambiar</strong> en
+    <em>Configuración → SUNAT → Boleta consolidada</em> — por ejemplo a <em>VENTAS DEL DÍA</em> o <em>CLIENTES VARIOS</em> —
+    y el cambio se ve en la boleta impresa y en lo que se declara a la SUNAT. Si el campo se deja vacío, vuelve a
+    <em>CONSUMIDOR FINAL</em>. ⚠️ Al ser un dato que se declara, conviene confirmarlo con el contador.</p>
 
   <h3>11.8 Pedidos</h3>
   <p>Es el seguimiento de las ventas que un vendedor manda a caja. Muestra <strong>todos los pedidos del mes con su estado</strong>, así se ve en qué terminó cada uno sin tener que cruzar pantallas:</p>
@@ -1235,7 +1241,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.7</p>
+  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.8</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

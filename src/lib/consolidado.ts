@@ -82,3 +82,36 @@ export function totalConsolidado(nvs: readonly NvConsolidable[] | null | undefin
 export function descuentoConsolidado(nvs: readonly NvConsolidable[] | null | undefined): number {
   return r2((nvs ?? []).reduce((s, nv) => s + descuentoDeVenta(nv?.venta as Record<string, unknown> | null | undefined), 0))
 }
+
+/** Nombre con el que sale la boleta consolidada si la empresa no configuró otro. */
+export const CLIENTE_CONSOLIDADO_POR_DEFECTO = 'CONSUMIDOR FINAL'
+
+/** Documento con el que sale la boleta consolidada si la empresa no configuró otro. */
+export const DNI_CONSOLIDADO_POR_DEFECTO = '00000000'
+
+/**
+ * 🔑 **Nombre del cliente de la BOLETA CONSOLIDADA** (decisión del usuario, 21/09/2026).
+ *
+ * Una boleta consolidada agrupa las **notas de venta del día**: no tiene un cliente real, va con
+ * documento `00000000` y el nombre es un rótulo. Estaba **fijo** en `'CONSUMIDOR FINAL'` (el
+ * consolidador ya leía `config.clienteDefaultNombre`, pero **no había dónde configurarlo**), y hay
+ * negocios que prefieren `'VENTAS DEL DÍA'` o `'CLIENTES VARIOS'` para que se entienda en el papel.
+ *
+ * ⚠️ Ese rótulo **se imprime en la boleta y se declara a SUNAT** como razón social del receptor:
+ * cambiarlo es una decisión del negocio (hablarlo con el contador), y vacío **vuelve al valor por
+ * defecto** — nunca se manda un nombre en blanco.
+ */
+export function nombreClienteConsolidado(config?: Record<string, unknown> | null): string {
+  const nombre = String(config?.clienteDefaultNombre ?? '').trim()
+  return nombre || CLIENTE_CONSOLIDADO_POR_DEFECTO
+}
+
+/**
+ * Número de documento del receptor de la boleta consolidada (`00000000` = doc. no domina).
+ * ⚠️ **Se lee del mismo lugar que el nombre** y por la misma razón: los dos describen al receptor
+ * que se declara.
+ */
+export function documentoClienteConsolidado(config?: Record<string, unknown> | null): string {
+  const dni = String(config?.clienteDefaultDni ?? '').trim()
+  return dni || DNI_CONSOLIDADO_POR_DEFECTO
+}
