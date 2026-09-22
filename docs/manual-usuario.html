@@ -55,6 +55,10 @@
     .alert h3 { font-size: 14px; font-weight: 700; color: #0f172a; margin: 0 0 5px; }
     .alert p { font-size: 13px; color: #475569; margin: 0; }
 
+    /* Diagrama de topología (Anexo A) */
+    pre { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 16px; font-size: 11px; line-height: 1.45; overflow-x: auto; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+    code { background: #f1f5f9; border-radius: 4px; padding: 1px 5px; font-size: 12px; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+
     /* Grid */
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
@@ -117,7 +121,7 @@
   <h1>JorFel</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.5 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.6 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -141,6 +145,7 @@
     <div class="toc-item"><span class="num">15</span> Funciones Especiales</div>
     <div class="toc-item"><span class="num">16</span> Emisión Electrónica y SUNAT</div>
     <div class="toc-item"><span class="num">17</span> Configuración Recomendada</div>
+    <div class="toc-item"><span class="num">A</span> Anexo: Equipo, Red y Puesta en Marcha</div>
   </div>
 </div>
 
@@ -1026,6 +1031,8 @@
       </ul>
     </div>
   </div>
+  <p>📎 <strong>El detalle técnico completo</strong> —equipo por puesto, periféricos, requisitos de red, topología y
+    puesta en marcha— está en el <strong>Anexo A</strong> de este manual.</p>
 
   <h3>17.5 Antes de dar la instalación por terminada</h3>
   <table>
@@ -1074,9 +1081,125 @@
     son estimaciones razonables, no mediciones.</p>
 </div>
 
+<!-- ============ ANEXO A. EQUIPO, RED Y PUESTA EN MARCHA ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">🧰</span> Anexo A. Equipo, Red y Puesta en Marcha</div>
+
+  <p>Esta parte es la <strong>ficha técnica</strong> para quien arma el local (el técnico o el encargado): qué equipo
+    conviene en cada puesto, qué necesita la red y cómo se deja todo listo. Se complementa con la sección 17, que dice
+    <strong>cuántas</strong> cajas, personas y productos conviene tener.</p>
+
+  <h3>A.1 Equipo por puesto</h3>
+  <table>
+    <thead><tr><th>Puesto</th><th>Mínimo</th><th>Recomendado</th><th>Nota</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Caja</strong> (donde se cobra)</td><td>2 núcleos · 4 GB RAM · disco 64 GB · 1366×768</td><td>Mini-PC N100/i3 · 8 GB RAM · SSD 128 GB · 1920×1080</td><td>El PDV necesita <strong>al menos 1024 píxeles de ancho</strong> para mostrar el catálogo y el carrito uno al lado del otro</td></tr>
+      <tr><td><strong>Vendedor</strong></td><td>Tablet de 10"</td><td>Tablet con lector Bluetooth</td><td>No guarda datos: todo vive en la nube</td></tr>
+      <tr><td><strong>Pantalla del cliente</strong></td><td>Cualquier equipo con navegador</td><td>Tablet de 10" o un segundo monitor</td><td>Se abre como página (<code>?session=…</code>): no lleva usuario ni permisos</td></tr>
+      <tr><td><strong>Administración</strong></td><td>Cualquier equipo</td><td>El mismo mini-PC de caja</td><td>Reportes y configuración</td></tr>
+    </tbody>
+  </table>
+  <p>⚠️ <strong>No hace falta una computadora potente</strong>: el trabajo pesado está en la nube. Un equipo de los
+    últimos años alcanza y sobra. Lo que <strong>sí</strong> no es opcional es que el dispositivo tenga el
+    <strong>navegador actualizado</strong> (Chrome o Edge).</p>
+
+  <h3>A.2 Periféricos</h3>
+  <table>
+    <thead><tr><th>Periférico</th><th>Recomendación</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Impresora de tickets</strong></td><td>Térmica de 58 u 80 mm, USB o de red</td><td>En el controlador: ancho del rollo, <strong>escala 100 %</strong> y márgenes en cero (el ticket se genera para <strong>72 mm</strong>)</td></tr>
+      <tr><td><strong>Cajón monedero</strong></td><td>Conectado al puerto RJ11 de la impresora</td><td>Se abre con el pulso de la impresora al emitir el ticket</td></tr>
+      <tr><td><strong>Lector de códigos</strong></td><td>USB tipo teclado (HID)</td><td>También sirve la <strong>cámara del equipo</strong> desde la opción «Escanear» de la app</td></tr>
+      <tr><td><strong>Impresora A4</strong> (opcional)</td><td>Cualquier láser o multifunción</td><td>Para el comprobante en hoja normal que se manda por correo o WhatsApp</td></tr>
+      <tr><td><strong>Balanza</strong> (si se vende por peso)</td><td>La que escriba en el teclado</td><td>La app maneja la unidad <code>KGM</code> y cantidades con decimales</td></tr>
+      <tr><td><strong>Estabilizador / UPS</strong></td><td>600 a 1000 VA</td><td>Para la computadora <strong>y el router</strong>: evita perder un ticket a mitad de impresión por un corte</td></tr>
+    </tbody>
+  </table>
+
+  <h3>A.3 Qué necesita la red</h3>
+  <table>
+    <thead><tr><th>Parámetro</th><th>Requisito</th><th>Por qué</th></tr></thead>
+    <tbody>
+      <tr><td>Velocidad</td><td><strong>10 Mbps de bajada y 2 Mbps de subida</strong> o más</td><td>La app mueve muy pocos datos: al abrir descarga menos de 2 MB y durante el día, unos pocos</td></tr>
+      <tr><td>Latencia</td><td><strong>Menos de 100 ms</strong></td><td>Cada cobro es una operación contra la nube; con mucha demora se siente en el mostrador</td></tr>
+      <tr><td>Estabilidad</td><td>Sin cortes ni pérdida de paquetes</td><td>La app mantiene una conexión en vivo con la base para ver stock y pedidos al instante</td></tr>
+      <tr><td>Servidor de nombres (DNS)</td><td>1.1.1.1 o 8.8.8.8</td><td>Es la causa más común de «la app no carga»</td></tr>
+      <tr><td>Salida a internet</td><td>Solo puerto <strong>443 (https)</strong></td><td><strong>No</strong> hay que abrir puertos entrantes ni contratar IP fija</td></tr>
+      <tr><td>Filtros y proxys</td><td><strong>Sin inspección de https</strong></td><td>Un proxy que intercepta el tráfico seguro rompe la conexión en vivo y la política de seguridad</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Direcciones que deben estar permitidas</strong> (si el local tiene filtrado de contenido, whitelist por
+    dominio):</p>
+  <ul>
+    <li><code>appadm-b359e.web.app</code> · <code>*.firebaseapp.com</code> — la aplicación</li>
+    <li><code>*.googleapis.com</code> · <code>*.firebaseio.com</code> — base de datos y acceso</li>
+    <li><code>identitytoolkit.googleapis.com</code> · <code>securetoken.googleapis.com</code> — inicio de sesión</li>
+    <li><code>*.gstatic.com</code> · <code>fonts.googleapis.com</code> · <code>fonts.gstatic.com</code> — recursos y tipografía</li>
+    <li><code>*.amazonaws.com</code> — envío de comprobantes a la SUNAT</li>
+    <li><code>api.apis.net.pe</code> — consulta de DNI y RUC</li>
+  </ul>
+
+  <h3>A.4 Cómo se conecta todo (topología recomendada)</h3>
+<pre>
+   FIBRA (50 Mbps o más) ─┬─► Router ──► 4G/5G de RESPALDO (conmutación automática)
+                          │     · Priorizar el tráfico de las cajas
+                          │     · IP fija por caja (reserva en el router)
+                          │     · Red Wi-Fi "POS" en 5 GHz, aparte del Wi-Fi de clientes
+                          └── Estabilizador / UPS (router + switch + PC de caja)
+                                  │
+                            SWITCH GIGABIT de 8 puertos   (cable de red Cat6, en estrella)
+                              ├── Caja 1: computadora + impresora + cajón + lector
+                              ├── Caja 2: computadora + impresora + cajón + lector
+                              ├── Caja 3: computadora + impresora + cajón + lector
+                              ├── Punto de acceso Wi-Fi → tablets de vendedores + pantalla cliente
+                              └── (opcional) copia de respaldo local
+</pre>
+  <ul>
+    <li><strong>Las cajas van con cable.</strong> El Wi-Fi queda para tablets y pantalla del cliente: menos cortes y
+      respuestas más rápidas donde se cobra.</li>
+    <li><strong>No hace falta servidor propio</strong> ni base de datos en el local: la aplicación y los datos están en la
+      nube (la copia de respaldo local es opcional).</li>
+    <li>Si algún día se emite con un servicio <strong>dentro del local</strong> (en lugar del servicio en la nube), ese
+      equipo pasa a ser un punto crítico: necesita estar en la misma red, con IP fija y su propio estabilizador.</li>
+  </ul>
+
+  <h3>A.5 Qué pasa si se corta algo</h3>
+  <table>
+    <thead><tr><th>Situación</th><th>Qué ocurre</th><th>Qué hacer</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Se corta internet</strong></td><td>La app permite <strong>consultar</strong> el catálogo y las últimas ventas del equipo, pero <strong>no se puede cobrar</strong> (las ventas se numeran contra la base)</td><td>Tener <strong>respaldo móvil (4G) con conmutación automática</strong>: es la inversión de continuidad más rentable</td></tr>
+      <tr><td><strong>Corte de luz</strong></td><td>Se pierde el ticket que se estaba cobrando</td><td>Estabilizador / UPS en el router, el switch y la computadora de caja</td></tr>
+      <tr><td><strong>Se cae una caja</strong></td><td>Sus pedidos pueden pasar a otra caja</td><td><em>Configuración → Cajas → Transferir pedidos</em>, o cobrarlos desde la otra caja (el sistema avisa que se emitirán con la serie de esa caja)</td></tr>
+      <tr><td><strong>Se cae la nube del proveedor</strong></td><td>No se puede cobrar; el servicio está replicado y con garantía de disponibilidad</td><td>Esperar el restablecimiento; los datos no se pierden</td></tr>
+    </tbody>
+  </table>
+
+  <h3>A.6 Cómo dejar cada equipo listo (puesta en marcha técnica)</h3>
+  <table>
+    <thead><tr><th>#</th><th>Paso</th><th>Cómo se comprueba</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Cable de red al switch e IP reservada por caja</td><td>Sin Wi-Fi en las cajas</td></tr>
+      <tr><td>2</td><td>Reloj del equipo en <strong>hora automática</strong> y suspensión desactivada</td><td>Hora correcta; el equipo no se duerme</td></tr>
+      <tr><td>3</td><td>Navegador actualizado y <strong>un perfil por equipo</strong></td><td>Nadie comparte el perfil del navegador</td></tr>
+      <tr><td>4</td><td>Instalar la app como aplicación y fijarla en la barra de tareas</td><td>Se abre sin la barra del navegador</td></tr>
+      <tr><td>5</td><td>Impresora de tickets como <strong>predeterminada</strong>, sin «ajustar a página»</td><td>El ticket sale completo y sin escalar</td></tr>
+      <tr><td>6</td><td>Probar el lector de códigos en el buscador del PDV</td><td>El código aparece escrito al escanear</td></tr>
+      <tr><td>7</td><td>Prueba de corte: desconectar el cable de red</td><td>La app avisa que está sin conexión y bloquea el cobro (es lo correcto)</td></tr>
+      <tr><td>8</td><td>Revisar <em>Auditoría → Errores</em> al final del primer día</td><td>Sin errores repetidos de ningún equipo</td></tr>
+    </tbody>
+  </table>
+
+  <div class="alert blue">
+    <h3>Resumen para el técnico</h3>
+    <p>Computadora modesta + navegador actualizado + cable de red + impresora térmica configurada a 72 mm +
+      estabilizador + internet con respaldo 4G. <strong>Sin servidor propio, sin base de datos local, sin puertos
+      abiertos y sin IP fija.</strong></p>
+  </div>
+</div>
+
 <!-- Footer -->
 <div class="footer">
-  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.5</p>
+  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.6</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

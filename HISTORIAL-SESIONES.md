@@ -22,7 +22,9 @@ Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `
 - ✅ **PDF regenerados y verificados** con Chrome headless: **manual 34 páginas** (antes 30) y **resumen 7**, los dos con `MediaBox [0 0 594.96 841.92]` = **A4 210×297 mm**. Se revisó el render de las dos secciones nuevas con una captura headless antes de cerrar.
 - ⚠️ **Efecto colateral controlado**: al agregar el bloque al `AGENTS.md` el archivo llegó a **66.201 bytes** y el entorno lo **truncó** (perdió el final: la tabla de colecciones). Se **condensó el bloque de 3 cajas** —el detalle completo vive en el bloque ·20 de este historial— y quedó en **64,7 KB**, dentro del presupuesto de 65.536. **Es la regla del repo: lo que gobierna va en `AGENTS.md`, el detalle acá.**
 
-**Relevant Files**: `docs/manual-usuario.html` + `manual-usuario.pdf` (sección 17, v2.5), `docs/resumen-app.html` + `resumen-app.pdf` (sección nueva, v1.1), `AGENTS.md` (sección *Documentos del producto* + bloque de pruebas condensado), `HISTORIAL-SESIONES.md`.
+- 🔧 **Ampliación (misma sesión, a pedido del usuario)**: la *ficha técnica* que había quedado **solo en el chat** (equipo, red y topología) también entró en los documentos: **Anexo A del manual (v2.6)** —equipo por puesto, periféricos, requisitos de red con la lista de direcciones a permitir, **diagrama de topología**, qué pasa si se corta algo y puesta en marcha técnica— y un bloque de **«Requisitos técnicos del local»** en el resumen (v1.2). El manual quedó en **38 páginas** y el resumen en **8**, los dos en A4.
+
+**Relevant Files**: `docs/manual-usuario.html` + `manual-usuario.pdf` (secciones 17 y Anexo A, v2.6), `docs/resumen-app.html` + `resumen-app.pdf` (sección nueva + requisitos técnicos, v1.2), `AGENTS.md` (sección *Documentos del producto* + bloque de pruebas condensado), `HISTORIAL-SESIONES.md`.
 
 ### (2026-09 · 20 — Prueba de 3 cajas / 3 series: NV01-NV02-NV03, 9 vendedores)
 
