@@ -519,6 +519,30 @@ export function Configuracion() {
 
       {tab === 'cajas' && <CajasTab />}
 
+      {/* 🔑 **Un guardado bloqueado tiene que decir POR QUÉ, en cualquier pestaña.** El botón de
+          abajo se deshabilita por cualquier conflicto BLOQUEANTE de series, y esos mensajes solo
+          se dibujan dentro de la pestaña SUNAT: desde Plantillas (o Listas, o Empresa) el admin
+          agregaba items, apretaba Guardar, **no pasaba nada y no había ningún motivo a la vista** —
+          al recargar, los items volvían a como estaban. Acá se muestra el motivo al lado del botón,
+          salvo en SUNAT, donde ya está arriba junto a los campos de series (no se repite). */}
+      {erroresSeries.length > 0 && tab !== 'sunat' && (
+        <div className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+          <p className="flex items-center gap-1.5 text-xs font-bold text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            No se puede guardar: {erroresSeries.length === 1 ? 'hay un conflicto de series' : `hay ${erroresSeries.length} conflictos de series`}
+          </p>
+          <ul className="mt-1.5 space-y-1">
+            {erroresSeries.map((c, i) => (
+              <li key={`bloqueo-${i}`} className="text-[11px] text-destructive">· {c.mensaje}</li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            Ajustá las series en la pestaña <span className="font-semibold">SUNAT</span> y las series de cada persona en{' '}
+            <span className="font-semibold">Usuarios</span>: dos lugares con la misma serie comparten el contador de correlativos.
+          </p>
+        </div>
+      )}
+
       <Button
         className="w-full"
         size="lg"

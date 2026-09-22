@@ -11,6 +11,19 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 24 — Un guardado bloqueado que no decía por qué (Plantillas))
+
+🔑 **Reporte del usuario**: *"he notado que en plantillas no puedo agregar más producto de embalaje"* — y minutos después: *"disculpame, ya está funcionando"*. O sea: **el síntoma no se reprodujo**, pero la investigación encontró un defecto real y latente en el mismo camino.
+
+- 🔍 **Lo que se revisó** (sin tocar nada): la pestaña Plantillas (`Configuracion.tsx`) **no tiene tope**: `agregar()` hace `[...plantillas, nueva]` y el modal del PDV mapea todas (con `max-h-[60vh] overflow-y-auto` ✓). El alta exige **nombre + precio > 0** (botón deshabilitado si no) y el precio se escribe **con punto** (`type="number"`). El PDV lee las plantillas **al montar** (`useConfiguracion` hace `getDoc` una vez), así que con la caja ya abierta una plantilla nueva se ve tras recargar.
+- 🔴 **El defecto real que apareció**: el botón **«Guardar Configuración»** se deshabilita cuando hay **conflictos bloqueantes de series** (`erroresSeries`), y esos mensajes se dibujaban **solo dentro de la pestaña SUNAT**. Desde **Plantillas** (o Listas, o Empresa) el admin agregaba items, apretaba Guardar, **no pasaba nada y no había ningún motivo a la vista**; al recargar, todo volvía a como estaba ⇒ se ve exactamente como *«no puedo agregar más productos»*. Es un fallo **silencioso** y de cualquier pestaña, no solo de Plantillas.
+- ✅ **Arreglo**: el motivo se muestra ahora **al lado del botón, en todas las pestañas** (salvo SUNAT, donde ya está arriba junto a los campos de series, para no repetirlo): encabezado *«No se puede guardar: hay N conflicto(s) de series»*, la **lista de mensajes concretos** (qué serie choca y con cuál) y la pista de dónde arreglarlo (SUNAT + Usuarios).
+- 🛡️ **Guarda automática** (`src/lib/configuracion-guardado.test.ts`, sumada al script de `npm test`): falla si alguien saca el aviso de las otras pestañas, si el botón deja de bloquearse con los conflictos, o si el aviso queda sin listar los mensajes.
+- ⚠️ **Método**: se preparó el arnés para reproducirlo en el navegador (emulador + script de diagnóstico **solo lectura** contra producción con la service account, que **nunca llegó a ejecutarse**) y se **desarmó todo al confirmarse que funcionaba**: emulador apagado, log borrado, carpeta temporal eliminada y **cero cambios en el repo** por esa vía. El único cambio que quedó es el arreglo de arriba.
+- ✅ **Verificado y desplegado**: `npm test` **295/295**, `tsc -b` ✓, lint **80/0** (baseline intacto), `npm run build` ✓ y `npx firebase deploy --only hosting`.
+
+**Relevant Files**: `src/pages/Configuracion.tsx` (aviso del bloqueo junto al botón), `src/lib/configuracion-guardado.test.ts` (nuevo), `package.json` (script de tests), `AGENTS.md` (invariante nuevo en *Código*), `HISTORIAL-SESIONES.md`.
+
 ### (2026-09 · 23 — Sin internet: la sesión ya no se cierra por inactividad (y el celular como plan B))
 
 🔑 **Pregunta del usuario**: *"¿qué pasa si se cae el internet? Si querés ingresar a la app no se va a poder porque tiene que loguearse; y si ya estás dentro no hay problema para consultas… pero recuerda que si no se hace nada en pantalla en 15 min se vuelve a pedir login"*. Tenía razón: lo verifiqué en el código y era **un auto-gol**.
