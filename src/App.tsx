@@ -141,12 +141,25 @@ function Shell() {
 
   // Cierre de sesión por inactividad: si no hay actividad (mouse/teclado/touch)
   // durante N minutos, se hace logout y vuelve a pedir login.
+  //
+  // 🔑 **SIN CONEXIÓN NO SE CIERRA LA SESIÓN** (decisión del usuario, 21/09/2026): el login de
+  // Firebase **necesita internet**, así que un logout durante un corte dejaba al local afuera —
+  // sin poder volver a entrar — hasta que volviera la red. Con el corte, el bloqueo de 15 minutos
+  // convertía una caída de 20 minutos en "cerrado hasta que vuelva el internet".
+  // Offline: el temporizador se cancela (la sesión queda en pausa, la app sigue sirviendo para
+  // consultar del caché local) y al volver la conexión se rearma con 15 minutos nuevos.
+  // ⚠️ Consecuencia aceptada: durante un corte, la pantalla **no** se bloquea sola. Cobrar y emitir
+  // ya requieren conexión, así que lo que queda expuesto es ver el catálogo y los precios.
   React.useEffect(() => {
     if (!user) return
     const IDLE_MIN = 15
     let timer: ReturnType<typeof setTimeout> | null = null
     const reset = () => {
       if (timer) clearTimeout(timer)
+      if (!online) {
+        timer = null
+        return
+      }
       timer = setTimeout(() => logout(), IDLE_MIN * 60 * 1000)
     }
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click', 'wheel'] as const
@@ -156,7 +169,9 @@ function Shell() {
       if (timer) clearTimeout(timer)
       events.forEach((e) => window.removeEventListener(e, reset))
     }
-  }, [user, logout])
+    // `online` en las dependencias: al cortarse la conexión se cancela el cierre pendiente y al
+    // volver se rearma. (Si el estado no estuviera acá, el temporizador seguiría corriendo.)
+  }, [user, logout, online])
 
   // Customer display: if ?session=XXX is present, render the display page directly (no auth).
   const customerSession = React.useMemo(() => new URLSearchParams(window.location.search).get('session'), [])
@@ -284,7 +299,8 @@ function Shell() {
                 <WifiOff className="h-4 w-4 shrink-0" />
                 <div>
                   <span className="font-semibold">Sin conexión a internet.</span>{' '}
-                  Podés consultar productos y clientes. Las ventas requieren conexión.
+                  Podés consultar productos y clientes. Las ventas requieren conexión.{' '}
+                  <span className="font-semibold">Tu sesión no se cerrará por inactividad mientras estés sin conexión.</span>
                 </div>
               </div>
             )}
