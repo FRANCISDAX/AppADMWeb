@@ -48,6 +48,13 @@
     .card ul li { padding: 3px 0; font-size: 13px; color: #475569; display: flex; align-items: flex-start; gap: 8px; }
     .card ul li::before { content: "✓"; color: #22c55e; font-weight: 700; flex-shrink: 0; }
 
+    /* Avisos destacados (usados en la sección 17: Configuración Recomendada) */
+    .alert { border-left: 4px solid #f59e0b; background: #fffbeb; border-radius: 8px; padding: 14px 16px; margin: 14px 0; }
+    .alert.blue { border-left-color: #2563eb; background: #eff6ff; }
+    .alert.red { border-left-color: #dc2626; background: #fef2f2; }
+    .alert h3 { font-size: 14px; font-weight: 700; color: #0f172a; margin: 0 0 5px; }
+    .alert p { font-size: 13px; color: #475569; margin: 0; }
+
     /* Grid */
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
@@ -110,7 +117,7 @@
   <h1>JorFel</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.4 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.5 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -133,6 +140,7 @@
     <div class="toc-item"><span class="num">14</span> Auditoría</div>
     <div class="toc-item"><span class="num">15</span> Funciones Especiales</div>
     <div class="toc-item"><span class="num">16</span> Emisión Electrónica y SUNAT</div>
+    <div class="toc-item"><span class="num">17</span> Configuración Recomendada</div>
   </div>
 </div>
 
@@ -935,9 +943,140 @@
   </ul>
 </div>
 
+<!-- ============ 17. CONFIGURACIÓN RECOMENDADA ============ -->
+<div class="section page-break">
+  <div class="section-title"><span class="icon">🎯</span> 17. Configuración Recomendada</div>
+
+  <p>Esta sección responde a la pregunta <strong>«¿cuántas cajas, cuántas personas y cuántos productos puede manejar el
+    sistema con estabilidad?»</strong>. Las cantidades de la tabla están <strong>validadas con pruebas de carga</strong>
+    (detalle al final de la sección): son la configuración que se recomienda instalar.</p>
+
+  <h3>17.1 Cuántas cajas, cuántas personas y cuántas cuentas</h3>
+  <table>
+    <thead><tr><th>Parámetro</th><th>Recomendado</th><th>Por qué</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Cajas</strong> (puntos de emisión)</td><td><strong>3</strong> · hasta 4</td><td>Cada caja con <strong>su propia serie</strong> (NV01, NV02, NV03…): con series distintas, cada caja numera por su cuenta y no compite con las otras.</td></tr>
+      <tr><td><strong>Cajeros</strong></td><td><strong>1 por caja</strong></td><td>El cajero es el dueño del <strong>turno</strong> y del <strong>cajón</strong>: así el arqueo coincide con la plata física.</td></tr>
+      <tr><td><strong>Vendedores</strong></td><td><strong>3 por caja</strong> (9 en total)</td><td>Escenario probado: 9 vendedores enviando pedidos a la vez, sin un solo fallo.</td></tr>
+      <tr><td><strong>Cuentas totales</strong></td><td><strong>12 a 15</strong></td><td>3 cajeros + 9 vendedores + 1 a 3 administradores/supervisores. <strong>Una cuenta por persona y por equipo</strong>.</td></tr>
+      <tr><td><strong>Turnos</strong></td><td><strong>2 por caja al día</strong></td><td>Mañana y tarde: el registro del turno se mantiene liviano y el cierre, legible.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="alert">
+    <h3>⚠️ La regla que más problemas evita: una cuenta por persona</h3>
+    <p>Si dos personas usan la <strong>misma cuenta</strong>, el sistema muestra el aviso <em>«Sesión en otro
+      dispositivo»</em> y <strong>bloquea el cobro</strong> hasta que alguien confirme. No es un error: es el control de
+      sesión única. La solución es darle a cada empleado su propia cuenta desde <em>Usuarios</em>, y que cada equipo
+      (cada caja) use su propio perfil del navegador.</p>
+  </div>
+
+  <h3>17.2 Cuántos productos</h3>
+  <ul>
+    <li><strong>Hasta 2.000 productos activos</strong> es la configuración cómoda: la app abre con el catálogo completo
+      en unos segundos y el buscador responde al instante.</li>
+    <li>Entre <strong>2.000 y 4.000</strong> sigue funcionando, pero la primera carga del día se nota más lenta
+      (unos 10 a 12 segundos).</li>
+    <li>Se recomienda <strong>mantener activos solo los productos que rotan</strong> y archivar el resto: el historial
+      de ventas y el kardex no se pierden, y la app queda más ágil.</li>
+  </ul>
+
+  <h3>17.3 Hasta dónde se puede crecer</h3>
+  <table>
+    <thead><tr><th>Recurso</th><th>🟢 Recomendado</th><th>🟡 Funciona, conviene revisar</th><th>🔴 No recomendado</th></tr></thead>
+    <tbody>
+      <tr><td>Cajas</td><td>3 (hasta 4)</td><td>5 a 8</td><td>Compartir una serie entre cajas</td></tr>
+      <tr><td>Vendedores</td><td>9 (3 por caja)</td><td>12 a 15</td><td>Más de 20 enviando pedidos a la vez</td></tr>
+      <tr><td>Cuentas activas</td><td>12 a 15</td><td>16 a 25</td><td>Más de 25 sin control de permisos</td></tr>
+      <tr><td>Productos activos</td><td>Hasta 2.000</td><td>2.000 a 4.000</td><td>Más de 10.000</td></tr>
+      <tr><td>Ventas por día</td><td>Hasta 360</td><td>360 a 2.000</td><td>Más de 2.000</td></tr>
+      <tr><td>Ventas por turno</td><td>Hasta 250</td><td>250 a 800</td><td>Más de 1.600 en un mismo turno</td></tr>
+      <tr><td>Pedidos al mismo tiempo</td><td>Hasta 18</td><td>Unos 36</td><td>Más de 36</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Si el negocio se acerca a un límite</strong>: agregue una serie propia por caja nueva, parta el día en dos
+    turnos, archive los productos que no rotan y avise al responsable del sistema para ampliar el plan de la nube.</p>
+
+  <h3>17.4 Qué equipo y qué conexión conviene en cada caja</h3>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Equipo</h3>
+      <ul>
+        <li><strong>PC de caja</strong>: cualquier equipo de los últimos años (4 GB de RAM como mínimo, 8 GB
+          recomendado). No hace falta una computadora potente: todo el trabajo pesado está en la nube.</li>
+        <li><strong>Pantalla de 1366×768 o más</strong>: el PDV necesita al menos 1024 píxeles de ancho para mostrar el
+          catálogo y el carrito uno al lado del otro.</li>
+        <li><strong>Ticketera térmica</strong> de 58 u 80 mm (USB o red) y, si se usa, <strong>cajón monedero</strong>
+          conectado a la impresora.</li>
+        <li><strong>Lector de códigos</strong> USB; también sirve la cámara del equipo desde la app.</li>
+        <li><strong>Estabilizador o UPS</strong> para el equipo y el router: evita perder un ticket a mitad de impresión.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Conexión</h3>
+      <ul>
+        <li><strong>Internet estable</strong> (cualquier plan de 10 Mbps o más alcanza: el sistema mueve muy pocos
+          datos).</li>
+        <li><strong>Respaldo móvil (4G) con conmutación automática</strong>: las ventas necesitan conexión; sin
+          internet <strong>no se puede cobrar</strong> (la app sí permite consultar lo que ya está en el equipo).</li>
+        <li><strong>Cable de red en las cajas</strong>; el Wi-Fi queda para tablets y para la pantalla del cliente.</li>
+        <li><strong>Reloj del equipo en hora automática</strong>: las fechas del turno y de los reportes usan la hora
+          del equipo.</li>
+        <li><strong>Instalar la app como aplicación</strong> (Chrome → «Instalar») y fijarla en la barra de tareas.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>17.5 Antes de dar la instalación por terminada</h3>
+  <table>
+    <thead><tr><th>#</th><th>Punto a verificar</th><th>Cómo se comprueba</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Las cajas están creadas con sus series y cada cajero tiene la suya asignada</td><td><em>Configuración → Cajas</em> y <em>Usuarios → Editar → Caja</em></td></tr>
+      <tr><td>2</td><td>Cada persona tiene su propia cuenta</td><td>No se comparte ningún usuario ni contraseña</td></tr>
+      <tr><td>3</td><td>Los permisos de cada rol están definidos y <strong>aplicados también del lado del servidor</strong></td><td>Pendiente del responsable del sistema (ver la nota de abajo)</td></tr>
+      <tr><td>4</td><td>Hay <strong>copias de seguridad automáticas</strong> y una restauración probada</td><td>Pendiente del responsable del sistema</td></tr>
+      <tr><td>5</td><td>La dirección del servicio de emisión SUNAT está configurada en <strong>https</strong></td><td><em>Configuración → Empresa</em></td></tr>
+      <tr><td>6</td><td>Venta de prueba de S/ 1</td><td>Número nuevo, stock −1, ticket impreso, un movimiento en el kardex</td></tr>
+      <tr><td>7</td><td>Cierre de turno</td><td>El «debería haber» coincide con el conteo físico</td></tr>
+      <tr><td>8</td><td>Prueba de corte de internet</td><td>La app avisa que está sin conexión y bloquea el cobro (es lo correcto)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="alert blue">
+    <h3>Dos tareas que dependen del responsable del sistema</h3>
+    <p>Para poder afirmar que la instalación funciona <strong>al 100 %</strong> faltan dos tareas técnicas, que no se
+      resuelven desde la pantalla del usuario: <strong>(a) aplicar los permisos por rol del lado del servidor</strong>
+      —hoy la base permite leer y escribir a cualquier usuario autenticado— y <strong>(b) programar las copias de
+      seguridad automáticas</strong>. La configuración de esta sección funciona sin ellas, pero con esas dos tareas
+      cerradas el sistema queda además protegido.</p>
+  </div>
+
+  <h3>17.6 De dónde salen estos números</h3>
+  <p>Las cantidades de esta sección se obtuvieron con <strong>pruebas de carga</strong> hechas el <strong>21 de septiembre
+    de 2026</strong> sobre un entorno de pruebas <strong>equivalente y aislado</strong> (nunca sobre la base real del
+    negocio), con el escenario recomendado: 3 cajas con series NV01/NV02/NV03, 3 cajeros, 9 vendedores, 3 turnos,
+    2.000 productos.</p>
+  <ul>
+    <li><strong>72 de 72</strong> cobros simultáneos (24 por caja) terminaron correctamente: <strong>ninguna venta
+      perdida</strong>.</li>
+    <li><strong>360 de 360</strong> ventas de una jornada completa (900 líneas) se registraron <strong>sin fallos</strong>
+      con las 9 personas trabajando a la vez.</li>
+    <li>La numeración quedó <strong>sin huecos ni números repetidos</strong> en las tres series.</li>
+    <li>Los <strong>tres cierres de caja cuadraron al céntimo</strong> contra la suma de sus comprobantes.</li>
+    <li><strong>Ningún producto quedó con stock negativo</strong> y un pedido cobrado dos veces al mismo tiempo fue
+      rechazado correctamente la segunda vez.</li>
+    <li>El catálogo del PDV y el buscador <strong>no se vuelven más lentos</strong> cuando crece la cantidad de
+      productos: la pantalla dibuja de a 60 tarjetas y una búsqueda tarda milésimas de segundo.</li>
+  </ul>
+  <p style="color:#64748b"><strong>Nota:</strong> las pruebas se hicieron en un entorno de emulación local, no sobre la
+    nube de producción. Garantizan <strong>corrección y margen</strong> (no se pierde una venta, no se repite un número,
+    no se descuadra la caja); los tiempos exactos pueden variar según la conexión del local. Los valores marcados en 🟡
+    son estimaciones razonables, no mediciones.</p>
+</div>
+
 <!-- Footer -->
 <div class="footer">
-  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.4</p>
+  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.5</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

@@ -11,6 +11,19 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 21 — La configuración estándar queda documentada en el manual y en el resumen)
+
+🔑 **Pedido del usuario**: *"que quede documentado la configuración ideal o estándar para que el app funcione estable"* — y, al proponerle un documento aparte, **corrigió el destino**: *"eso podrías ponerlo dentro del manual y el resumen"*. Se hizo así: **nada de archivo nuevo**, la sección entra en los dos documentos que ya se le entregan al cliente.
+
+- **Manual de usuario → sección 17 «Configuración Recomendada»** (versión **2.4 → 2.5**): 17.1 cuántas cajas/cajeros/vendedores/cuentas y turnos; 17.2 cuántos productos; 17.3 hasta dónde se puede crecer (🟢/🟡/🔴); 17.4 equipo y conexión por caja; 17.5 lista de verificación de la instalación; 17.6 **de dónde salen los números** (las pruebas de carga del bloque ·20, con la nota de que son de un entorno de emulación). Incluye dos avisos destacados: **una cuenta por persona** (el modal de sesión única bloquea el cobro) y **las dos tareas del responsable del sistema** (permisos por rol y respaldos).
+- **Resumen comercial → sección «Configuración estándar recomendada»** (versión **1.1**, que ahora figura en el footer): las mismas cantidades en clave comercial, con la tarjeta de estadísticas (3 cajas · 1 cajero por caja · 9 vendedores · 2.000 productos), la tabla con porqués, las tres tarjetas 🟢/🟡/🔴 y el bloque **«Lo que necesita el local para operar al 100 %»**.
+- ⚠️ **Corrección de un dato falso que tenía el resumen**: el texto comercial decía *"úsalo sin internet"*. Las ventas son **transaccionales**: sin conexión **no se cobra** (la app solo permite consultar lo que ya está en el equipo). Se cambió por *"consúltalo sin conexión"* — era una promesa que la app no cumple y que la prueba de carga desmiente.
+- 🔧 **Dos arreglos de forma para que los PDF salgan parejos**: (a) `@page { size: A4 }` también en el **resumen** (solo lo tenía el manual: Chrome usaba **Letter**); (b) estilos de viñeta **`.warn`/`.no`** en las tarjetas del resumen, porque con el tilde verde del estilo por defecto la lista de «Evitar» parecía aprobada.
+- ✅ **PDF regenerados y verificados** con Chrome headless: **manual 34 páginas** (antes 30) y **resumen 7**, los dos con `MediaBox [0 0 594.96 841.92]` = **A4 210×297 mm**. Se revisó el render de las dos secciones nuevas con una captura headless antes de cerrar.
+- ⚠️ **Efecto colateral controlado**: al agregar el bloque al `AGENTS.md` el archivo llegó a **66.201 bytes** y el entorno lo **truncó** (perdió el final: la tabla de colecciones). Se **condensó el bloque de 3 cajas** —el detalle completo vive en el bloque ·20 de este historial— y quedó en **64,7 KB**, dentro del presupuesto de 65.536. **Es la regla del repo: lo que gobierna va en `AGENTS.md`, el detalle acá.**
+
+**Relevant Files**: `docs/manual-usuario.html` + `manual-usuario.pdf` (sección 17, v2.5), `docs/resumen-app.html` + `resumen-app.pdf` (sección nueva, v1.1), `AGENTS.md` (sección *Documentos del producto* + bloque de pruebas condensado), `HISTORIAL-SESIONES.md`.
+
 ### (2026-09 · 20 — Prueba de 3 cajas / 3 series: NV01-NV02-NV03, 9 vendedores)
 
 🔑 **Pregunta del usuario**: *"mi propuesta es usar 3 cajas con 3 vendedores cada uno y con su propia serie por ejemplo NV01, NV02 y NV03 y así que rinda más el app web, ¿sería mucho mejor? ¿o no habrá concurrencia?"* → se corrió la prueba en el **emulador local** (3 cajas con sus series, **3 cajeros**, **9 vendedores**, 3 turnos = 3 cajones, 2.000 productos) replicando `registrarVenta` operación por operación con las claves de la app (`claveContador`).

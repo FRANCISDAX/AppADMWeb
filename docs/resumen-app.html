@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JorFel — Resumen del Sistema</title>
   <style>
+    /* El PDF sale en A4 (210 x 297 mm): sin `@page` Chrome usa su default (Letter, 216 x 279 mm). */
+    @page { size: A4; margin: 0; }
+
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -111,6 +114,10 @@
       font-weight: 700;
       flex-shrink: 0;
     }
+
+    /* Variantes de viñeta: para las listas de "funciona pero revisar" (⚠) y "evitar" (✕) */
+    .card ul li.warn::before { content: "⚠"; color: #d97706; }
+    .card ul li.no::before { content: "✕"; color: #dc2626; }
 
     /* Grid */
     .grid-2 {
@@ -668,18 +675,101 @@
     </div>
   </div>
 
+  <!-- Configuración estándar recomendada -->
+  <div class="section">
+    <div class="section-title"><span class="icon">🎯</span> Configuración estándar recomendada</div>
+
+    <p style="font-size:14px; color:#475569; margin-bottom:15px;">
+      Estas son las cantidades <strong>validadas con pruebas de carga</strong>: la configuración con la que el sistema
+      opera <strong>estable</strong>, sin perder ventas ni descuadrar la caja.
+    </p>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="value">3</div><div class="label">cajas</div></div>
+      <div class="stat"><div class="value">1</div><div class="label">cajero por caja</div></div>
+      <div class="stat"><div class="value">9</div><div class="label">vendedores (3 por caja)</div></div>
+      <div class="stat"><div class="value">2.000</div><div class="label">productos activos</div></div>
+    </div>
+
+    <table>
+      <thead><tr><th>Parámetro</th><th>Recomendado</th><th>Por qué</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Cajas</strong> (puntos de emisión)</td><td><span class="badge badge-green">3 · hasta 4</span></td><td>Cada caja con <strong>su propia serie</strong> (NV01, NV02, NV03…). Con series distintas, las cajas no compiten entre sí al numerar: es lo que hace que el sistema escale.</td></tr>
+        <tr><td><strong>Cajeros</strong></td><td><span class="badge badge-green">1 por caja</span></td><td>El cajero es dueño del <strong>turno</strong> y del <strong>cajón</strong>: el arqueo cuadra con la plata física.</td></tr>
+        <tr><td><strong>Vendedores</strong></td><td><span class="badge badge-green">3 por caja</span></td><td>Escenario probado: 9 vendedores simultáneos, <strong>0 fallos</strong>.</td></tr>
+        <tr><td><strong>Cuentas</strong></td><td><span class="badge badge-green">12 a 15</span></td><td>Una cuenta <strong>por persona y por equipo</strong>: es lo que evita el bloqueo por sesión compartida.</td></tr>
+        <tr><td><strong>Productos activos</strong></td><td><span class="badge badge-green">hasta 2.000</span></td><td>Arranque en frío medido: ~6 segundos. Con 4.000 sube a 10-12 s (sigue funcionando).</td></tr>
+        <tr><td><strong>Ventas por día</strong></td><td><span class="badge badge-green">hasta 360</span></td><td>Medido sin un solo fallo (900 líneas/día). Más de 2.000/día requiere ampliar el plan de la nube.</td></tr>
+        <tr><td><strong>Turnos</strong></td><td><span class="badge badge-green">2 por caja al día</span></td><td>Mañana y tarde: el registro del turno se mantiene liviano y el cierre, legible.</td></tr>
+        <tr><td><strong>Cobros simultáneos</strong></td><td><span class="badge badge-green">hasta 24 por caja</span></td><td>Probado hasta <strong>72 a la vez: 72/72 correctos</strong>, ninguna venta perdida.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="grid-3" style="margin-top:18px;">
+      <div class="card">
+        <h3>🟢 Recomendado</h3>
+        <ul>
+          <li>3 cajas, 4 como máximo</li>
+          <li>9 a 15 vendedores</li>
+          <li>Hasta 2.000 productos</li>
+          <li>Hasta 360 ventas/día</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>🟡 Funciona, revisar</h3>
+        <ul>
+          <li class="warn">5 a 8 cajas</li>
+          <li class="warn">16 a 25 cuentas</li>
+          <li class="warn">2.000 a 4.000 productos</li>
+          <li class="warn">360 a 2.000 ventas/día</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>🔴 Evitar</h3>
+        <ul>
+          <li class="no">Compartir una serie entre cajas</li>
+          <li class="no">Compartir la cuenta de usuario</li>
+          <li class="no">Más de 10.000 productos activos</li>
+          <li class="no">Cobrar sin internet</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="highlight">
+      <h3>Lo que necesita el local para operar al 100 %</h3>
+      <p>
+        <strong>Internet estable con respaldo 4G</strong> (las ventas son inmediatas: sin conexión no se cobra) ·
+        <strong>un estabilizador o UPS</strong> en la caja · <strong>una cuenta por persona</strong> ·
+        <strong>copias de seguridad automáticas</strong> y <strong>permisos por rol aplicados en el servidor</strong>
+        (dos tareas que configura el responsable del sistema) · <strong>reloj del equipo en hora</strong> y
+        <strong>la app instalada</strong> como aplicación en cada puesto.
+      </p>
+    </div>
+
+    <div class="card" style="background:#fff7ed; border-color:#fdba74;">
+      <h3>📌 Sobre las pruebas</h3>
+      <ul>
+        <li><strong>72 de 72</strong> cobros simultáneos correctos (24 por caja): <strong>ninguna venta perdida</strong>.</li>
+        <li><strong>360 de 360</strong> ventas de una jornada (900 líneas) con 9 personas a la vez: <strong>0 fallos</strong>.</li>
+        <li>Numeración <strong>sin huecos ni números repetidos</strong> en las tres series.</li>
+        <li>Los <strong>tres cierres de caja cuadraron al céntimo</strong>; ningún producto quedó con stock negativo.</li>
+        <li>Pruebas del <strong>21/09/2026</strong> sobre un entorno de prueba aislado, nunca sobre la base real del negocio.</li>
+      </ul>
+    </div>
+  </div>
+
   <!-- Highlight -->
   <div class="highlight">
     <h3>¿Por qué elegir JorFel?</h3>
     <p>
-      JorFel no es solo un sistema de ventas. Es una solución completa que se adapta a tu negocio. Instálalo como app en tu celular, úsalo sin internet, actualízalo automáticamente y accede desde cualquier lugar. Sin costos de hardware, sin licencias complicadas, sin límites. El flujo vendedor → cajero separa quién vende de quién cobra, dando control total sobre la caja.
+      JorFel no es solo un sistema de ventas. Es una solución completa que se adapta a tu negocio. Instálalo como app en tu celular, consúltalo sin conexión, actualízalo automáticamente y accede desde cualquier lugar. Sin costos de hardware, sin licencias complicadas, sin límites. El flujo vendedor → cajero separa quién vende de quién cobra, dando control total sobre la caja.
     </p>
   </div>
 
   <!-- Footer -->
   <div class="footer">
     <p><strong>JorFel</strong> — Sistema de Punto de Venta e Inventario</p>
-    <p>CIBERSOFT CyS · 2026</p>
+    <p>CIBERSOFT CyS · 2026 · Versión 1.1 — Septiembre 2026</p>
   </div>
 
 </div>
