@@ -12,6 +12,7 @@ import {
   avisosDelMismoMonto,
   coincideConTotal,
   confirmarAntesDeAplicar,
+  codigoDeSeguridadYape,
   esAvisoDePrueba,
   etiquetaYape,
   haceCuantoYape,
@@ -167,7 +168,7 @@ export function PanelPagosYape({
           `Yapeó a las ${horaDeYape(pago.fecha)} (${haceCuantoYape(pago.fecha)}).\n\n` +
           `La venta es de ${fmt(total)}.\n\n` +
           (otros.length > 0
-            ? `⚠️ Hay ${otros.length + 1} avisos disponibles por ${fmt(pago.monto)}: fijate el N° de operación (o pedile al cliente que muestre su Yape) para no cargarle el pago de otro.\n\n`
+            ? `⚠️ Hay ${otros.length + 1} avisos disponibles por ${fmt(pago.monto)}: cotejá el código de seguridad (o el N° de operación) con lo que muestra el cliente para no cargarle el pago de otro.\n\n`
             : '') +
           '¿Es el yapeo de este cliente?',
         okText: 'Sí, aplicar',
@@ -249,6 +250,8 @@ export function PanelPagosYape({
         const procesando = procesandoId === pago.id
         const restantes = minutosRestantesYape(pago, { ahora, vigenciaMin })
         const esPrueba = esAvisoDePrueba(pago)
+        /** El código que Yape le muestra al que paga ('' si el aviso no lo trae). */
+        const codigoSeguridad = codigoDeSeguridadYape(pago)
         /** Otros avisos **disponibles** por el mismo monto: con varias cajas, el monto no alcanza. */
         const repetidos = avisosDelMismoMonto(pago, pagos, { ahora, vigenciaMin })
         const pedirConfirmacion = confirmarAntesDeAplicar(pago, total)
@@ -312,6 +315,21 @@ export function PanelPagosYape({
               )}
             </div>
 
+            {/* 🔑 El **código de seguridad** que Yape le muestra al que paga: el cliente lo dice o lo
+                muestra y el cajero lo coteja acá. Es el control más rápido que hay, y hace falta
+                porque estos avisos NO traen N° de operación (ver `codigoDeSeguridadYape`). */}
+            {codigoSeguridad && situacion !== 'usado' && (
+              <div className="flex items-center gap-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  Código
+                </span>
+                <span className="num text-xl font-extrabold tracking-wider">{codigoSeguridad}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  el que muestra el cliente en su Yape
+                </span>
+              </div>
+            )}
+
             {esPrueba && situacion !== 'usado' && (
               <p className="text-[11px] text-muted-foreground">
                 Aviso de <b>prueba</b> (creado en Configuración → Yape): <b>no entró plata</b>. Sirve
@@ -323,8 +341,8 @@ export function PanelPagosYape({
                 trabajando a la vez hay que decirlo, o el cajero elige a ciegas. */}
             {situacion === 'disponible' && repetidos.length > 0 && (
               <p className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                ⚠️ Hay <b>{repetidos.length + 1} avisos disponibles de {fmt(pago.monto)}</b>. Mirá el N° de
-                operación (o pedile al cliente que muestre su Yape) antes de usar.
+                ⚠️ Hay <b>{repetidos.length + 1} avisos disponibles de {fmt(pago.monto)}</b>. Cotejá el{' '}
+                <b>código de seguridad</b> (o el N° de operación) con lo que muestra el cliente antes de usar.
               </p>
             )}
 

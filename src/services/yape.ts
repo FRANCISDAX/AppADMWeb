@@ -22,6 +22,9 @@
  *   estado         string     'disponible'
  *   pagadorNombre  string     opcional, tal como lo manda Yape (enmascarado: `Johan Rey*`)
  *   pagadorCelular string     opcional, enmascarado
+ *   codigoSeguridad string    opcional: el código que Yape le muestra al que PAGA (`159`), para que
+ *                             el cajero lo coteje con la pantalla del cliente. ⚠️ No es la identidad
+ *                             del aviso (esa es el id del documento) y puede repetirse.
  *   origen         string     opcional ('puente', 'manual'): quién lo escribió
  *   textoCrudo     string     opcional: el texto original del aviso, para auditar el parser
  * ```
@@ -107,6 +110,7 @@ function primeraTexto(...valores: unknown[]): string {
 function aPagoYape(id: string, data: Record<string, unknown>): PagoYape {
   const nombre = primeraTexto(data.pagadorNombre, data.pagador_nombre, data.nombrePagador)
   const celular = primeraTexto(data.pagadorCelular, data.pagador_celular, data.celularPagador)
+  const codigoSeguridad = primeraTexto(data.codigoSeguridad, data.codigo_seguridad)
   const reservadoPor = texto(data.reservadoPor)
   const ventaId = texto(data.ventaId)
   const documento = texto(data.documento)
@@ -126,6 +130,7 @@ function aPagoYape(id: string, data: Record<string, unknown>): PagoYape {
     estado: texto(data.estado) || 'disponible',
     ...(nombre ? { pagadorNombre: nombre } : {}),
     ...(celular ? { pagadorCelular: celular } : {}),
+    ...(codigoSeguridad ? { codigoSeguridad } : {}),
     ...(reservadoPor ? { reservadoPor } : {}),
     ...(reservadoEn ? { reservadoEn } : {}),
     ...(ventaId ? { ventaId } : {}),

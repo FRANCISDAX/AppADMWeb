@@ -8,6 +8,7 @@ import { useNotifications } from '@/components/notifications'
 import { exportarExcel } from '@/lib/excel'
 import {
   COLUMNAS_AVISOS_YAPE,
+  codigoDeSeguridadYape,
   conteoAvisosYape,
   detalleDeAviso,
   esAvisoDePrueba,
@@ -285,6 +286,9 @@ export function ReporteAvisosYape() {
                     <p className="mt-0.5 truncate text-sm font-semibold">{p.pagadorNombre || 'Sin nombre'}</p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
                       {p.nroOperacion && <span className="num">op. {p.nroOperacion}</span>}
+                      {codigoDeSeguridadYape(p) && (
+                        <span className="num font-semibold text-foreground">cód. {codigoDeSeguridadYape(p)}</span>
+                      )}
                       {situacion === 'usado' && (
                         <>
                           {p.usadoPor && <span>lo usó {p.usadoPor}</span>}

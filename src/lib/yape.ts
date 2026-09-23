@@ -90,6 +90,11 @@ export type PagoYape = {
   /** Nombre del que yapeó (Yape lo manda enmascarado: `Juan Rey*`). Se guarda tal cual. */
   pagadorNombre?: string
   pagadorCelular?: string
+  /**
+   * **Código de seguridad** que Yape le muestra al que paga (`El cód. de seguridad es: 159`), tal
+   * como lo leyó el puente. Ver [`codigoDeSeguridadYape`].
+   */
+  codigoSeguridad?: string
   /** Cuándo ocurrió el yapeo (ms). */
   fecha: number
   estado: EstadoPagoYape | string
@@ -266,6 +271,25 @@ export function operacionDePagoYape(pago: PagoYape): string {
   return nro || pago.id
 }
 
+/**
+ * **Código de seguridad** del aviso, tal como lo leyó el puente (`''` si no vino).
+ *
+ * 🔑 **Para qué está** (pedido del usuario, 22/09/2026): Yape le muestra ese número al que **paga**
+ * —*«El cód. de seguridad es: 159»*— y el cliente lo dice o lo muestra; el cajero lo compara con el
+ * que está en el PDV y así sabe que **ese** aviso es el de la persona que tiene delante. Es el
+ * control más rápido que hay, y hace falta justamente porque **estos avisos NO traen N° de
+ * operación** (verificado en el celular del negocio): sin el código, lo único que distinguía un
+ * aviso de otro era el monto y el nombre, que pueden repetirse.
+ *
+ * ⚠️ **No es la identidad del aviso** (la identidad es el `id` del documento, que el puente arma con
+ * el `postTime` de la notificación): dos clientes pueden yapear con el mismo monto y el código es de
+ * 3 dígitos, así que **coincidir no alcanza como prueba** — es una ayuda para cotejar, igual que el
+ * N° de operación cuando viene.
+ */
+export function codigoDeSeguridadYape(pago: PagoYape): string {
+  return String(pago.codigoSeguridad ?? '').trim()
+}
+
 // ─── Listas para la UI ──────────────────────────────────────────────────────
 
 /** Orden de la lista: primero lo que se puede usar, después lo que está en uso, después lo usado. */
@@ -404,6 +428,8 @@ export function etiquetaYape(pago: PagoYape): string {
   if (nombre) partes.push(nombre)
   const nro = String(pago.nroOperacion ?? '').trim()
   if (nro) partes.push(`op. ${nro}`)
+  const codigo = codigoDeSeguridadYape(pago)
+  if (codigo) partes.push(`cód. ${codigo}`)
   return partes.join(' · ')
 }
 
@@ -609,6 +635,7 @@ export const COLUMNAS_AVISOS_YAPE = [
   'Monto',
   'Pagador',
   'N° operación',
+  'Código',
   'Situación',
   'Origen',
   'Lo usó',
@@ -630,6 +657,7 @@ export function filasDeAvisosYape(
     redondear2(Number(p.monto) || 0),
     String(p.pagadorNombre ?? '').trim(),
     String(p.nroOperacion ?? '').trim(),
+    codigoDeSeguridadYape(p),
     etiquetaSituacionYape(situacionPagoYape(p, opciones)) + (esAvisoDePrueba(p) ? ' (PRUEBA)' : ''),
     esAvisoDePrueba(p) ? 'PRUEBA' : String(p.origen ?? '').trim(),
     String(p.usadoPor ?? '').trim(),

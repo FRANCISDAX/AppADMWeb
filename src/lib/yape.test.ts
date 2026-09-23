@@ -9,6 +9,7 @@ import {
   avisoYapeActivo,
   avisosDelMismoMonto,
   coincideConTotal,
+  codigoDeSeguridadYape,
   confirmarAntesDeAplicar,
   conteoAvisosYape,
   detalleDeAviso,
@@ -301,7 +302,7 @@ test('un aviso anulado por la anulación de la venta NO cuenta como cobro confir
 /** Un aviso de cada tipo, como los que quedan en la colección después de unos días. */
 const historial = (): PagoYape[] => [
   aviso({ id: 'hoy-libre', monto: 25, nroOperacion: '1001', pagadorNombre: 'Rosa Diaz*', fecha: AHORA - 2 * MIN }),
-  aviso({ id: 'ayer-usado', monto: 12, nroOperacion: '1002', pagadorNombre: 'Carlos Mena*', fecha: AHORA - 25 * 60 * MIN, estado: 'usado', usadoEn: AHORA - 24 * 60 * MIN, usadoPor: 'Ana', documento: '2026-9_BOLETA-B001-000123' }),
+  aviso({ id: 'ayer-usado', monto: 12, nroOperacion: '1002', pagadorNombre: 'Carlos Mena*', fecha: AHORA - 25 * 60 * MIN, estado: 'usado', usadoEn: AHORA - 24 * 60 * MIN, usadoPor: 'Ana', documento: '2026-9_BOLETA-B001-000123', codigoSeguridad: '159' }),
   aviso({ id: 'ayer-ignorado', monto: 8.5, nroOperacion: '1003', pagadorNombre: 'Luis Quispe*', fecha: AHORA - 26 * 60 * MIN, estado: 'ignorado', ignoradoPor: 'Luis', motivoIgnorado: 'era de otra tienda' }),
   aviso({ id: 'viejo-vencido', monto: 30, nroOperacion: '1004', pagadorNombre: 'Marta Sosa*', fecha: AHORA - 3 * 24 * 60 * MIN }),
   aviso({ id: 'anulado-x', monto: 40, nroOperacion: '1005', pagadorNombre: 'Pedro Ruiz*', fecha: AHORA - 4 * 24 * 60 * MIN, estado: 'anulado', usadoEn: AHORA - 4 * 24 * 60 * MIN }),
@@ -377,8 +378,8 @@ test('un aviso de PRUEBA se ve en el historial pero no infla lo cobrado', () => 
   assert.equal(r.montoPruebas, 100)
   // Y sigue apareciendo en la lista, marcado como PRUEBA.
   const fila = filasDeAvisosYape(pagos, op)[0]
-  assert.equal(fila[5], 'Usado (PRUEBA)')
-  assert.equal(fila[6], 'PRUEBA')
+  assert.equal(fila[6], 'Usado (PRUEBA)')
+  assert.equal(fila[7], 'PRUEBA')
 })
 
 test('la fecha y la hora del historial se leen por separado (un rango cruza varios días)', () => {
@@ -407,10 +408,23 @@ test('las filas del historial tienen el mismo largo que los encabezados (si no, 
   const filas = filasDeAvisosYape(historial(), op)
   assert.equal(filas.length, 7)
   for (const f of filas) assert.equal(f.length, COLUMNAS_AVISOS_YAPE.length)
-  const usada = filas.find((f) => f[4] === '1002' && f[5] === 'Usado')
+  const usada = filas.find((f) => f[4] === '1002' && f[6] === 'Usado')
   assert.ok(usada)
-  assert.equal(usada[7], 'Ana')
-  assert.equal(usada[8], '2026-9_BOLETA-B001-000123')
+  assert.equal(usada[5], '159', 'el código de seguridad va en su columna (es lo que se coteja con el cliente)')
+  assert.equal(usada[8], 'Ana')
+  assert.equal(usada[9], '2026-9_BOLETA-B001-000123')
   // Ninguna celda puede quedar `undefined`: ExcelJS lo escribiría como una celda vacía rara.
   for (const f of filas) for (const c of f) assert.notEqual(c, undefined)
+})
+
+test('el código de seguridad se muestra y se coteja: es lo único que distingue dos avisos sin N° de operación', () => {
+  // Los avisos reales de Yape NO traen N° de operación (verificado en el celular): el código que el
+  // cliente ve en su pantalla es el dato que permite confirmar que el aviso es del que está delante.
+  const conCodigo = aviso({ codigoSeguridad: '159', nroOperacion: '' })
+  assert.equal(codigoDeSeguridadYape(conCodigo), '159')
+  assert.equal(codigoDeSeguridadYape(aviso({ codigoSeguridad: '  159  ' })), '159')
+  assert.equal(codigoDeSeguridadYape(aviso()), '', 'sin código no se inventa uno')
+  assert.equal(codigoDeSeguridadYape(aviso({ codigoSeguridad: undefined })), '')
+  // Y viaja en la etiqueta de una línea (la usan el panel, el cierre y las confirmaciones).
+  assert.equal(etiquetaYape(conCodigo), 'S/ 25.00 · Johan Rey* · cód. 159')
 })
