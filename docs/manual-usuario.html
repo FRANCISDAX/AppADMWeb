@@ -121,7 +121,7 @@
   <h1>JorFel</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.10 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.11 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -321,7 +321,7 @@
 
   <div class="steps">
     <div class="step"><strong>Llega el aviso</strong> al PDV con el monto, el nombre y la hora. Suena (si está activado) y el aviso que <strong>coincide con el total</strong> de la venta se marca con <em>"coincide con el total"</em>.</div>
-    <div class="step"><strong>Tocá "Usar en esta venta"</strong>: el sistema carga la forma de pago <strong>Yape</strong> con el monto del aviso y su <strong>N° de operación</strong>; después cobrás normalmente.</div>
+    <div class="step"><strong>Tocá "Usar en esta venta"</strong>: el sistema carga la forma de pago <strong>Yape</strong> con el monto del aviso y su <strong>N° de operación</strong> (o su <strong>código de seguridad</strong>, cuando el aviso lo trae); después cobrás normalmente.</div>
     <div class="step"><strong>Si no corresponde</strong>, tocá <strong>"Ignorar"</strong>: el aviso deja de aparecer y queda registrado quién lo ignoró.</div>
     <div class="step"><strong>El aviso no se puede usar dos veces</strong>: al tocarlo queda <em>tomado</em> para esa venta, así que otra caja no lo puede aplicar. Si quitás el pago (o vaciás el carrito), el aviso se libera solo.</div>
   </div>
@@ -333,12 +333,31 @@
       <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>"vence en N min"</strong>: el aviso vale unos minutos (se configura). Pasado ese rato deja de aparecer.</li>
       <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>"en uso por …"</strong>: otra caja lo está aplicando en este momento.</li>
       <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>"usado en B001-000123"</strong>: ya se aplicó a esa venta (queda unos minutos a la vista, como confirmación).</li>
+      <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>CÓDIGO 159</strong>: el <strong>código de seguridad</strong> que Yape le muestra al cliente que paga. Pedíselo (o que te muestre su pantalla) y cotejalo con el de acá: es la forma más rápida de saber que ese aviso es el de la persona que tenés delante. ⚠️ Es una ayuda para cotejar, <strong>no una prueba</strong>: dos yapes distintos pueden tener el mismo código.</li>
+      <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>⚠️ "Hay 2 avisos disponibles de S/ 25.00"</strong>: entraron <strong>dos pagos por el mismo monto</strong>, así que el monto no alcanza para reconocer el tuyo. Mirá el <strong>código</strong> (o la hora con segundos) con el cliente antes de usar.</li>
+      <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>"No coincide con el total"</strong>: el aviso es por otro monto. Se puede usar igual (pago parcial o mayor), pero el sistema te va a <strong>pedir confirmación</strong> antes de aplicarlo.</li>
     </ul>
   </div>
 
   <div class="warning">
     <div class="warning-label">⚠️ Un aviso dice un monto, no una venta</div>
     <p>Yape no informa <em>a qué venta</em> corresponde el pago: solo dice cuánto y quién. Por eso el sistema te muestra el aviso y <strong>vos</strong> decidís si es el de esta venta (con el monto que coincide como ayuda) y por eso, al cerrar el turno, el sistema <strong>cruza</strong> los avisos usados contra los cobros por Yape del turno (ver <em>6.6 Cerrar turno</em>). Si un aviso es por <strong>más</strong> plata que la venta, se aplica el total y el resto queda a favor del cliente (Yape no da vuelto).</p>
+  </div>
+
+  <h3>2.15 El estado del puente (¿está andando el aviso de Yape?)</h3>
+  <p>Los avisos los manda el <strong>celular del negocio</strong> (el «puente»), no la computadora. Por eso, cuando el panel está vacío hay dos causas muy distintas: <strong>no yapeó nadie</strong> (normal) o <strong>el celular dejó de mandar avisos</strong> (hay que actuar, porque la plata entró igual). Para no confundirlas, arriba del carrito el PDV muestra <strong>siempre</strong> el estado del puente:</p>
+  <table>
+    <thead><tr><th>Lo que dice el PDV</th><th>Qué significa</th><th>Qué hacer</th></tr></thead>
+    <tbody>
+      <tr><td><strong>🟢 Puente activo · dio señales hace 2 min</strong></td><td>El celular está dando su señal de vida cada 5 minutos.</td><td>Nada: si no aparecen avisos, es que <strong>no yapeó nadie</strong>.</td></tr>
+      <tr><td><strong>🟡 El puente no da señales hace 20 min</strong></td><td>Puede ser un corte de internet o de datos del celular, o que el sistema lo esté durmiendo.</td><td>Vigilar: si sigue así, revisá el celular del Yape.</td></tr>
+      <tr><td><strong>🔴 Puente sin señal hace 1 h 40 min</strong></td><td>El celular <strong>no está mandando avisos</strong>: los yapeos de ese rato <strong>no están llegando</strong> al sistema.</td><td>Andá al celular: encendido, con internet, con las notificaciones de Yape permitidas y el puente abierto (<em>12.9</em>). ⚠️ Los avisos de ese rato <strong>no se recuperan</strong>.</td></tr>
+      <tr><td><strong>Sin datos del puente</strong></td><td>El celular <strong>nunca</strong> dio señales: el puente no está instalado, o le falta la cuenta o el permiso.</td><td>Instalarlo o revisar los permisos (ver <em>12.9</em>).</td></tr>
+    </tbody>
+  </table>
+  <div class="tip">
+    <div class="tip-label">💡 Esa línea es el chico que avisa</div>
+    <p>Es lo único que distingue «no yapeó nadie» de «el aviso se perdió». El control de fondo sigue siendo el <strong>cruce del cierre</strong> (ver <em>6.6</em>): si hubo cobros por Yape y ningún aviso, el sistema lo dice. El estado también se ve en <em>Configuración → Yape</em>, con el último aviso que mandó el celular (ver <em>12.9</em>).</p>
   </div>
 </div>
 
@@ -764,6 +783,25 @@
   <p>Se puede filtrar por estado y por mes. <strong>Quién ve qué</strong>: el <strong>administrador o supervisor</strong> ve todos los pedidos; un <strong>vendedor</strong> ve solo los que él envió, y un <strong>cajero</strong>, los que él cobró (además de los que haya armado).</p>
   <p>Toda la trazabilidad queda además en <strong>Auditoría</strong>, con las acciones <em>Enviar pedido a caja</em>, <em>Cobrar pedido</em> y <em>Eliminar pedido</em> del módulo Pedidos.</p>
 
+  <h3>11.9 Historial de avisos de Yape</h3>
+  <p>Es la lista de <strong>todos los avisos de Yape</strong> que llegaron, se hayan usado o no. Responde la pregunta del día siguiente: <em>«¿y ese yapeo de ayer dónde quedó?»</em> — el panel del PDV muestra solo los avisos del día, así que un pago de ayer no aparece ahí.</p>
+  <p>Se elige un <strong>rango de fechas</strong> (con los atajos <em>Hoy</em>, <em>Ayer</em> y <em>Este mes</em>), se filtra por estado y se busca por <strong>pagador, N° de operación, código de seguridad, comprobante o monto</strong>. Cada fila muestra la <strong>fecha y la hora</strong>, el monto, el pagador, el código y —si se usó— <strong>quién lo usó y en qué comprobante</strong>; si se ignoró, <strong>el motivo</strong>.</p>
+  <table>
+    <thead><tr><th>Estado</th><th>Qué quiere decir</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Usado</strong></td><td>Se aplicó a una venta: se ve <strong>el comprobante</strong> y quién lo usó.</td></tr>
+      <tr><td><strong>Vencido</strong></td><td>Llegó, pero nadie lo usó dentro de la vigencia (ver <em>12.9</em>).</td></tr>
+      <tr><td><strong>Ignorado / Anulado</strong></td><td>Un cajero lo descartó (con su motivo) o se anuló la venta donde se había usado.</td></tr>
+      <tr><td><strong>Disponible / En uso</strong></td><td>Está en el panel del PDV en este momento.</td></tr>
+      <tr><td><strong>PRUEBA</strong></td><td>No entró plata: lo mandó el administrador para probar el circuito (ver <em>12.9</em>). <strong>No suma</strong> a lo cobrado.</td></tr>
+    </tbody>
+  </table>
+  <p>Arriba resume el rango elegido: <em>«N avisos · cobrado con aviso S/ X · sin usar N (S/ Y) · N de PRUEBA»</em>, y el botón <strong>Excel</strong> baja la lista con esas mismas columnas para revisarla con calma o adjuntarla.</p>
+  <div class="warning">
+    <div class="warning-label">⚠️ Un aviso no es una venta</div>
+    <p>El historial dice <strong>qué plata entró por Yape</strong> (con un aviso detrás), no qué se vendió. Lo cobrado se mira en los comprobantes y en el <strong>cierre del turno</strong>, que es donde se cruzan las dos cosas.</p>
+  </div>
+
   <div class="tip">
     <div class="tip-label">💡 Consejo</div>
     <p>Todos los reportes se pueden filtrar por tipo de comprobante (NV, Boleta, Factura, NC, ND) y por mes. Usa los filtros para obtener datos precisos.</p>
@@ -810,6 +848,11 @@
       <tr><td><strong>Número de Yape del negocio</strong></td><td>Opcional: se muestra en el panel para dictárselo al cliente que todavía no yapeó.</td></tr>
     </tbody>
   </table>
+
+  <div class="tip">
+    <div class="tip-label">💡 Estado del puente</div>
+    <p>Más abajo, esta pantalla muestra el <strong>estado del puente</strong> igual que el PDV (ver <em>2.15</em>): si está activo y desde cuándo, <strong>cuál fue el último aviso que mandó el celular</strong> y en qué celular corre. Si el puente del teléfono es una versión vieja, acá te avisa que conviene actualizarlo. Es la pantalla para revisar cuando alguien dice «no me aparece el aviso».</p>
+  </div>
 
   <div class="warning">
     <div class="warning-label">⚠️ Los avisos los escribe el "puente de Yape"</div>
@@ -1177,7 +1220,7 @@
       <tr><td><strong>Impresora A4</strong> (opcional)</td><td>Cualquier láser o multifunción</td><td>Para el comprobante en hoja normal que se manda por correo o WhatsApp</td></tr>
       <tr><td><strong>Balanza</strong> (si se vende por peso)</td><td>La que escriba en el teclado</td><td>La app maneja la unidad <code>KGM</code> y cantidades con decimales</td></tr>
       <tr><td><strong>Estabilizador / UPS</strong></td><td>600 a 1000 VA</td><td>Para la computadora <strong>y el router</strong>: evita perder un ticket a mitad de impresión por un corte</td></tr>
-      <tr><td><strong>Celular del Yape</strong> (si se usan avisos)</td><td>Android que ya tenga instalado el Yape del negocio</td><td>Corre el <strong>puente de Yape</strong> (ver A.6): lee el aviso de pago y lo manda al PDV. Necesita estar encendido, con las <strong>notificaciones de Yape permitidas</strong> y con internet</td></tr>
+      <tr><td><strong>Celular del Yape</strong> (si se usan avisos)</td><td>Android que ya tenga instalado el Yape del negocio</td><td>Corre el <strong>puente de Yape</strong> (ver A.6): lee el aviso de pago y lo manda al PDV. Necesita estar encendido, con internet, con las <strong>notificaciones de Yape permitidas</strong> y <strong>sin restricciones de batería</strong> (los ahorradores de energía lo duermen). ⚠️ Si se apaga, los avisos de ese rato no llegan: el PDV lo avisa con el <strong>estado del puente</strong> (ver <em>2.15</em>)</td></tr>
     </tbody>
   </table>
 
@@ -1251,7 +1294,7 @@
       <tr><td>6</td><td>Probar el lector de códigos en el buscador del PDV</td><td>El código aparece escrito al escanear</td></tr>
       <tr><td>7</td><td>Prueba de corte: desconectar el cable de red</td><td>La app avisa que está sin conexión y bloquea el cobro (es lo correcto)</td></tr>
       <tr><td>8</td><td>Revisar <em>Auditoría → Errores</em> al final del primer día</td><td>Sin errores repetidos de ningún equipo</td></tr>
-      <tr><td>9</td><td><strong>Solo si se usan avisos de Yape</strong>: dejar el celular del negocio encendido, cargando, con las notificaciones de Yape permitidas y el puente corriendo</td><td>Hacer un <strong>yapeo de prueba</strong> y ver el aviso aparecer en el PDV; después cargarlo en una venta y comprobar en <em>Cerrar turno</em> que el aviso aparece en el <strong>Cruce de Yape</strong></td></tr>
+      <tr><td>9</td><td><strong>Solo si se usan avisos de Yape</strong>: dejar el celular del negocio encendido, cargando, <strong>sin restricciones de batería</strong>, con las notificaciones de Yape permitidas y el puente corriendo (versión 1.3 o más nueva)</td><td>El PDV tiene que decir <strong>«Puente activo»</strong> arriba del carrito (ver <em>2.15</em>); después hacer un <strong>yapeo de prueba</strong>, ver el aviso aparecer en el PDV, cargarlo en una venta y comprobar en <em>Cerrar turno</em> que aparece en el <strong>Cruce de Yape</strong></td></tr>
     </tbody>
   </table>
 
@@ -1300,7 +1343,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.10</p>
+  <p><strong>JorFel</strong> — Manual de Usuario · Versión 2.11</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

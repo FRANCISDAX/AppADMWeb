@@ -11,6 +11,19 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 35 — El manual y el resumen al día con Yape (código, historial y latido))
+
+🔑 **Pedido del usuario**: *«también actualiza el manual y lo otro»* — el manual de usuario y el resumen comercial seguían **sin mencionar** lo de estos días (el código de seguridad, el historial de avisos y el estado del puente), y la regla del repo es que si el manual cambia de fondo se **sube la versión** y se **regeneran los PDF**.
+
+- 📘 **Manual (2.10 → 2.11)**: (a) en **§2.14 Avisos de pago de Yape** se sumaron las tres cosas que el cajero ve y no estaban: el **CÓDIGO de seguridad** (con el ⚠️ de que es para cotejar con el cliente, no una prueba), el aviso de **«dos pagos por el mismo monto»** y la **confirmación** cuando el aviso no coincide con el total; (b) **§2.15 nueva («El estado del puente»)** con la tabla 🟢 activo / 🟡 demorado / 🔴 caído / sin datos, **qué significa cada uno y qué hacer** — incluido el ⚠️ de que los avisos del rato caído **no se recuperan**; (c) **§11.9 nueva («Historial de avisos de Yape»)** en Reportes, con la tabla de estados (usado / vencido / ignorado / anulado / PRUEBA), los filtros y el Excel; (d) **§12.9 Yape** ahora cuenta que ahí también se ve el **estado del puente** con el último aviso que mandó el celular; (e) **Anexo A**: el celular del Yape pasa a pedir **sin restricciones de batería** y el paso 9 de la puesta en marcha exige ver **«Puente activo»** en el PDV, con el puente en **versión 1.3 o más nueva**.
+- 📊 **Resumen comercial (1.4 → 1.5)**: la viñeta de Yape ahora nombra el **código de seguridad**, la **hora con segundos**, el aviso de montos repetidos y —en una viñeta nueva— el **estado del puente** y el **historial exportable**, que son las dos cosas que resuelven el *«¿y si no me llega el aviso?»* frente a un cliente.
+- 🖨️ **PDF regenerados** con Chrome headless (el procedimiento del manual, sin abrir el navegador a mano): manual **3.516.843 bytes** (antes 3.444.278) y resumen **1.713.279** (antes 1.710.660) — crecieron lo que creció el texto, con el mismo `MediaBox [0 0 594.96 841.92]` = **A4** verificado en los dos.
+- ⚠️ **`docs/` NO se despliega** (no está en `public/` y la app no los linkea): el commit es todo lo que hace falta, y así quedó. Los dos PDF están **versionados en el repo** a pedido del usuario (17/09).
+
+**Next Move**: nada pendiente de este lado; cuando el usuario instale el **APK 1.3** y confirme que el PDV dice *«Puente activo»*, queda cerrado el circuito de Yape (aviso → código → panel → historial → estado del puente). Sigue ofrecido el **botón para reenviar** un aviso descartado desde el celular.
+
+**Relevant Files**: `docs/manual-usuario.html` + `manual-usuario.pdf` (v2.11), `docs/resumen-app.html` + `resumen-app.pdf` (v1.5), `AGENTS.md` (la línea de versiones de los dos documentos), `HISTORIAL-SESIONES.md`.
+
 ### (2026-09 · 34 — El latido del puente en el PDV: saber si el silencio es «no yapeó nadie» o «el puente se murió»)
 
 🔑 **Pedido del usuario**: *«procede con los 2 puntos yaaaaa»* — después de que le explicara, con sus propios datos, qué es el latido. Los dos puntos eran: (1) que el PDV y Configuración muestren el latido, y (2) que el puente lo escriba con `merge` para no perder el «último aviso enviado».

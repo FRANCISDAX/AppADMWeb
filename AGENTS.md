@@ -141,7 +141,7 @@ Reglas que ya costaron un bug o que salieron de una decisión explícita del usu
 
 ## Historial de sesiones
 
-El detalle de cada sesión —objective, decisiones con su porqué, evidencias, `Next Move` y archivos tocados— está en **`HISTORIAL-SESIONES.md`** (más reciente primero; el último bloque es **·34, el latido del puente en el PDV (puente 1.3)**; al final del archivo hay un **apéndice con la referencia de funciones y la tabla de colecciones**).
+El detalle de cada sesión —objective, decisiones con su porqué, evidencias, `Next Move` y archivos tocados— está en **`HISTORIAL-SESIONES.md`** (más reciente primero; el último bloque es **·35, el manual y el resumen al día con Yape**; al final del archivo hay un **apéndice con la referencia de funciones y la tabla de colecciones**).
 
 
 ⚠️ **Por qué está separado**: el entorno carga `AGENTS.md` con un presupuesto (~64 KB) y lo **trunca** si se pasa. Acá queda solo lo que **gobierna**; al cerrar una sesión el bloque va **al historial** y en `## Estado actual` se actualiza solo lo que cambió de fondo.
@@ -185,7 +185,7 @@ El detalle de cada sesión —objective, decisiones con su porqué, evidencias, 
 
 ⚠️ **Actualizarlos NO requiere deploy**: `docs/` no está en `public/` y la app no los linkea (son archivos para compartir con el cliente). Si el manual cambia de fondo, subir la versión en la portada y en el footer. **Los PDF están versionados en el repo a pedido del usuario** (17/09).
 
-- 🔑 **La configuración estándar recomendada vive en los dos documentos** (21/09/2026): en el **manual** son la **sección 17 «Configuración Recomendada»** (límites 🟢🟡🔴 con sus pruebas) y el **Anexo A** (equipo, periféricos, red, puesta en marcha y **A.7 trabajar sin internet**); en el **resumen comercial**, la sección homónima. ⚠️ **Las dos salen del bloque de pruebas de carga de arriba**: si una medición cambia hay que actualizar los dos HTML **y regenerar los PDF**. Versiones: manual **2.10**, resumen **1.4**.
+- 🔑 **La configuración estándar recomendada vive en los dos documentos** (21/09/2026): en el **manual** son la **sección 17 «Configuración Recomendada»** (límites 🟢🟡🔴 con sus pruebas) y el **Anexo A** (equipo, periféricos, red, puesta en marcha y **A.7 trabajar sin internet**); en el **resumen comercial**, la sección homónima. ⚠️ **Las dos salen del bloque de pruebas de carga de arriba**: si una medición cambia hay que actualizar los dos HTML **y regenerar los PDF**. Versiones: manual **2.11**, resumen **1.5**.
 - ⚠️ **El PDF del resumen también necesita `@page { size: A4 }`**: sin eso Chrome usa **Letter** (216×279 mm) y sale distinto al manual. Verificado: los dos PDF dan `MediaBox [0 0 594.96 841.92]` = 210×297 mm.
 
 No test framework is configured. No CI workflows exist.
