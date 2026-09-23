@@ -14,7 +14,6 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 - **Verde**: `npm test` **362/362**, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 warnings (baseline: no subirlo)**, `npm run build` ✓.
 - **Producción real** (medida, no supuesta): ~93 turnos, ~234 documentos, 40 productos **todos exonerados (`'20'`)** porque la región está exenta de IGV.
 - **Decisiones tomadas con el usuario** (16/09) sobre los controles del cierre: **conciliación por billetera opcional** (no bloquea el cierre), **conteo ciego configurable y apagado por defecto** (`config.conteoCiego`, Configuración → Empresa) y **firmas**: los PDF imprimen nombre/RUC del negocio, quién cerró el turno y dos líneas de firma (cajero / supervisor).
-- 📌 **Alcance acordado (17/09)**: este agente trabaja **solo en el web**; la app móvil `AppAdm` queda para otra sesión.
 - **Rol ALMACEN** (19/09): inventario, kardex, compras, proveedores y costos; **sin** ventas, caja, reportes financieros ni configuración.
 
 ## Invariantes y trampas (leer antes de tocar código)
