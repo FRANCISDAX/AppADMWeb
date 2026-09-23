@@ -545,7 +545,14 @@ export function Reportes() {
       {tab === 'nv' ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Notas de Venta del mes</span>
+            {/* ⚠️ **Tiene que decir DE QUIÉN son los documentos que se ven.** Sin `verTodo`, la consulta
+                filtra `usuarioId == tu uid`: un cajero ve **solo los suyos** y las ventas que hizo otro
+                usuario ese mismo mes **no aparecen**. Pasó el 23/09/2026: los primeros días del mes se
+                vendió con el usuario admin y después con el cajero, y parecía que **faltaban ventas**
+                (no faltaba ninguna: estaba mirando con el cajero). Mismo rótulo que la pestaña Pedidos. */}
+            <span className="text-sm text-muted-foreground">
+              {verTodo ? 'Todas las notas de venta del mes' : 'Tus notas de venta del mes'}
+            </span>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={exportarExcelNv} disabled={nvPag.items.length === 0}>
                 <Download className="mr-1 h-3.5 w-3.5" /> Excel
@@ -556,7 +563,7 @@ export function Reportes() {
           <div className="overflow-hidden rounded-xl border bg-card shadow-card">
             <div className="flex items-center justify-between border-b px-4 py-3">
               <span className="text-sm font-bold">Notas de Venta</span>
-              <span className="num text-sm text-muted-foreground">{nvPag.total} doc · {fmt(sumPaginaNv)}</span>
+              <span className="num text-sm text-muted-foreground">{nvPag.total} doc · esta página {fmt(sumPaginaNv)}</span>
             </div>
             <ListaHooked pag={nvPag} renderItem={(d) => <Row key={d.id} d={d} mostrarAcciones />} empty={<p className="py-16 text-center text-sm text-muted-foreground">Sin notas de venta en este mes</p>} />
           </div>
@@ -674,8 +681,14 @@ export function Reportes() {
 
           <div className="overflow-hidden rounded-xl border bg-card shadow-card">
             <div className="flex items-center justify-between border-b px-4 py-3">
-              <span className="text-sm font-bold">{SUNAT_TIPOS.find((t) => t.key === filtroTipo)?.label}</span>
-              <span className="num text-sm text-muted-foreground">{sunatPag.total} doc · {fmt(sumPaginaSunat)}</span>
+              <div className="min-w-0">
+                <span className="text-sm font-bold">{SUNAT_TIPOS.find((t) => t.key === filtroTipo)?.label}</span>
+                {/* El alcance también acá: el Registro SUNAT está acotado igual que las NV (ver arriba). */}
+                <p className="text-[11px] text-muted-foreground">
+                  {verTodo ? 'Todos los documentos del mes' : 'Tus documentos del mes'}
+                </p>
+              </div>
+              <span className="num text-sm text-muted-foreground">{sunatPag.total} doc · esta página {fmt(sumPaginaSunat)}</span>
             </div>
             <ListaHooked pag={sunatPag} renderItem={(d) => <Row key={d.id} d={d} sunat />} empty={<p className="py-16 text-center text-sm text-muted-foreground">Sin {SUNAT_TIPOS.find((t) => t.key === filtroTipo)?.label.toLowerCase()} en este mes</p>} />
           </div>

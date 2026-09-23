@@ -11,6 +11,22 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 36 — «Solo me sale desde el 6»: el alcance por usuario de Facturación, ahora dicho en pantalla)
+
+🔴 **Reporte del usuario**: *«¿por qué en boletas de ventas solo me sale desde el 6 a la fecha y de los primeros días? ¿qué pasó? Esto en Facturación»*.
+
+- 🔍 **Diagnóstico (por código, no por suposición)**: la pestaña **Notas de Venta** consulta `tblDocumentos` con `where('tipoDoc','==','NV') + where('anioMes','==', mes) + orderBy('fecha','desc')`, y —clave— **`where('usuarioId','==', miUid)` cuando quien entra no tiene `verTodo`** (`miUid = verTodo ? '' : user.uid`). Se descartaron las otras hipótesis con evidencia: la lista va **de 25 en 25** (paginación real con cursor), los dos apps escriben `anioMes` en el **mismo formato** (`2026-9`) desde siempre, y el botón *«Limpiar datos de prueba»* del móvil borra **solo** las colecciones `*_test` (nunca las reales). ⇒ **No faltaba ninguna venta.**
+- ✅ **La causa, confirmada por el usuario**: los primeros días del mes las ventas se hicieron **con el usuario admin** y a partir del 6 **con el usuario cajero** — y se estaba mirando **con el cajero**, que ve solo lo suyo. El sistema funciona como está diseñado: **el alcance por usuario es una función, no un defecto** (decisión del usuario, se mantiene).
+- ⚠️ **El problema real era que la pantalla no lo decía**: la pestaña **Pedidos** ya aclara *«Todos los pedidos del mes» / «Tus pedidos del mes»*, pero **Notas de Venta y Registro SUNAT no decían nada**, así que el síntoma se leía como *«se perdieron ventas»*. Además la cabecera decía `N doc · S/ X` mezclando **el total del mes** con **el importe de la página**.
+- 🔧 **Arreglo (decisión del usuario: mantener el alcance y rotularlo)**: Notas de Venta dice **«Todas las notas de venta del mes» / «Tus notas de venta del mes»**, el Registro SUNAT **«Todos los documentos del mes» / «Tus documentos del mes»** (mismo criterio que Pedidos), y las dos cabeceras pasan a **`N doc · esta página S/ X`**. 🛡️ Guarda nueva `lib/alcance-reportes.test.ts` (3 tests): falla si alguien saca el rótulo, si alguien saca el filtro por `usuarioId` (eso sería un cambio de permisos, no de UI) o si la cabecera vuelve a mezclar mes y página.
+- 🔬 **Verificado en el emulador con la app real y DOS usuarios** (`run-alcance.mjs`, **9/9 OK**): sembrando una NV de S/ 100 con `usuarioId` del admin y otra de S/ 50 del cajero — **con el cajero** la pantalla dice *«Tus notas de venta del mes»*, muestra la de S/ 50 y **no** la de S/ 100, y el Registro SUNAT dice *«Tus documentos del mes»*; **con el admin** dice *«Todas las notas de venta del mes»* y salen las **dos**. Capturas: `docs/pruebas-carga/facturacion-alcance-{cajero,admin}.png`.
+- ⚠️ **Nota de la prueba (no del producto)**: el primer intento cerraba sesión y volvía a entrar en la misma pestaña, y el login del segundo usuario se trababa; se resolvió abriendo un **contexto de navegador nuevo** para el admin (perfil limpio) — las dos sesiones no se pisan.
+- ✅ **Verificado**: `npm test` **362/362** (359 + 3 de la guarda nueva), `tsc -b` ✓, lint **80/0**, `npm run build` ✓.
+
+**Next Move**: nada pendiente. Si algún día se quiere que un **cajero** vea el mes completo sin darle `verTodo` (que además lo habilita a operar con otros turnos), es un cambio de alcance a decidir aparte — hoy la ruta es mirar con el **admin** o con un supervisor.
+
+**Relevant Files**: `src/pages/Reportes.tsx` (rótulos de alcance + cabeceras), `src/lib/alcance-reportes.test.ts` (guarda), `package.json`, `docs/pruebas-carga/facturacion-alcance-cajero.png` + `facturacion-alcance-admin.png`, `AGENTS.md` (invariante en *Reportes y datos*), `HISTORIAL-SESIONES.md`.
+
 ### (2026-09 · 35 — El manual y el resumen al día con Yape (código, historial y latido))
 
 🔑 **Pedido del usuario**: *«también actualiza el manual y lo otro»* — el manual de usuario y el resumen comercial seguían **sin mencionar** lo de estos días (el código de seguridad, el historial de avisos y el estado del puente), y la regla del repo es que si el manual cambia de fondo se **sube la versión** y se **regeneran los PDF**.
