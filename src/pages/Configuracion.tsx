@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePermisos } from '@/context/permisos'
 import { useNotifications } from '@/components/notifications'
+import { EstadoPuenteYape } from '@/components/EstadoPuenteYape'
 import { AFECTACION_POR_DEFECTO, CONFIG_POR_DEFECTO, TIPO_AFECTACION, TIPOS_REGIMEN } from '@/constants/tributario'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos } from '@/hooks/use-productos'
@@ -668,6 +669,13 @@ export function Configuracion() {
                 instalado, esta pantalla se configura pero el PDV no muestra nada. Los avisos quedan
                 guardados en <span className="font-mono">tblPagosYape</span> con quién usó cada uno y en
                 qué comprobante, y el cierre del turno los cruza contra los cobros por Yape.
+              </div>
+
+              {/* 🔑 El latido del puente, acá y en el PDV con el **mismo** componente: es el dato que
+                  distingue «no yapeó nadie» de «el puente se murió y la plata entró igual». */}
+              <div className="space-y-1">
+                <Label className="font-medium">Estado del puente</Label>
+                <EstadoPuenteYape />
               </div>
 
               {/* 🔑 Aviso de PRUEBA: la única excepción a «los avisos los crea el puente». Sirve para

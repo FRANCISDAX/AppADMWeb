@@ -21,6 +21,7 @@ import {
   haceCuantoYape,
   horaDeYape,
   minutosRestantesYape,
+  msDeFechaYape,
   operacionDePagoYape,
   pagosYapeDeTurno,
   pagosYapeVisibles,
@@ -402,6 +403,21 @@ test('el detalle dice por qué un aviso no llegó a una venta', () => {
   assert.equal(detalleDeAviso(aviso({ estado: 'reservado', reservadoEn: AHORA - MIN, reservadoPor: 'Ana' }), op), 'en uso por Ana')
   assert.equal(detalleDeAviso(aviso({ estado: 'pendiente' }), op), 'estado «pendiente»')
   assert.equal(detalleDeAviso(aviso({ estado: 'usado' }), op), '')
+})
+
+test('la fecha de un aviso se lee venga como venga (el puente es otro proceso)', () => {
+  // 🔑 Si esto fallara, TODOS los avisos parecerían vencidos: una fecha que no se entiende da NaN, y
+  // `ahora - NaN` no es «hace poco», es «nunca». Lo usan los avisos y el latido del puente.
+  const d = new Date('2026-09-22T22:00:00.000Z')
+  assert.equal(msDeFechaYape(d.getTime()), d.getTime())
+  assert.equal(msDeFechaYape(d), d.getTime())
+  assert.equal(msDeFechaYape(d.toISOString()), d.getTime())
+  assert.equal(msDeFechaYape({ toMillis: () => 123 }), 123, 'Timestamp de Firestore')
+  assert.equal(msDeFechaYape({ seconds: 1700000000 }), 1700000000000)
+  assert.equal(msDeFechaYape(null), 0)
+  assert.equal(msDeFechaYape(undefined), 0)
+  assert.equal(msDeFechaYape('ni idea'), 0)
+  assert.equal(msDeFechaYape(Number.NaN), 0)
 })
 
 test('las filas del historial tienen el mismo largo que los encabezados (si no, el Excel se corre)', () => {

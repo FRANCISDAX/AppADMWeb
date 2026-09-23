@@ -142,6 +142,27 @@ export function sonidoYapeActivo(config?: ConfigYape | null): boolean {
 // ─── Situación de un aviso ──────────────────────────────────────────────────
 
 /**
+ * Convierte cualquier fecha que haya guardado el puente en milisegundos.
+ *
+ * ⚠️ Sin esto, un `fecha` guardado como string (o un Timestamp que no se convirtió) daría `NaN` y
+ * **todos** los avisos parecerían vencidos: el parser del puente es código de otro proceso y no se
+ * puede dar por hecho. Lo usan `services/yape.ts` (avisos) y `services/puente.ts` (latido).
+ */
+export function msDeFechaYape(valor: unknown): number {
+  if (valor == null) return 0
+  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : 0
+  if (valor instanceof Date) return valor.getTime()
+  if (typeof valor === 'string') {
+    const t = Date.parse(valor)
+    return Number.isFinite(t) ? t : 0
+  }
+  const ts = valor as { toMillis?: () => number; seconds?: number }
+  if (typeof ts.toMillis === 'function') return ts.toMillis()
+  if (typeof ts.seconds === 'number') return ts.seconds * 1000
+  return 0
+}
+
+/**
  * Qué es este aviso **ahora**: si el estado guardado es `disponible` pero ya pasó la
  * vigencia, está `vencido` (no se guarda el vencimiento: se deriva, así no hace falta
  * ningún proceso que limpie la colección). Una reserva vieja vuelve a estar `disponible`.

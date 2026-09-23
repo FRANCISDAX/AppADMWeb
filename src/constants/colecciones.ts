@@ -19,4 +19,7 @@ export const COL = {
   /** Avisos de pago de Yape: los **crea el puente** (notificación del celular o pasarela) y el
    *  POS solo los lee y avanza su estado. Ver `services/yape.ts`. */
   PAGOS_YAPE: 'tblPagosYape',
+  /** **Latido del puente** (la señal de vida del celular del Yape), cada 5 min. El web solo lo
+   *  lee para avisar si el puente se cayó. Ver `services/puente.ts`. */
+  PUENTE_YAPE: 'tblPuenteYape',
 } as const

@@ -70,6 +70,7 @@ import { promocionesAplicables, type PromocionVolumen } from '@/services/promoci
 import QRCode from 'qrcode'
 import { PanelVentasPendientes } from '@/components/PanelVentasPendientes'
 import { PanelPagosYape } from '@/components/PanelPagosYape'
+import { EstadoPuenteYape } from '@/components/EstadoPuenteYape'
 import { InfiniteScroll } from '@/components/ui/infinite-scroll'
 
 // Un producto tiene precio especial (promo) si su valor es > 0.
@@ -1581,6 +1582,16 @@ export function Pdv() {
               {allItems.length} item{allItems.length !== 1 ? 's' : ''}
             </span>
           </div>
+
+          {/* 🔑 El latido del puente va **acá y no dentro del panel de avisos**, a propósito: el panel
+              se oculta cuando no hay nada que mostrar, y el caso que más importa es justamente ese
+              (panel vacío) — con el puente caído, «vacío» significa que **la plata entró y nadie se
+              enteró**, no que no yapeó nadie. Se ve siempre, sin buscar. */}
+          {!esVendedor && (
+            <div className="border-b px-5 pt-3">
+              <EstadoPuenteYape compacto />
+            </div>
+          )}
 
           {/* 🔑 Los avisos de Yape van **arriba de todo** (y antes que los pedidos): un aviso vale
               minutos, así que se tiene que ver sin buscar. El panel no ocupa lugar cuando no hay

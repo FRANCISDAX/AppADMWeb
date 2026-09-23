@@ -58,6 +58,7 @@ import {
   ORIGEN_PRUEBA,
   RESERVA_YAPE_MINUTOS,
   VIGENCIA_YAPE_MINUTOS_POR_DEFECTO,
+  msDeFechaYape,
   situacionPagoYape,
   type PagoYape,
 } from '@/lib/yape'
@@ -70,26 +71,6 @@ function inicioDelDia(ahora: number = Date.now()): number {
   const d = new Date(ahora)
   d.setHours(0, 0, 0, 0)
   return d.getTime()
-}
-
-/**
- * Convierte cualquier fecha que haya guardado el puente en ms.
- * ⚠️ Sin esto, un `fecha` guardado como string (o un Timestamp que no se convirtió) daría
- * `NaN` y **todos** los avisos parecerían vencidos: el parser del puente es código de otro
- * proceso y no se puede dar por hecho.
- */
-function msDeFecha(valor: unknown): number {
-  if (valor == null) return 0
-  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : 0
-  if (valor instanceof Date) return valor.getTime()
-  if (typeof valor === 'string') {
-    const t = Date.parse(valor)
-    return Number.isFinite(t) ? t : 0
-  }
-  const ts = valor as { toMillis?: () => number; seconds?: number }
-  if (typeof ts.toMillis === 'function') return ts.toMillis()
-  if (typeof ts.seconds === 'number') return ts.seconds * 1000
-  return 0
 }
 
 /** Texto recortado de un campo opcional ('' si no vino). */
@@ -118,15 +99,15 @@ function aPagoYape(id: string, data: Record<string, unknown>): PagoYape {
   const ignoradoPor = texto(data.ignoradoPor)
   const motivoIgnorado = texto(data.motivoIgnorado)
   const origen = texto(data.origen)
-  const reservadoEn = msDeFecha(data.reservadoEn ?? data.reservado_en)
-  const usadoEn = msDeFecha(data.usadoEn ?? data.usado_en)
-  const ignoradoEn = msDeFecha(data.ignoradoEn ?? data.ignorado_en)
-  const anuladoEn = msDeFecha(data.anuladoEn ?? data.anulado_en)
+  const reservadoEn = msDeFechaYape(data.reservadoEn ?? data.reservado_en)
+  const usadoEn = msDeFechaYape(data.usadoEn ?? data.usado_en)
+  const ignoradoEn = msDeFechaYape(data.ignoradoEn ?? data.ignorado_en)
+  const anuladoEn = msDeFechaYape(data.anuladoEn ?? data.anulado_en)
   return {
     id,
     monto: Number(data.monto) || 0,
     nroOperacion: primeraTexto(data.nroOperacion, data.nro_operacion, data.operacion),
-    fecha: msDeFecha(data.fecha ?? data.fechaHora ?? data.creadoEn ?? data.createdAt),
+    fecha: msDeFechaYape(data.fecha ?? data.fechaHora ?? data.creadoEn ?? data.createdAt),
     estado: texto(data.estado) || 'disponible',
     ...(nombre ? { pagadorNombre: nombre } : {}),
     ...(celular ? { pagadorCelular: celular } : {}),
