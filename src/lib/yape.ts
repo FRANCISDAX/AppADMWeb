@@ -406,3 +406,234 @@ export function etiquetaYape(pago: PagoYape): string {
   if (nro) partes.push(`op. ${nro}`)
   return partes.join(' · ')
 }
+
+// ─── Historial (Reportes → Yape) ─────────────────────────────────────────────
+
+/**
+ * Fecha local del yapeo `DD/MM/AAAA` (compañera de [`horaDeYape`], que da la hora con segundos).
+ *
+ * 🔑 **El historial muestra fecha y hora por separado** porque un rango puede cruzar varios días:
+ * en el panel del PDV alcanza con la hora, pero al revisar yapes anteriores hay que poder ubicar
+ * el aviso en su jornada — y con la hora vieja (`estado: 'disponible'` de anteayer) un aviso
+ * parece de hoy cuando no lo es.
+ */
+export function fechaDeYape(fecha: number): string {
+  const d = new Date(Number(fecha) || 0)
+  const dos = (n: number) => String(n).padStart(2, '0')
+  return `${dos(d.getDate())}/${dos(d.getMonth() + 1)}/${d.getFullYear()}`
+}
+
+/** Cómo se llama cada situación en pantalla (una sola nomenclatura para el historial). */
+export function etiquetaSituacionYape(situacion: SituacionPagoYape): string {
+  switch (situacion) {
+    case 'disponible':
+      return 'Disponible'
+    case 'reservado':
+      return 'En uso'
+    case 'usado':
+      return 'Usado'
+    case 'ignorado':
+      return 'Ignorado'
+    case 'anulado':
+      return 'Anulado'
+    case 'vencido':
+      return 'Vencido'
+    default:
+      return 'No reconocido'
+  }
+}
+
+/** Lo que el cajero escribió (o el sistema dedujo) sobre un aviso que no llegó a venta. */
+export function detalleDeAviso(pago: PagoYape, opciones: OpcionesYape = {}): string {
+  const situacion = situacionPagoYape(pago, opciones)
+  if (situacion === 'ignorado') return String(pago.motivoIgnorado ?? '').trim()
+  if (situacion === 'anulado') return 'la venta se anuló: la plata volvió al cliente'
+  if (situacion === 'reservado') {
+    const quien = String(pago.reservadoPor ?? '').trim()
+    return quien ? `en uso por ${quien}` : 'en uso'
+  }
+  if (situacion === 'desconocido') return `estado «${String(pago.estado ?? '').trim()}»`
+  return ''
+}
+
+/**
+ * Todo lo que sirve para **reconocer** un aviso en el historial: pagador, celular, N° de
+ * operación, comprobante, quién lo usó, motivo, origen, id y el monto en texto.
+ *
+ * 🔑 Buscar por **monto** (`25.00`) está a propósito: cuando el cliente reclama, lo que suele
+ * decir es *«yapeé 25»*, no el número de operación.
+ */
+function textoBuscableDeAviso(pago: PagoYape): string {
+  return [
+    pago.pagadorNombre,
+    pago.pagadorCelular,
+    pago.nroOperacion,
+    pago.documento,
+    pago.ventaId,
+    pago.usadoPor,
+    pago.ignoradoPor,
+    pago.motivoIgnorado,
+    pago.reservadoPor,
+    pago.origen,
+    pago.id,
+    (Number(pago.monto) || 0).toFixed(2),
+  ]
+    .map((v) => String(v ?? '').trim().toLowerCase())
+    .filter(Boolean)
+    .join(' ')
+}
+
+/** `'todos'` o una situación concreta (incluye `vencido`, que no es un estado guardado). */
+export type EstadoFiltradoYape = 'todos' | SituacionPagoYape
+
+export type FiltroAvisosYape = {
+  /** Situación a mostrar (`'todos'` = sin filtro). ⚠️ Es la **situación**, no el estado guardado. */
+  estado?: EstadoFiltradoYape
+  /** Texto libre (pagador, N° de operación, comprobante, quién lo usó, motivo, monto). */
+  texto?: string
+  opciones?: OpcionesYape
+}
+
+/**
+ * Filtra y ordena los avisos del historial: los más nuevos primero.
+ *
+ * 🔑 **El filtro se hace acá y no en Firestore**, a propósito: filtrar por estado en la consulta
+ * exigiría un **índice compuesto** (`estado` + rango de `fecha`) que hay que declarar en
+ * `firestore.indexes.json` **y desplegar** — y un índice que falta no se ve hasta que la consulta
+ * falla en producción. El historial lee **un rango de fechas** (un solo campo ⇒ sin índice
+ * compuesto) y filtra en memoria, igual que `obtenerPedidosDelMes` del reporte de pedidos.
+ */
+export function filtrarAvisosYape(
+  pagos: readonly PagoYape[],
+  filtro: FiltroAvisosYape = {},
+): PagoYape[] {
+  const estado = filtro.estado ?? 'todos'
+  const busca = String(filtro.texto ?? '').trim().toLowerCase()
+  const opciones = filtro.opciones ?? {}
+  return (pagos ?? [])
+    .filter((p) => !!p)
+    .filter((p) => estado === 'todos' || situacionPagoYape(p, opciones) === estado)
+    .filter((p) => !busca || textoBuscableDeAviso(p).includes(busca))
+    .sort((a, b) => Number(b.fecha) - Number(a.fecha))
+}
+
+/** Cuántos avisos hay en cada situación dentro del rango consultado (para los contadores del filtro). */
+export type ConteoAvisosYape = Record<'todos' | SituacionPagoYape, number>
+
+export function conteoAvisosYape(
+  pagos: readonly PagoYape[],
+  opciones: OpcionesYape = {},
+): ConteoAvisosYape {
+  const c: ConteoAvisosYape = {
+    todos: 0,
+    disponible: 0,
+    reservado: 0,
+    usado: 0,
+    ignorado: 0,
+    anulado: 0,
+    vencido: 0,
+    desconocido: 0,
+  }
+  for (const p of pagos ?? []) {
+    if (!p) continue
+    c.todos++
+    c[situacionPagoYape(p, opciones)]++
+  }
+  return c
+}
+
+/** Lo que el historial afirma del rango: cuánto entró **con un aviso detrás** y cuánto no. */
+export type ResumenHistorialYape = {
+  /** Avisos que entraron en el rango. */
+  cantidad: number
+  /** Monto de esos avisos, **sin contar los de PRUEBA** (un aviso de prueba no es plata). */
+  total: number
+  /** Monto de los **usados**: lo que el sistema puede afirmar que entró por Yape. */
+  cobrado: number
+  /** Avisos que no terminaron en una venta: ignorados, anulados o vencidos. */
+  sinUsar: number
+  montoSinUsar: number
+  /** Avisos de PRUEBA del rango (se cuentan aparte y **no** suman a los montos). */
+  pruebas: number
+  montoPruebas: number
+  /** Estados que la app no entiende: si hay, el puente está escribiendo otra cosa. */
+  desconocidos: number
+}
+
+/**
+ * Resumen del rango para el encabezado del historial.
+ *
+ * 🔑 **Los avisos de PRUEBA no suman a `total` ni a `cobrado`**: un aviso `origen: 'prueba'` es
+ * un botón que alguien apretó para probar el circuito, no plata que entró (ver el invariante de
+ * los avisos). Se informan aparte para que se vean, pero no inflan lo cobrado.
+ */
+export function resumenHistorialYape(
+  pagos: readonly PagoYape[],
+  opciones: OpcionesYape = {},
+): ResumenHistorialYape {
+  const r: ResumenHistorialYape = {
+    cantidad: 0,
+    total: 0,
+    cobrado: 0,
+    sinUsar: 0,
+    montoSinUsar: 0,
+    pruebas: 0,
+    montoPruebas: 0,
+    desconocidos: 0,
+  }
+  for (const p of pagos ?? []) {
+    if (!p) continue
+    const monto = Number(p.monto) || 0
+    r.cantidad++
+    if (esAvisoDePrueba(p)) {
+      r.pruebas++
+      r.montoPruebas = redondear2(r.montoPruebas + monto)
+      continue
+    }
+    const situacion = situacionPagoYape(p, opciones)
+    r.total = redondear2(r.total + monto)
+    if (situacion === 'usado') r.cobrado = redondear2(r.cobrado + monto)
+    if (situacion === 'ignorado' || situacion === 'anulado' || situacion === 'vencido') {
+      r.sinUsar++
+      r.montoSinUsar = redondear2(r.montoSinUsar + monto)
+    }
+    if (situacion === 'desconocido') r.desconocidos++
+  }
+  return r
+}
+
+/** Encabezados de la planilla del historial (los usa la pantalla y el Excel). */
+export const COLUMNAS_AVISOS_YAPE = [
+  'Fecha',
+  'Hora',
+  'Monto',
+  'Pagador',
+  'N° operación',
+  'Situación',
+  'Origen',
+  'Lo usó',
+  'Comprobante',
+  'Detalle',
+] as const
+
+/**
+ * Filas del historial, en el mismo orden en que se ven en pantalla: una sola forma de armar la
+ * planilla, para que el Excel no diga algo distinto de la tabla.
+ */
+export function filasDeAvisosYape(
+  pagos: readonly PagoYape[],
+  opciones: OpcionesYape = {},
+): (string | number)[][] {
+  return (pagos ?? []).filter(Boolean).map((p) => [
+    fechaDeYape(p.fecha),
+    horaDeYape(p.fecha),
+    redondear2(Number(p.monto) || 0),
+    String(p.pagadorNombre ?? '').trim(),
+    String(p.nroOperacion ?? '').trim(),
+    etiquetaSituacionYape(situacionPagoYape(p, opciones)) + (esAvisoDePrueba(p) ? ' (PRUEBA)' : ''),
+    esAvisoDePrueba(p) ? 'PRUEBA' : String(p.origen ?? '').trim(),
+    String(p.usadoPor ?? '').trim(),
+    String(p.documento ?? '').trim(),
+    detalleDeAviso(p, opciones),
+  ])
+}

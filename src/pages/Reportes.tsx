@@ -1,4 +1,4 @@
-import { ClipboardList, CloudUpload, Download, FileDown, FileText, Loader2, Printer, Receipt, Send, Share2, Trash2, Wallet } from 'lucide-react'
+import { ClipboardList, CloudUpload, Download, FileDown, FileText, Loader2, Printer, Receipt, Send, Share2, Smartphone, Trash2, Wallet } from 'lucide-react'
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import * as React from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +20,7 @@ import { crearNotaCreditoDebito } from '@/services/notas'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { generarConsolidado } from '@/services/consolidado'
 import { ListaPaginada } from '@/components/ListaPaginada'
+import { ReporteAvisosYape } from '@/components/ReporteAvisosYape'
 import { PaginadorControles } from '@/components/PaginadorControles'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
@@ -85,7 +86,7 @@ export function Reportes() {
   // Scope por usuario: si no tiene 'verTodo', solo ve sus propios documentos.
   const verTodo = tienePermiso('verTodo')
   const miUid = verTodo ? '' : (user?.uid || '')
-  const [tab, setTab] = React.useState<'nv' | 'consolidado' | 'sunat' | 'pedidos'>('nv')
+  const [tab, setTab] = React.useState<'nv' | 'consolidado' | 'sunat' | 'pedidos' | 'yape'>('nv')
   const [filtroTipo, setFiltroTipo] = React.useState<'BOLETA' | 'FACTURA' | 'NC' | 'ND'>('BOLETA')
   const [mes, setMes] = React.useState(mesDeHoy())
   const [notaDoc, setNotaDoc] = React.useState<Doc | null>(null)
@@ -531,6 +532,7 @@ export function Reportes() {
         {([
           { id: 'nv', label: 'Notas de Venta', icon: FileText },
           { id: 'pedidos', label: 'Pedidos', icon: ClipboardList },
+          { id: 'yape', label: 'Yape', icon: Smartphone },
           { id: 'consolidado', label: 'Consolidado de Boletas', icon: Receipt },
           { id: 'sunat', label: 'Registro SUNAT', icon: CloudUpload },
         ] as const).map((t) => (
@@ -623,6 +625,8 @@ export function Reportes() {
             )}
           </div>
         </div>
+      ) : tab === 'yape' ? (
+        <ReporteAvisosYape />
       ) : tab === 'consolidado' ? (
         <div className="overflow-hidden rounded-xl border bg-card shadow-card">
           <div className="border-b px-4 py-3">

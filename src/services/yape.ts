@@ -30,7 +30,8 @@
  * `usadoPor`/`usadoEn`, `ignoradoPor`/`ignoradoEn`, `motivoIgnorado`, `anuladoPor`/`anuladoEn`.
  *
  * ⚠️ **Los avisos viejos no se borran**: son el respaldo de por qué una venta se cobró por
- * Yape. La consulta trae los del día (una colección que crece para siempre se vuelve lenta).
+ * Yape. La consulta **del día** trae los del día (una colección que crece para siempre se vuelve
+ * lenta) y el **historial** (`Reportes → Yape`) lee un **rango** de fechas a pedido.
  */
 
 import {
@@ -183,6 +184,56 @@ export async function obtenerPagosYapeDelDia(): Promise<PagoYape[]> {
   const snap = await getDocs(consultaDelDia())
   const pagos = snap.docs.map((d) => aPagoYape(d.id, d.data() as Record<string, unknown>))
   return pagos.sort((a, b) => b.fecha - a.fecha)
+}
+
+// ─── Historial (Reportes → Yape) ────────────────────────────────────────────
+
+/**
+ * Cuántos avisos trae una lectura del historial.
+ *
+ * ⚠️ Al llegar al tope **hay que decirlo en pantalla** (el historial devuelve `tope: true`): un
+ * rango que trae más avisos de los que se leyeron y no lo avisa hace creer que «esos no están».
+ */
+const LIMITE_AVISOS_HISTORIAL = 1000
+
+/**
+ * Avisos de un **rango de fechas**, los más nuevos primero (el historial de `Reportes → Yape`).
+ *
+ * 🔑 **Una sola consulta por rango de `fecha`** (con `orderBy` del **mismo** campo) ⇒ **no necesita
+ * índice compuesto**. El filtro por situación y el buscador se hacen en memoria con
+ * [`filtrarAvisosYape`]: pedir el filtro a Firestore exigiría un índice `estado + fecha` declarado
+ * y **desplegado**, y si falta la consulta falla recién en producción (*«The query requires an
+ * index»*). ⚠️ **No agregar acá una igualdad** (`where('estado', ...)`): si algún día hace falta,
+ * va con su índice en `firestore.indexes.json` y su deploy. 🛡️ Guarda: `lib/yape-historial.test.ts`.
+ *
+ * ⚠️ **`error` no es lo mismo que «no hay avisos»**: quien llama tiene que distinguir un rango
+ * vacío de una lectura que falló (si no, el reporte miente).
+ */
+export async function obtenerAvisosYapeDelRango({
+  desde,
+  hasta,
+}: {
+  desde: Date
+  hasta: Date
+}): Promise<{ pagos: PagoYape[]; tope: boolean; error?: string }> {
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, COL.PAGOS_YAPE),
+        where('fecha', '>=', desde),
+        where('fecha', '<=', hasta),
+        orderBy('fecha', 'desc'),
+        fsLimit(LIMITE_AVISOS_HISTORIAL),
+      ),
+    )
+    const pagos = snap.docs.map((d) => aPagoYape(d.id, d.data() as Record<string, unknown>))
+    pagos.sort((a, b) => b.fecha - a.fecha)
+    return { pagos, tope: snap.size >= LIMITE_AVISOS_HISTORIAL }
+  } catch (e) {
+    const error = (e as Error).message
+    console.error('❌ No se pudieron leer los avisos de Yape del rango:', error)
+    return { pagos: [], tope: false, error }
+  }
 }
 
 // ─── El aviso de PRUEBA (la única puerta por la que la app crea un aviso) ───

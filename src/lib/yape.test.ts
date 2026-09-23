@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import {
+  COLUMNAS_AVISOS_YAPE,
   RESERVA_YAPE_MINUTOS,
   VIGENCIA_YAPE_MINUTOS_POR_DEFECTO,
   YAPE_USADO_RECIENTE_MINUTOS,
@@ -9,14 +10,20 @@ import {
   avisosDelMismoMonto,
   coincideConTotal,
   confirmarAntesDeAplicar,
+  conteoAvisosYape,
+  detalleDeAviso,
   estaDisponible,
   etiquetaYape,
+  fechaDeYape,
+  filasDeAvisosYape,
+  filtrarAvisosYape,
   haceCuantoYape,
   horaDeYape,
   minutosRestantesYape,
   operacionDePagoYape,
   pagosYapeDeTurno,
   pagosYapeVisibles,
+  resumenHistorialYape,
   resumenYape,
   situacionPagoYape,
   sonidoYapeActivo,
@@ -287,4 +294,123 @@ test('un aviso anulado por la anulación de la venta NO cuenta como cobro confir
   // Si se anula la venta, la plata se le devuelve al cliente: el aviso deja de ser un cobro.
   const pagos = [aviso({ id: 'anulado', estado: 'anulado', usadoEn: AHORA - 5 * MIN, monto: 25 })]
   assert.deepEqual(pagosYapeDeTurno(pagos, { desde: AHORA - 60 * MIN }), [])
+})
+
+// ─── Historial (Reportes → Yape) ────────────────────────────────────────────
+
+/** Un aviso de cada tipo, como los que quedan en la colección después de unos días. */
+const historial = (): PagoYape[] => [
+  aviso({ id: 'hoy-libre', monto: 25, nroOperacion: '1001', pagadorNombre: 'Rosa Diaz*', fecha: AHORA - 2 * MIN }),
+  aviso({ id: 'ayer-usado', monto: 12, nroOperacion: '1002', pagadorNombre: 'Carlos Mena*', fecha: AHORA - 25 * 60 * MIN, estado: 'usado', usadoEn: AHORA - 24 * 60 * MIN, usadoPor: 'Ana', documento: '2026-9_BOLETA-B001-000123' }),
+  aviso({ id: 'ayer-ignorado', monto: 8.5, nroOperacion: '1003', pagadorNombre: 'Luis Quispe*', fecha: AHORA - 26 * 60 * MIN, estado: 'ignorado', ignoradoPor: 'Luis', motivoIgnorado: 'era de otra tienda' }),
+  aviso({ id: 'viejo-vencido', monto: 30, nroOperacion: '1004', pagadorNombre: 'Marta Sosa*', fecha: AHORA - 3 * 24 * 60 * MIN }),
+  aviso({ id: 'anulado-x', monto: 40, nroOperacion: '1005', pagadorNombre: 'Pedro Ruiz*', fecha: AHORA - 4 * 24 * 60 * MIN, estado: 'anulado', usadoEn: AHORA - 4 * 24 * 60 * MIN }),
+  aviso({ id: 'raro', monto: 5, nroOperacion: '1006', pagadorNombre: 'Sofia Leon*', fecha: AHORA - 5 * 24 * 60 * MIN, estado: 'pendiente' }),
+  aviso({ id: 'prueba-1', monto: 0.1, nroOperacion: '1007', pagadorNombre: 'PRUEBA DEL SISTEMA', fecha: AHORA - 3 * MIN, origen: 'prueba' }),
+]
+
+test('el historial filtra por SITUACIÓN (no por el estado guardado) y ordena lo más nuevo primero', () => {
+  const pagos = historial()
+  // «Vencido» no es un estado guardado (se deriva): si el filtro leyera `estado` a mano, un
+  // aviso viejo sin usar no se podría ni buscar. Y `anulado` sí es un estado: tiene que salir.
+  assert.deepEqual(filtrarAvisosYape(pagos, { estado: 'usado', opciones: op }).map((p) => p.id), ['ayer-usado'])
+  assert.deepEqual(filtrarAvisosYape(pagos, { estado: 'vencido', opciones: op }).map((p) => p.id), ['viejo-vencido'])
+  assert.deepEqual(filtrarAvisosYape(pagos, { estado: 'anulado', opciones: op }).map((p) => p.id), ['anulado-x'])
+  assert.deepEqual(filtrarAvisosYape(pagos, { estado: 'ignorado', opciones: op }).map((p) => p.id), ['ayer-ignorado'])
+  assert.deepEqual(filtrarAvisosYape(pagos, { estado: 'desconocido', opciones: op }).map((p) => p.id), ['raro'])
+  // Sin filtro, todo y lo más nuevo primero (el historial se lee de arriba hacia abajo).
+  const todos = filtrarAvisosYape(pagos, { opciones: op })
+  assert.equal(todos.length, 7)
+  assert.equal(todos[0].id, 'hoy-libre')
+  assert.equal(todos[todos.length - 1].id, 'raro')
+})
+
+test('el buscador del historial encuentra por pagador, N° de operación, comprobante, monto y motivo', () => {
+  const pagos = historial()
+  const ids = (texto: string) => filtrarAvisosYape(pagos, { texto, opciones: op }).map((p) => p.id)
+  assert.deepEqual(ids('rosa'), ['hoy-libre'])
+  assert.deepEqual(ids('1002'), ['ayer-usado'])
+  assert.deepEqual(ids('B001-000123'), ['ayer-usado'])
+  // 🔑 Buscar por monto: cuando el cliente reclama dice «yapeé 8.50», no el número de operación.
+  assert.deepEqual(ids('8.50'), ['ayer-ignorado'])
+  assert.deepEqual(ids('otra tienda'), ['ayer-ignorado'])
+  // Quién lo usó también es buscable (es la pregunta «¿quién cobró con este aviso?»).
+  assert.deepEqual(ids('ana'), ['ayer-usado'])
+  // El filtro y el buscador se combinan (uno acota al otro).
+  assert.deepEqual(filtrarAvisosYape(pagos, { estado: 'usado', texto: 'quispe', opciones: op }), [])
+  assert.deepEqual(filtrarAvisosYape(pagos, { estado: 'ignorado', texto: 'quispe', opciones: op }).map((p) => p.id), ['ayer-ignorado'])
+})
+
+test('el conteo del filtro cuenta cada situación y distingue los estados que no se entienden', () => {
+  const c = conteoAvisosYape(historial(), op)
+  assert.equal(c.todos, 7)
+  assert.equal(c.disponible, 2) // el de hoy y el de prueba (los dos están dentro de la vigencia)
+  assert.equal(c.usado, 1)
+  assert.equal(c.ignorado, 1)
+  assert.equal(c.anulado, 1)
+  assert.equal(c.vencido, 1)
+  assert.equal(c.desconocido, 1)
+})
+
+test('el resumen del historial separa lo cobrado con aviso, lo que no se usó y los de PRUEBA', () => {
+  const r = resumenHistorialYape(historial(), op)
+  assert.equal(r.cantidad, 7)
+  // `total` no incluye el aviso de prueba (0.10): un aviso de prueba NO es plata que entró.
+  assert.equal(r.total, 25 + 12 + 8.5 + 30 + 40 + 5)
+  assert.equal(r.cobrado, 12)
+  // Sin usar = ignorado (8.50) + anulado (40) + vencido (30): los tres que no llegaron a una venta.
+  assert.equal(r.sinUsar, 3)
+  assert.equal(r.montoSinUsar, 78.5)
+  assert.equal(r.pruebas, 1)
+  assert.equal(r.montoPruebas, 0.1)
+  assert.equal(r.desconocidos, 1)
+})
+
+test('un aviso de PRUEBA se ve en el historial pero no infla lo cobrado', () => {
+  // Es la misma regla del panel del PDV y del cierre: si el aviso de prueba sumara, el reporte
+  // diría que entró plata que nunca entró.
+  const pagos = [aviso({ id: 'p', monto: 100, origen: 'prueba', estado: 'usado', usadoEn: AHORA - MIN })]
+  const r = resumenHistorialYape(pagos, op)
+  assert.equal(r.cobrado, 0)
+  assert.equal(r.total, 0)
+  assert.equal(r.pruebas, 1)
+  assert.equal(r.montoPruebas, 100)
+  // Y sigue apareciendo en la lista, marcado como PRUEBA.
+  const fila = filasDeAvisosYape(pagos, op)[0]
+  assert.equal(fila[5], 'Usado (PRUEBA)')
+  assert.equal(fila[6], 'PRUEBA')
+})
+
+test('la fecha y la hora del historial se leen por separado (un rango cruza varios días)', () => {
+  // Se leen en hora **local**, igual que el resto de la app: `fechaDeYape` da el día y
+  // `horaDeYape` la hora con segundos (en el panel del PDV alcanza con la hora; en un rango de
+  // varios días, no saber de qué jornada es el aviso lo vuelve inútil).
+  const ms = Date.parse('2026-09-21T22:10:03.000Z')
+  const d = new Date(ms)
+  const dos = (n: number) => String(n).padStart(2, '0')
+  assert.equal(fechaDeYape(ms), `${dos(d.getDate())}/${dos(d.getMonth() + 1)}/${d.getFullYear()}`)
+  assert.equal(horaDeYape(ms), `${dos(d.getHours())}:${dos(d.getMinutes())}:${dos(d.getSeconds())}`)
+  assert.match(fechaDeYape(ms), /^\d{2}\/\d{2}\/\d{4}$/)
+  // Sin fecha válida no se inventa una fecha de 1970 en pantalla: se muestra el epoch, que se ve raro.
+  assert.equal(fechaDeYape(Number.NaN), fechaDeYape(0))
+})
+
+test('el detalle dice por qué un aviso no llegó a una venta', () => {
+  assert.equal(detalleDeAviso(aviso({ estado: 'ignorado', motivoIgnorado: 'era de otra tienda' })), 'era de otra tienda')
+  assert.equal(detalleDeAviso(aviso({ estado: 'anulado' })), 'la venta se anuló: la plata volvió al cliente')
+  assert.equal(detalleDeAviso(aviso({ estado: 'reservado', reservadoEn: AHORA - MIN, reservadoPor: 'Ana' }), op), 'en uso por Ana')
+  assert.equal(detalleDeAviso(aviso({ estado: 'pendiente' }), op), 'estado «pendiente»')
+  assert.equal(detalleDeAviso(aviso({ estado: 'usado' }), op), '')
+})
+
+test('las filas del historial tienen el mismo largo que los encabezados (si no, el Excel se corre)', () => {
+  const filas = filasDeAvisosYape(historial(), op)
+  assert.equal(filas.length, 7)
+  for (const f of filas) assert.equal(f.length, COLUMNAS_AVISOS_YAPE.length)
+  const usada = filas.find((f) => f[4] === '1002' && f[5] === 'Usado')
+  assert.ok(usada)
+  assert.equal(usada[7], 'Ana')
+  assert.equal(usada[8], '2026-9_BOLETA-B001-000123')
+  // Ninguna celda puede quedar `undefined`: ExcelJS lo escribiría como una celda vacía rara.
+  for (const f of filas) for (const c of f) assert.notEqual(c, undefined)
 })
