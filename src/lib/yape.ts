@@ -190,6 +190,51 @@ export function coincideConTotal(pago: PagoYape, total: number): boolean {
   return Math.abs((Number(pago.monto) || 0) - t) < TOLERANCIA
 }
 
+/** Hora local del yapeo, **con segundos**: es lo que deja cruzar «este aviso es el de mi cliente». */
+export function horaDeYape(fecha: number): string {
+  const d = new Date(Number(fecha) || 0)
+  const dos = (n: number) => String(n).padStart(2, '0')
+  return `${dos(d.getHours())}:${dos(d.getMinutes())}:${dos(d.getSeconds())}`
+}
+
+/**
+ * Otros avisos **disponibles** por el mismo monto (sin contar el propio).
+ *
+ * 🔑 **Por qué existe** (22/09/2026, pregunta del usuario sobre 3 cajas trabajando a la vez): con
+ * varias cajas abiertas **todos ven la misma lista** de avisos — la plata entra a **una sola cuenta
+ * Yape**, así que el pago no dice de qué caja es. Si dos clientes yapean lo mismo casi al mismo
+ * tiempo, el monto ya no alcanza para reconocer el propio: el panel tiene que **avisarlo** para que
+ * el cajero mire el N° de operación (o la hora) con el cliente delante. No es un candado: es no
+ * dejar que elija a ciegas.
+ */
+export function avisosDelMismoMonto(
+  pago: PagoYape,
+  pagos: readonly PagoYape[],
+  opciones: OpcionesYape = {},
+): PagoYape[] {
+  const monto = Number(pago?.monto) || 0
+  if (monto <= 0) return []
+  return (pagos ?? []).filter(
+    (p) =>
+      !!p &&
+      p.id !== pago.id &&
+      Math.abs((Number(p.monto) || 0) - monto) < TOLERANCIA &&
+      situacionPagoYape(p, opciones) === 'disponible'
+  )
+}
+
+/**
+ * ¿Hay que confirmar antes de aplicarlo? El aviso **no coincide** con el total de la venta.
+ *
+ * ⚠️ **No es un candado**: aplicar un aviso por menos (pago parcial) o por más (se topea, ver
+ * `aplicarYapeEnVenta`) es legítimo. Lo que hace es **frenar un segundo** al cajero para que mire
+ * monto y N° de operación con el cliente delante, que es el único control real cuando varias cajas
+ * ven la misma lista.
+ */
+export function confirmarAntesDeAplicar(pago: PagoYape, total: number): boolean {
+  return !coincideConTotal(pago, total)
+}
+
 /**
  * Cuánto de este aviso se puede aplicar a la venta, y si se puede.
  *
@@ -342,10 +387,11 @@ export function textoMonto(n: number): string {
   return `S/ ${(Number(n) || 0).toFixed(2)}`
 }
 
-/** «hace 3 min» — hace cuánto yapeó el cliente. */
+/** «hace 12 s» / «hace 3 min» — hace cuánto yapeó el cliente. Los segundos importan con varias cajas. */
 export function haceCuantoYape(fecha: number, ahora: number = Date.now()): string {
-  const min = Math.floor(Math.max(0, ahora - Number(fecha)) / 60000)
-  if (min < 1) return 'hace menos de 1 min'
+  const seg = Math.floor(Math.max(0, ahora - Number(fecha)) / 1000)
+  if (seg < 60) return `hace ${seg} s`
+  const min = Math.floor(seg / 60)
   if (min < 60) return `hace ${min} min`
   const hrs = Math.floor(min / 60)
   return `hace ${hrs} h ${min % 60} min`

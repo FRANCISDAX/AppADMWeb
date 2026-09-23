@@ -6,10 +6,13 @@ import {
   YAPE_USADO_RECIENTE_MINUTOS,
   aplicarYapeEnVenta,
   avisoYapeActivo,
+  avisosDelMismoMonto,
   coincideConTotal,
+  confirmarAntesDeAplicar,
   estaDisponible,
   etiquetaYape,
   haceCuantoYape,
+  horaDeYape,
   minutosRestantesYape,
   operacionDePagoYape,
   pagosYapeDeTurno,
@@ -122,10 +125,50 @@ test('«vence en N min» cuenta desde la fecha del yapeo y nunca da negativo', (
   assert.equal(minutosRestantesYape(aviso({ fecha: AHORA - 60 * MIN }), op), 0)
 })
 
-test('«hace cuánto» se lee en minutos y después en horas', () => {
-  assert.equal(haceCuantoYape(AHORA - 20 * 1000, AHORA), 'hace menos de 1 min')
+test('«hace cuánto» se lee en segundos cuando es reciente, y después en minutos y horas', () => {
+  // 🔑 Los segundos importan: con varias cajas abiertas, «hace 12 s» es lo que deja reconocer
+  // cuál de los avisos es el del cliente que está delante.
+  assert.equal(haceCuantoYape(AHORA - 20 * 1000, AHORA), 'hace 20 s')
   assert.equal(haceCuantoYape(AHORA - 3 * MIN, AHORA), 'hace 3 min')
   assert.equal(haceCuantoYape(AHORA - 75 * MIN, AHORA), 'hace 1 h 15 min')
+})
+
+test('la hora del yapeo se muestra con segundos', () => {
+  // Se compara contra la hora local de la propia fecha, sin fijar zona horaria (el test corre
+  // en cualquier máquina): lo que importa es el formato HH:MM:SS.
+  const fecha = Date.parse('2026-09-21T22:10:07.000Z')
+  const d = new Date(fecha)
+  const dos = (n: number) => String(n).padStart(2, '0')
+  assert.equal(horaDeYape(fecha), `${dos(d.getHours())}:${dos(d.getMinutes())}:07`)
+})
+
+// ─── Varias cajas a la vez (la misma lista para todos) ──────────────────────
+
+test('se detectan los avisos disponibles por el mismo monto (y solo esos)', () => {
+  const mio = aviso({ id: 'mio', monto: 10 })
+  const pagos = [
+    mio,
+    aviso({ id: 'igual-disponible', monto: 10, fecha: AHORA - 2 * MIN }),
+    aviso({ id: 'igual-reservado', monto: 10, estado: 'reservado', reservadoEn: AHORA - MIN }),
+    aviso({ id: 'igual-usado', monto: 10, estado: 'usado', usadoEn: AHORA - MIN }),
+    aviso({ id: 'igual-vencido', monto: 10, fecha: AHORA - 60 * MIN }),
+    aviso({ id: 'otro-monto', monto: 25 }),
+  ]
+  const repetidos = avisosDelMismoMonto(mio, pagos, op).map((p) => p.id)
+  assert.deepEqual(repetidos, ['igual-disponible'])
+})
+
+test('un aviso sin monto no arrastra a los demás', () => {
+  const mio = aviso({ id: 'mio', monto: 0 })
+  assert.deepEqual(avisosDelMismoMonto(mio, [aviso({ id: 'otro', monto: 0 })], op), [])
+})
+
+test('un aviso que NO coincide con el total pide confirmación; el que coincide, no', () => {
+  assert.equal(confirmarAntesDeAplicar(aviso({ monto: 10 }), 10), false)
+  assert.equal(confirmarAntesDeAplicar(aviso({ monto: 10 }), 7.5), true)
+  assert.equal(confirmarAntesDeAplicar(aviso({ monto: 30 }), 10), true)
+  // Sin venta armada no hay nada que confirmar: el botón ya está deshabilitado (`aplicarYapeEnVenta`).
+  assert.equal(confirmarAntesDeAplicar(aviso({ monto: 10 }), 0), true)
 })
 
 // ─── La lista del panel ─────────────────────────────────────────────────────

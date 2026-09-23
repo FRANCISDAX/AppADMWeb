@@ -9,10 +9,13 @@ import { cn } from '@/lib/utils'
 import {
   aplicarYapeEnVenta,
   avisoYapeActivo,
+  avisosDelMismoMonto,
   coincideConTotal,
+  confirmarAntesDeAplicar,
   esAvisoDePrueba,
   etiquetaYape,
   haceCuantoYape,
+  horaDeYape,
   minutosRestantesYape,
   pagosYapeVisibles,
   resumenYape,
@@ -152,6 +155,25 @@ export function PanelPagosYape({
   async function usar(pago: PagoYape) {
     const revision = aplicarYapeEnVenta(pago, total)
     if (!revision.ok) return toast(`⚠️ ${revision.motivo}`)
+    // 🔑 Con varias cajas abiertas todos ven la misma lista (la plata entra a una sola cuenta Yape),
+    // así que un aviso que **no coincide** con el total de la venta se confirma: es el momento de
+    // mirar el monto y el N° de operación con el cliente delante, antes de cargarlo al cobro.
+    if (confirmarAntesDeAplicar(pago, total)) {
+      const otros = avisosDelMismoMonto(pago, pagos, { ahora, vigenciaMin })
+      const ok = await confirm({
+        title: 'El aviso no coincide con el total',
+        message:
+          `${etiquetaYape(pago)}\n` +
+          `Yapeó a las ${horaDeYape(pago.fecha)} (${haceCuantoYape(pago.fecha)}).\n\n` +
+          `La venta es de ${fmt(total)}.\n\n` +
+          (otros.length > 0
+            ? `⚠️ Hay ${otros.length + 1} avisos disponibles por ${fmt(pago.monto)}: fijate el N° de operación (o pedile al cliente que muestre su Yape) para no cargarle el pago de otro.\n\n`
+            : '') +
+          '¿Es el yapeo de este cliente?',
+        okText: 'Sí, aplicar',
+      })
+      if (!ok) return
+    }
     // ⚠️ Un aviso de PRUEBA no es un pago: si se aplica a una venta, esa venta queda registrada
     // como pagada por Yape sin que haya entrado plata. Se puede hacer (es para probar el circuito),
     // pero nunca por accidente.
@@ -227,6 +249,9 @@ export function PanelPagosYape({
         const procesando = procesandoId === pago.id
         const restantes = minutosRestantesYape(pago, { ahora, vigenciaMin })
         const esPrueba = esAvisoDePrueba(pago)
+        /** Otros avisos **disponibles** por el mismo monto: con varias cajas, el monto no alcanza. */
+        const repetidos = avisosDelMismoMonto(pago, pagos, { ahora, vigenciaMin })
+        const pedirConfirmacion = confirmarAntesDeAplicar(pago, total)
 
         return (
           <div
@@ -269,10 +294,15 @@ export function PanelPagosYape({
                     </span>
                   )}
                 </div>
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                <p className="mt-1 truncate text-sm font-semibold">
                   {pago.pagadorNombre || 'Sin nombre'}
-                  {pago.nroOperacion ? ` · op. ${pago.nroOperacion}` : ''}
-                  {` · ${haceCuantoYape(pago.fecha, ahora)}`}
+                </p>
+                {/* 🔑 La hora **con segundos** y el «hace 12 s» son el dato que permite reconocer el
+                    aviso propio cuando varias cajas ven la misma lista: el monto solo no alcanza. */}
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+                  <span className="num font-semibold text-foreground">{horaDeYape(pago.fecha)}</span>
+                  <span>{haceCuantoYape(pago.fecha, ahora)}</span>
+                  {pago.nroOperacion && <span className="num truncate">op. {pago.nroOperacion}</span>}
                 </p>
               </div>
               {situacion === 'disponible' && (
@@ -286,6 +316,15 @@ export function PanelPagosYape({
               <p className="text-[11px] text-muted-foreground">
                 Aviso de <b>prueba</b> (creado en Configuración → Yape): <b>no entró plata</b>. Sirve
                 para comprobar que el circuito funciona.
+              </p>
+            )}
+
+            {/* ⚠️ Dos avisos por el mismo monto son indistinguibles por el monto: con varias cajas
+                trabajando a la vez hay que decirlo, o el cajero elige a ciegas. */}
+            {situacion === 'disponible' && repetidos.length > 0 && (
+              <p className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                ⚠️ Hay <b>{repetidos.length + 1} avisos disponibles de {fmt(pago.monto)}</b>. Mirá el N° de
+                operación (o pedile al cliente que muestre su Yape) antes de usar.
               </p>
             )}
 
@@ -326,6 +365,12 @@ export function PanelPagosYape({
 
             {situacion === 'disponible' && !revision.ok && (
               <p className="text-[10px] text-muted-foreground">{revision.motivo}</p>
+            )}
+
+            {situacion === 'disponible' && revision.ok && pedirConfirmacion && (
+              <p className="text-[10px] text-muted-foreground">
+                No coincide con el total ({fmt(total)}): al usarlo te va a pedir confirmación.
+              </p>
             )}
           </div>
         )

@@ -11,6 +11,22 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 30 — Con varias cajas trabajando a la vez, el panel de Yape ayuda a no elegir a ciegas)
+
+🔑 **Pedido del usuario**: *"procede con las mejoras de B"* — la opción B de la respuesta a *"¿qué va a pasar si 3 cajeros están trabajando a la vez?"*. El fondo del problema: **la plata entra a UNA sola cuenta Yape**, así que el aviso **no dice de qué caja es** y los tres cajeros ven **la misma lista**. El ciclo transaccional `disponible → reservado → usado` (bloque ·26) ya impedía que **dos cajas cobraran el mismo aviso**, pero **no impedía tomar el aviso de otro cliente**.
+
+- 🔑 **Qué se agregó, todo en el panel del PDV**: (1) **hora con segundos** (`horaDeYape`, `HH:MM:SS`); (2) **«hace N s»** en vez de *«hace menos de 1 min»* en el primer minuto; (3) el **pagador más grande y en negrita** (`text-sm font-semibold`), que es el único dato que distingue dos avisos del mismo monto; (4) **aviso ámbar cuando hay otro aviso DISPONIBLE por el mismo monto** (`avisosDelMismoMonto`, tolerancia S/ 0,01; excluye el propio y también los `reservado`/`usado`/`vencido`) — *«⚠️ Hay N avisos disponibles de S/ X. Mirá el N° de operación»*; y (5) **confirmación cuando el aviso NO coincide con el total del carrito** (`confirmarAntesDeAplicar`), con el monto, la hora y el N° de operación en el texto del diálogo (y una pista permanente en la tarjeta: *No coincide con el total (S/ X): al usarlo te va a pedir confirmación*).
+- 🔑 **Decisión de diseño: ayuda para decidir, NO candado.** Ninguna de las cinco bloquea: aplicar un aviso por menos o por más que el total **sigue siendo legítimo** (pago parcial, propina, venta que se completa con otro medio). Lo que se agrega es **información en el momento**; el control real del circuito sigue siendo el **cruce del cierre**, que lista los avisos confirmados del turno y avisa si hubo cobros por Yape y ningún aviso.
+- ⚠️ **Lo que esto NO resuelve (y es decisión de negocio, no de código)**: dos avisos del mismo monto pueden **intercambiarse** el `nroOperacion` guardado (la plata es la misma, el rastro no) y el sistema **no puede atribuir un aviso a una caja**. La ruta para eso es **una cuenta Yape por caja** (3 celulares + 3 puentes) y que el `numeroYape` del aviso decida a quién pertenece.
+- 🔬 **Verificado en el emulador, con la app real** (no solo con tests): `run-b.mjs`, **23/23 comprobaciones OK** contra Firestore local con 3 cajas y un duplicado de S/ 8.50 a propósito. Capturas: `docs/pruebas-carga/yape-varias-cajas-panel.png` (`22:50:03` + `hace 25 s` + `op. 34153099` + `Luis Q*`, el aviso ámbar de duplicado y el chip verde *coincide con el total* en el de 8.50) y `docs/pruebas-carga/yape-varias-cajas-confirmacion.png` (el diálogo *«El aviso no coincide con el total»*).
+- ⚠️ **Dos fallos iniciales del test, NO del producto** (vale aclararlo para no confundirlos con bugs): un regex demasiado suelto matcheaba el propio texto de ayuda (*No coincide con el total*) y un `querySelectorAll('div').find(...)` devolvía un `div` **ancestro**, así que el clic en *«Usar en esta venta»* caía en **otra** tarjeta. Se corrigieron el conteo (por un `<span>`) y la búsqueda de la tarjeta **más interna** (`.filter(...).pop()`).
+- ⚠️ **`Date.now()` durante el render subía el baseline de lint a 81** (`react(purity): Cannot call impure function during render`): se reemplazó por el estado `ahora` que el panel ya mantiene ⇒ **80/0** otra vez.
+- ✅ **Verificado**: `npm test` **335/335** (331 del ·29 + **4 tests nuevos** en `lib/yape.test.ts`), `tsc -b` ✓, lint **80/0**, `npm run build` ✓.
+
+**Next Move**: que el usuario pruebe con 2-3 cajas a la vez y avisos reales; pendiente y barato, el **latido del puente en el PDV** (`tblPuenteYape/estado` lo escribe el puente y **todavía nadie lo lee**).
+
+**Relevant Files**: `src/lib/yape.ts` (`horaDeYape`, `avisosDelMismoMonto`, `confirmarAntesDeAplicar`, `haceCuantoYape` con segundos), `src/lib/yape.test.ts`, `src/components/PanelPagosYape.tsx`, `docs/pruebas-carga/yape-varias-cajas-panel.png` + `yape-varias-cajas-confirmacion.png`, `AGENTS.md` (invariante de varias cajas), `HISTORIAL-SESIONES.md`.
+
 ### (2026-09 · 29 — La configuración de empresa pasa a leerse EN VIVO)
 
 🔑 **Reporte del usuario**: *"en vigencia de un mensaje lo cambié a 5, pero sigue saliendo en la prueba a 10 min"* (la **vigencia de un aviso de Yape**, en Configuración → Yape).
