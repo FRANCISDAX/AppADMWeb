@@ -1,5 +1,5 @@
 import { numeroALetras } from '@/lib/numero-a-letras'
-import { etiquetaPago, formaPagoLabel } from '@/lib/pagos'
+import { etiquetaPago, formaPagoLabel, textoReferenciaPago } from '@/lib/pagos'
 import { cantidadDe, descuentoDeVenta, importeBrutoDe, itemsConDescuento } from '@/lib/sunat-importes'
 import { esc } from '@/lib/ui-utils'
 import { desglosarTurno, lineasDeOrigen, type ConciliacionMedios, type DesgloseTurno, type ItemTurno } from '@/lib/arqueo'
@@ -50,7 +50,7 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   // Pago múltiple (efectivo + Yape + tarjeta…): muestra el desglose con el medio real.
   const pagoHTML =
     Array.isArray(venta.pagos) && venta.pagos.length > 1
-      ? venta.pagos.map((p: any) => `<tr><td class="td-l" colspan="3">${etiquetaPago(p)} S/ ${Number(p.monto || 0).toFixed(2)}${p.operacion ? ` · Op: ${esc(String(p.operacion))}` : ''}</td></tr>`).join('')
+      ? venta.pagos.map((p: any) => `<tr><td class="td-l" colspan="3">${etiquetaPago(p)} S/ ${Number(p.monto || 0).toFixed(2)}${p.operacion ? ` · ${esc(textoReferenciaPago(p.operacion))}` : ''}</td></tr>`).join('')
         + (Number(venta.cambio || 0) > 0
           ? (Number(venta.montoRecibido || 0) > 0
             ? `<tr><td class="td-l" colspan="2">Efectivo recibido S/ ${Number(venta.montoRecibido || 0).toFixed(2)}</td><td class="td-r">Vuelto S/ ${Number(venta.cambio || 0).toFixed(2)}</td></tr>`
@@ -357,7 +357,7 @@ export async function abrirPDFArqueo({ fecha, turnos, resumen, empresa }: { fech
       ? `<div style="margin-top:6px;font-size:9px;"><b>Comprobantes (${turno.comprobantes.length}):</b><br/>
           ${turno.comprobantes.map(c => {
             const tipoLabel = c.tipoPago === 'efectivo' ? '💵 Efectivo' : c.tipoPago === 'transferencia' ? '📲 Transferencia' : c.tipoPago === 'yape' ? '📱 Yape' : c.tipoPago === 'plin' ? '📱 Plin' : c.esCobro ? '💳 Crédito' : c.tipoPago
-            const cobroInfo = c.esCobro ? ` · Op: ${c.operacion || 'SN'}` : ''
+            const cobroInfo = c.esCobro ? ` · ${esc(textoReferenciaPago(c.operacion))}` : ''
             // Si la venta la armó un vendedor y la cobró el cajero del turno, se aclara: el papel
             // tiene que decir quién vendió cada comprobante, no solo quién cerró la caja.
             const p = personalDeVenta({ cajero: c.cajero, vendedorNombre: c.vendedorNombre, usuarioNombre: turno.usuarioNombre })

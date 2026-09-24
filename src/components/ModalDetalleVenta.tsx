@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { etiquetaPago } from '@/lib/pagos'
+import { etiquetaPago, textoReferenciaPago } from '@/lib/pagos'
 import { cn } from '@/lib/utils'
 
 const fmt = (n: any) => 'S/ ' + (Number(n) || 0).toFixed(2)
@@ -89,7 +89,7 @@ export function ModalDetalleVenta({ venta, serieNumero, fecha, tipoDoc, onClose 
               <div key={i} className="flex items-center justify-between">
                 <span>
                   {etiquetaPago(p)}
-                  {p.operacion ? <span className="ml-1 text-[11px] text-muted-foreground">· Op: {p.operacion}</span> : null}
+                  {p.operacion ? <span className="ml-1 text-[11px] text-muted-foreground">· {textoReferenciaPago(p.operacion)}</span> : null}
                 </span>
                 <span className="font-bold">{fmt(p.monto ?? 0)}</span>
               </div>

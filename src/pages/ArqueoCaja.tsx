@@ -13,6 +13,7 @@ import { abrirPDFArqueo, type TurnoArqueo } from '@/lib/pdf'
 import { diagnosticarDiferencia, type Diagnostico } from '@/lib/diagnosticos'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { lineasDeOrigen, type ConciliacionMedios, type DesgloseBolsillo, type DesgloseTurno } from '@/lib/arqueo'
+import { textoReferenciaPago } from '@/lib/pagos'
 
 const MESES_CORTO = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
 const fmt = (n: number) => 'S/ ' + (n ?? 0).toFixed(2)
@@ -441,7 +442,7 @@ export function ArqueoCaja() {
                               <div className="num text-xs font-bold">{fmt(comp.total)}</div>
                               <Badge variant={comp.esCobro ? 'warning' : comp.tipoPago === 'efectivo' ? 'success' : comp.tipoPago === 'credito' ? 'warning' : 'secondary'} className="mt-1">
                                 {comp.esCobro
-                                  ? `${comp.tipoPago === 'efectivo' ? '💵 Efectivo' : comp.tipoPago === 'transferencia' ? '📲 Transferencia' : comp.tipoPago === 'yape' ? '📱 Yape' : comp.tipoPago === 'plin' ? '📱 Plin' : '💳 Crédito'} · Op: ${comp.operacion || 'SN'}`
+                                  ? `${comp.tipoPago === 'efectivo' ? '💵 Efectivo' : comp.tipoPago === 'transferencia' ? '📲 Transferencia' : comp.tipoPago === 'yape' ? '📱 Yape' : comp.tipoPago === 'plin' ? '📱 Plin' : '💳 Crédito'} · ${textoReferenciaPago(comp.operacion)}`
                                   : comp.tipoPago === 'efectivo' ? '💵 EFECTIVO' : comp.tipoPago === 'credito' ? '💳 CRÉDITO' : '📲 TRANSF'}
                               </Badge>
                             </div>

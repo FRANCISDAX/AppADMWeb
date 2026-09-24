@@ -22,7 +22,7 @@
  */
 
 import { numeroALetras } from './numero-a-letras.ts'
-import { etiquetaPago, formaPagoLabel } from './pagos.ts'
+import { etiquetaPago, formaPagoLabel, textoReferenciaPago } from './pagos.ts'
 import { cantidadDe, descuentoDeVenta, importeBrutoDe, itemsConDescuento, valorUnitarioSunat } from './sunat-importes.ts'
 import { lineasPersonal, personalDeVenta } from './personal.ts'
 import { TITULOS, calcularTotales, construirQRData, generarQRDataUrl, normalizarMontosNota } from './comprobante-comun.ts'
@@ -162,7 +162,7 @@ export function datosComprobanteA4({ doc, correlativo, config, tipoDoc = 'NV', s
   if (Array.isArray(venta.pagos) && venta.pagos.length > 1) {
     for (const p of venta.pagos) {
       lineasPago.push({
-        etiqueta: `${limpiarTextoA4(etiquetaPago(p))}${p?.operacion ? ` · Op: ${limpiarTextoA4(p.operacion)}` : ''}`,
+        etiqueta: `${limpiarTextoA4(etiquetaPago(p))}${p?.operacion ? ` · ${limpiarTextoA4(textoReferenciaPago(p.operacion))}` : ''}`,
         monto: Number(p?.monto || 0).toFixed(2),
       })
     }

@@ -9,6 +9,7 @@ import {
   medioDeVenta,
   normalizarMonto,
   resumenPagos,
+  textoReferenciaPago,
   tipoPagoDe,
   topeSugerido,
   type PagoEntrada,
@@ -28,6 +29,23 @@ test('el bolsillo manda todo lo electrónico a transferencia y el efectivo a caj
   assert.equal(bolsilloDe('transferencia'), 'transferencia')
   assert.equal(bolsilloDe('tarjeta'), 'transferencia')
   assert.equal(bolsilloDe('cualquier-cosa'), 'credito', 'un medio desconocido NO entra a la caja: si cayera a efectivo, inflaría el cajón')
+})
+
+test('la referencia de un pago se rotula «Ref», no «Op» (puede ser un código de seguridad)', () => {
+  // 🔑 El rótulo viejo («Op: 159») prometía un N° de operación, y un aviso de Yape real NO lo trae:
+  // lo que se guarda ahí es el **código de seguridad** (ver `lib/yape.ts`). Un solo lugar decide
+  // cómo se escribe, así el ticket, el A4, el arqueo, el detalle y los turnos no se contradicen.
+  assert.equal(textoReferenciaPago('34153064'), 'Ref: 34153064')
+  assert.equal(textoReferenciaPago('159'), 'Ref: 159')
+  // Sin referencia: `SN` («sin número»), como antes — solo cambia el rótulo.
+  assert.equal(textoReferenciaPago(''), 'Ref: SN')
+  assert.equal(textoReferenciaPago('   '), 'Ref: SN')
+  assert.equal(textoReferenciaPago(null), 'Ref: SN')
+  assert.equal(textoReferenciaPago(undefined), 'Ref: SN')
+  // Un texto con espacios de más se normaliza (lo que se imprime no puede salir con saltos raros).
+  assert.equal(textoReferenciaPago('  12 34 \n 56 '), 'Ref: 12 34 56')
+  // ⚠️ Nunca dice «Op»: es lo que se estaba corrigiendo.
+  assert.ok(!textoReferenciaPago('159').includes('Op'))
 })
 
 // `medioDeVenta` es lo que permite que una nota herede el medio del comprobante original

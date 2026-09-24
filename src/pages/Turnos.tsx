@@ -13,6 +13,7 @@ import { obtenerPagosYapeDelTurno } from '@/services/yape'
 import type { PagoYape } from '@/lib/yape'
 import { cn } from '@/lib/utils'
 import { desglosarTurno, lineasDeOrigen, type DesgloseTurno } from '@/lib/arqueo'
+import { textoReferenciaPago } from '@/lib/pagos'
 
 const fmt = (n: number) => 'S/ ' + n.toFixed(2)
 
@@ -308,7 +309,7 @@ export function Turnos() {
                   const esCobro = v.tipo === 'cobro_credito'
                   const tipo = v.tipoPago || 'efectivo'
                   const tipoLabel = tipo === 'efectivo' ? '💵 Efectivo' : tipo === 'transferencia' ? '📲 Transferencia' : tipo === 'yape' ? '📱 Yape' : tipo === 'plin' ? '📱 Plin' : '💳 Crédito'
-                  const op = v.operacion || 'SN'
+                  const op = textoReferenciaPago(v.operacion)
                   return (
                     <div key={v.id || i} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 text-sm">
                       <div className="min-w-[7.5rem] flex-1">
@@ -318,7 +319,7 @@ export function Turnos() {
                       <div className="shrink-0 text-right">
                         <div className={cn('num font-bold', anulada && 'line-through text-muted-foreground')}>{fmt(v.total ?? 0)}</div>
                         <div className={cn('text-[11px]', anulada ? 'text-red-600' : 'text-muted-foreground')}>
-                          {anulada ? '🗑️ Anulada' : esCobro ? `${tipoLabel} · Op: ${op}` : tipoLabel}
+                          {anulada ? '🗑️ Anulada' : esCobro ? `${tipoLabel} · ${op}` : tipoLabel}
                         </div>
                       </div>
                     </div>

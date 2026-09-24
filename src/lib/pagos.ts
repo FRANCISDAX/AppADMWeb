@@ -262,3 +262,25 @@ export function formaPagoLabel(pagos: readonly { tipo?: string; medio?: string }
   if (pagos.length > 1) return 'Mixto'
   return infoMedio(pagos[0].medio || pagos[0].tipo || 'efectivo').label
 }
+
+/** Cómo se dice «no hay referencia» (lo que antes se imprimía como `Op: SN`). */
+export const REFERENCIA_SIN_NUMERO = 'SN'
+
+/**
+ * Cómo se rotula la **referencia** de un pago (`Ref: 159`): la usan el ticket de 72 mm, el A4, el
+ * arqueo, el PDF del cierre, el detalle de la venta y los turnos.
+ *
+ * 🔑 **Por qué dice «Ref» y no «Op»** (pedido del usuario, 24/09/2026): lo que se guarda ahí **ya no
+ * es siempre un N° de operación**. Un aviso real de Yape **no trae** N° de operación y lo que se
+ * guarda es el **código de seguridad** (`lib/yape.ts` → `operacionDePagoYape`), así que un rótulo
+ * que decía «Op» prometía un número de operación que podía no serlo. «Ref» es lo que realmente es:
+ * la referencia del pago, venga del N° de operación o del código de seguridad.
+ * ⚠️ **`Op. Gravadas` / `Op. Exonerada` / `Op. Inafecta` de los comprobantes NO se tocan**: son los
+ * totales de SUNAT (otra cosa) y los declara el comprobante.
+ * ⚠️ Los lugares que **omiten** la referencia cuando no hay nada (el ticket y el A4) siguen
+ * omitiéndola: el `SN` es para los listados, que necesitan una columna con algo.
+ */
+export function textoReferenciaPago(operacion?: string | null): string {
+  const valor = String(operacion ?? '').trim().replace(/\s+/g, ' ')
+  return `Ref: ${valor || REFERENCIA_SIN_NUMERO}`
+}
