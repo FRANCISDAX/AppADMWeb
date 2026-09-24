@@ -48,7 +48,7 @@ import { CreditoPanel } from '@/components/CreditoPanel'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { registrarVenta, crearVentaPendiente, cobrarVentaPendiente, obtenerDocumento, obtenerVentasPendientes, type VentaItem } from '@/services/ventas'
 import { confirmarPagoYapeEnVenta, reservarPagoYape, soltarPagoYape } from '@/services/yape'
-import { aplicarYapeEnVenta, operacionDePagoYape, vigenciaYapeMinutos, type PagoYape } from '@/lib/yape'
+import { aplicarYapeEnVenta, operacionDePagoYape, textoOperacionYape, vigenciaYapeMinutos, type PagoYape } from '@/lib/yape'
 import { abrirPDFComprobante } from '@/lib/pdf'
 // 📄 A4 (hoja normal) para mandar el comprobante por correo o WhatsApp. Es un documento **aparte** del
 // ticket de 72 mm: la impresión de la ticketera no cambia.
@@ -2106,12 +2106,22 @@ export function Pdv() {
                           </button>
                         </div>
                         {info.pideOperacion && (
-                          <Input
-                            value={p.operacion}
-                            onChange={(e) => actualizarPago(p.id, { operacion: e.target.value })}
-                            placeholder="N° de operación (opcional)"
-                            className="h-8 text-xs"
-                          />
+                          <>
+                            <Input
+                              value={p.operacion}
+                              onChange={(e) => actualizarPago(p.id, { operacion: e.target.value })}
+                              placeholder="N° de operación (opcional)"
+                              className="h-8 text-xs"
+                            />
+                            {/* 🔑 Cuando la fila la llenó un aviso de Yape, se dice QUÉ quedó acá:
+                                estos avisos no traen N° de operación, así que se guarda el código de
+                                seguridad — y sin el rótulo el cajero cree que es un N° de operación. */}
+                            {avisoYape?.filaId === p.id && textoOperacionYape(avisoYape.pago) !== '' && (
+                              <p className="text-[10px] leading-snug text-muted-foreground">
+                                {textoOperacionYape(avisoYape.pago)}
+                              </p>
+                            )}
+                          </>
                         )}
                       </div>
                     )

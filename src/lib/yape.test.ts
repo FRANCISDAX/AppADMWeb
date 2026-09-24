@@ -29,6 +29,7 @@ import {
   resumenYape,
   situacionPagoYape,
   sonidoYapeActivo,
+  textoOperacionYape,
   totalYape,
   vigenciaYapeMinutos,
   type PagoYape,
@@ -266,9 +267,23 @@ test('un aviso sin monto no se aplica: hay que revisar el puente', () => {
   assert.match(r.motivo ?? '', /no tiene monto/)
 })
 
-test('el pago de la venta guarda el N° de operación del aviso (y si falta, el id del aviso)', () => {
+test('el pago de la venta guarda el N° de operación del aviso; si no viene, el código de seguridad', () => {
   assert.equal(operacionDePagoYape(aviso()), '34153064')
-  assert.equal(operacionDePagoYape(aviso({ nroOperacion: '   ' })), 'yape-1')
+  // 📌 Estos avisos NO traen N° de operación (verificado en el celular): antes se guardaba el id del
+  // documento (`yape-1`, `nd_1790227037576`) y el cajero veía un garabato en el PDV, en el ticket y
+  // en el arqueo. Ahora se guarda el **código de seguridad**, que es lo que el cliente muestra.
+  assert.equal(operacionDePagoYape(aviso({ nroOperacion: '   ', codigoSeguridad: '159' })), '159')
+  // Sin N° de operación NI código: se guarda sin referencia (no se inventa ni se filtra el id interno).
+  assert.equal(operacionDePagoYape(aviso({ nroOperacion: '   ' })), '')
+  assert.equal(operacionDePagoYape(aviso({ nroOperacion: '', codigoSeguridad: '  ' })), '')
+  // El N° de operación manda cuando existe (es el dato de conciliación).
+  assert.equal(operacionDePagoYape(aviso({ codigoSeguridad: '159' })), '34153064')
+})
+
+test('el texto que explica la referencia solo aparece cuando no hay N° de operación', () => {
+  assert.equal(textoOperacionYape(aviso()), '')
+  assert.match(textoOperacionYape(aviso({ nroOperacion: '', codigoSeguridad: '159' })), /Código de seguridad/)
+  assert.match(textoOperacionYape(aviso({ nroOperacion: '' })), /no trae N° de operación ni código/)
 })
 
 test('la etiqueta de una línea aguanta un aviso sin nombre ni número', () => {

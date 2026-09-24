@@ -286,10 +286,41 @@ export function aplicarYapeEnVenta(
   return { ok: true, monto }
 }
 
-/** N° de operación con el que se guarda el pago de la venta (queda en `pagos[].operacion`). */
+/**
+ * La **referencia** con la que se guarda el pago de la venta (queda en `pagos[].operacion` y de ahí
+ * sale la `referencia` del documento, el `· Op:` del ticket y el del arqueo).
+ *
+ * 🔑 **Qué se guarda, y por qué** (corregido el 24/09/2026 a pedido del usuario): el **N° de
+ * operación** si el aviso lo trae y, si no, el **código de seguridad**.
+ *
+ * 📌 **Lo que estaba mal**: cuando el aviso no traía N° de operación —y **estos avisos no lo traen**,
+ * verificado en el celular del negocio— se guardaba **el id del documento** (`nd_1790227037576`). Ese
+ * id es interno (sirve para ubicar el aviso en `tblPagosYape`, no para una persona) y terminaba
+ * impreso en el PDV, en el ticket y en el arqueo como si fuera un número de operación: el cajero veía
+ * *«un garabato»*. Lo que hay que poder cotejar con el cliente es el **código de seguridad** que Yape
+ * le muestra al que paga.
+ * ⚠️ **No hace falta el id para nada**: el vínculo venta ↔ aviso se guarda **en el aviso**
+ * (`ventaId`/`documento`, que escribe `confirmarPagoYapeEnVenta`) y por ahí lo encuentra la anulación
+ * (`anularPagoYapeDeVenta` busca por `ventaId`). Ninguna regla compara ni busca por este campo.
+ * ⚠️ Si el aviso no trae ni N° de operación ni código, devuelve **`''`**: el pago se guarda **sin**
+ * referencia (y el ticket no imprime `· Op:`), que es más honesto que un id interno.
+ */
 export function operacionDePagoYape(pago: PagoYape): string {
   const nro = String(pago.nroOperacion ?? '').trim()
-  return nro || pago.id
+  if (nro) return nro
+  return codigoDeSeguridadYape(pago)
+}
+
+/**
+ * Qué decirle al cajero sobre **qué quedó** en el campo de referencia (`''` = no hace falta
+ * explicar nada porque vino el N° de operación de verdad).
+ */
+export function textoOperacionYape(pago: PagoYape): string {
+  if (String(pago.nroOperacion ?? '').trim()) return ''
+  if (codigoDeSeguridadYape(pago).trim()) {
+    return 'Código de seguridad del aviso: estos avisos no traen N° de operación'
+  }
+  return 'El aviso no trae N° de operación ni código de seguridad'
 }
 
 /**
