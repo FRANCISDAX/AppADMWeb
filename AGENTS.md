@@ -11,7 +11,7 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 - **Punto de partida (checkpoint del 17/09)**: se unificó y commiteó el trabajo sin versionar de la **sesión paralela** — **cajas**, **ventas pendientes**, **rol VENDEDOR** y proveedores — tras revisar que no rompiera los invariantes.
 - ⚠️ **Los índices compuestos viven en `firestore.indexes.json`** y se despliegan con `npx firebase deploy --only firestore:indexes` (**ya desplegados** el 17/09: `tblEgresos: proveedorId + categoria`, `tblDocumentos: cajaId + estado + fecha`). **Nunca** `--force`. Al agregar una consulta con igualdad + rango/orderBy, declarar el índice ahí **y** desplegarlo: sin eso la consulta falla con *"The query requires an index"* (el mismo síntoma del bloque ·5 del historial). ⚠️ El proyecto tiene **1 índice creado a mano en la consola que no está en el archivo**: por eso **nunca** `--force` (lo borraría).
 - **Ventas pendientes / en espera → pedidos**: el **vendedor** manda la venta a caja y el **cajero**, desde `PanelVentasPendientes`, la **trae al carrito del PDV** (modo pedido) para elegir ahí **comprobante** y **forma de pago**. **El comprobante se genera recién al cobrar** (`PENDIENTE`, sin serie ni correlativo) y **el pedido NO toca el stock**; eliminarlo solo lo marca `cancelado`. El detalle y el porqué de cada decisión están en los invariantes de **Pedidos**.
-- **Verde**: `npm test` **362/362**, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 warnings (baseline: no subirlo)**, `npm run build` ✓.
+- **Verde**: `npm test` **363/363**, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 warnings (baseline: no subirlo)**, `npm run build` ✓.
 - **Producción real** (medida, no supuesta): ~93 turnos, ~234 documentos, 40 productos **todos exonerados (`'20'`)** porque la región está exenta de IGV.
 - **Decisiones tomadas con el usuario** (16/09) sobre los controles del cierre: **conciliación por billetera opcional** (no bloquea el cierre), **conteo ciego configurable y apagado por defecto** (`config.conteoCiego`, Configuración → Empresa) y **firmas**: los PDF imprimen nombre/RUC del negocio, quién cerró el turno y dos líneas de firma (cajero / supervisor).
 - **Rol ALMACEN** (19/09): inventario, kardex, compras, proveedores y costos; **sin** ventas, caja, reportes financieros ni configuración.
@@ -141,7 +141,7 @@ Reglas que ya costaron un bug o que salieron de una decisión explícita del usu
 
 ## Historial de sesiones
 
-El detalle de cada sesión —objective, decisiones con su porqué, evidencias, `Next Move` y archivos tocados— está en **`HISTORIAL-SESIONES.md`** (más reciente primero; el último bloque es **·39, la pantalla y el icono del puente (v1.5)**; al final del archivo hay un **apéndice con la referencia de funciones y la tabla de colecciones**).
+El detalle de cada sesión —objective, decisiones con su porqué, evidencias, `Next Move` y archivos tocados— está en **`HISTORIAL-SESIONES.md`** (más reciente primero; el último bloque es **·40, la referencia del pago por Yape**; al final del archivo hay un **apéndice con la referencia de funciones y la tabla de colecciones**).
 
 
 ⚠️ **Por qué está separado**: el entorno carga `AGENTS.md` con un presupuesto (~64 KB) y lo **trunca** si se pasa. Acá queda solo lo que **gobierna**; al cerrar una sesión el bloque va **al historial** y en `## Estado actual` se actualiza solo lo que cambió de fondo.
