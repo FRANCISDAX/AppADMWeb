@@ -173,7 +173,6 @@ El detalle de cada sesión —objective, decisiones con su porqué, evidencias, 
 - 📌 **El documento del TURNO tiene su propio techo (medido)**: guarda el array **`ventasDelTurno` completo y lo reescribe en cada venta** ⇒ **917 bytes por venta** y **~130 KB con 200 ventas**; el 1 MiB de Firestore llegaría a **~1.600 ventas en un mismo turno** ⇒ **partir el día en turnos (mañana/tarde)** antes que dejar un turno de 800+ ventas.
 - ✅ **Integridad y peso (medidos)**: en ráfaga, numeración sin huecos ni duplicados, stock exacto y **cero stocks negativos**; **0,74 KB por venta** ⇒ 150 ventas/día son **~6 MB/mes** y **~71 MB/año** ⇒ entra en el plan gratuito o cuesta centavos.
 - 💳 **Plan de Firebase**: depende del **consumo diario**, no de las cajas, y lo primero que se rompe son las **lecturas** (cada dispositivo cuenta el **catálogo completo**). **Spark**: 50.000 lecturas y 20.000 escrituras/día (**~2.000-2.500 ventas**) y ⚠️ **Hosting 360 MB/día**; ⚠️ **pasarse CORTA el servicio hasta la medianoche** ⇒ **Blaze va antes de necesitarlo** (con **6 cajas deja de ser opcional**). Cuesta **<US$1/mes** con 3 cajas y ⚠️ **no hay tope automático de gasto**; al crecer toca **pre-agregar los reportes** (`tblResumenDiario`). Detalle: historial ·22.
-- 🔢 **Los números completos de cada prueba de carga** están en el **historial (·19-·22)** y en el **manual §17 / Anexo A**.
 
 
 
