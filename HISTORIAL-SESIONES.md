@@ -11,6 +11,23 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 41 — El rótulo «Op:» pasa a «Ref:»: una sola regla para la referencia del pago)
+
+🔑 **Pedido del usuario**: *«procede»*, sobre lo que había quedado ofrecido al cerrar el bloque ·40 — cambiar el rótulo impreso `· Op:` por **`· Ref:`**.
+
+- 🔍 **Por qué se cambia** (consecuencia directa del bloque ·40): desde que un aviso de Yape sin N° de operación guarda el **código de seguridad**, ese campo **ya no es siempre un N° de operación**. Un rótulo que dice «Op» promete algo que puede no ser: el cajero lee `Op: 159` y cree que 159 es el número de operación del pago. «Ref» es lo que realmente es.
+- 🔧 **Una sola regla, en `lib/pagos.ts`** (al lado de `formaPagoLabel`): **`textoReferenciaPago(operacion)`** devuelve `Ref: 159` y `Ref: SN` cuando no hay nada (el `SN` es el que ya usaba el arqueo; los lugares que **omiten** la referencia cuando está vacía —el ticket y el A4— siguen omitiéndola). ⚠️ **No fue un buscar-y-reemplazar**: los `Op. Gravadas` / `Op. Exonerada` / `Op. Inafecta` / `Op. Gratuita` de los comprobantes son **los totales de SUNAT** (otra cosa) y quedaron intactos.
+- 📍 **Los seis lugares** que la imprimen ahora usan la misma función: ticket de 72 mm (`lib/pdf.ts`), comprobante **A4** (`lib/comprobante-a4.ts`), **arqueo** y **PDF del cierre** (`lib/pdf.ts`), **detalle de la venta** (`components/ModalDetalleVenta.tsx`), **arqueo en pantalla** (`pages/ArqueoCaja.tsx`) y **turnos** (`pages/Turnos.tsx`).
+- 🛡️ **Guarda nueva** (`src/lib/referencia-pago.test.ts`, **6 tests**): lee los cinco archivos y **falla** si alguno deja de usar `textoReferenciaPago` o si vuelve a aparecer `· Op: ` (si se rompe en uno solo, el ticket y el arqueo dirían cosas distintas del mismo pago). Y fija lo contrario: que los rótulos de SUNAT sigan existiendo.
+- 🧪 **Verificado en el EMULADOR con la app real** (`run-referencia.mjs`, **6/6 OK**): con un cobro de crédito por Yape con referencia `159` en el turno, la pantalla **Turnos** muestra **`Ref: 159`**, **no** aparece `Op: 159`, no quedó ningún `Op: ` en la pantalla, el comprobante se lista, sin pedidos a internet y sin errores de página. Captura: `docs/pruebas-carga/pago-referencia-turnos.png`.
+- ✅ **Baselines**: `npm test` **370/370** (364 + 6 de la guarda), `npx tsc -b` ✓, lint **80 warnings / 0 errores** ✓.
+- 🚀 **Desplegado y verificado en vivo** (worktree limpio en `a30ea7a`): bundle **`index-Dfjh6esi.js`**; el `index.html` en vivo apunta a los **mismos 5 assets** que el `dist`; el chunk `pagos-B5CiB6aV.js` servido es **byte a byte** el compilado y tiene `Ref: ` sin `Op: `; y en **todo** el bundle compilado **no queda ningún chunk con `Op: `** (el rótulo nuevo está en `pagos`, `pdf`, `comprobante-a4`, `ModalDetalleVenta`, `Turnos` y `Pdv`).
+- 📘 **El manual no se toca**: §2.14 ya decía que *«Usar en esta venta»* carga la forma de pago con **«su N° de operación (o su código de seguridad, cuando el aviso lo trae)»** — el texto del bloque ·33 ya era correcto para este comportamiento. El rótulo `Ref` es del papel, no del manual.
+
+**Next Move**: nada pendiente. Para que se vea en las cajas hay que **recargar** (Ctrl+Shift+R) o cerrar y abrir la PWA: el HTML está cacheado una hora.
+
+**Relevant Files**: `src/lib/pagos.ts` (`textoReferenciaPago`, `REFERENCIA_SIN_NUMERO`), `src/lib/pagos.test.ts`, `src/lib/referencia-pago.test.ts` (guarda nueva), `src/lib/pdf.ts`, `src/lib/comprobante-a4.ts`, `src/components/ModalDetalleVenta.tsx`, `src/pages/ArqueoCaja.tsx`, `src/pages/Turnos.tsx`, `package.json`, `docs/pruebas-carga/pago-referencia-turnos.png`, `AGENTS.md`, `HISTORIAL-SESIONES.md`; commit **`a30ea7a`** + deploy.
+
 ### (2026-09 · 40 — «N° de Operación» ya no muestra un garabato: la referencia del pago por Yape es el código de seguridad)
 
 🔴 **Reporte del usuario**: *«cuando se paga con yape … en el pdv cuando se presiona que se va usar ese pago de yape … en Num de Operacion no va el codigo de seguridad que tiene el yape va unas letras parece garabato … en su reemplazó se usa el código de seguridad»*. **Diagnosticó el síntoma exacto**.
