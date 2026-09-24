@@ -64,6 +64,8 @@ Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `
 
 **Next Move**: que el usuario instale **`PuenteYape-1.5.apk`** (encima de la 1.4) y mire la pantalla nueva. Para volver a probar el puente sin el celular, la receta queda acá: AVD con la imagen `android-37.0` que ya está en la máquina, app falsa con el paquete de Yape para publicar los textos reales, `adb shell cmd notification allow_listener`, y capturar con reintento (las capturas del emulador salen negras a veces).
 
+- ✅ **Confirmado con hardware real (24/09/2026)**: el usuario probó un **yapeo real y el aviso llegó al PDV con su código de seguridad** — era el único tramo que no se podía verificar desde acá (el emulador prueba el reconocimiento y la cola, no que la notificación real del negocio llegue). **Lo que NO confirmó** (y por lo tanto sigue sin verificarse): si ya instaló la **1.5** y cómo sale el **`Ref:`** en el ticket y el arqueo impresos.
+
 **Relevant Files** (puente `appadm-yape-puente`, repo que versiona el usuario): `app/src/main/java/pe/appadm/puenteyape/Tema.kt` (nuevo), `MainActivity.kt` (pantalla nueva), `app/src/main/res/values/{colors,themes,strings}.xml` (nuevos), `app/src/main/res/drawable/ic_launcher_foreground.xml` (nuevo), `app/src/main/res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher{,_round}.png` (10 PNG nuevos), `app/src/main/res/mipmap-anydpi-v26/ic_launcher{,_round}.xml` (nuevos), `AndroidManifest.xml` (icono, roundIcon, tema, label), `app/build.gradle.kts` (1.5), `Puente.kt` (`VERSION = "1.5"`), `README.md`; (web) `docs/pruebas-carga/puente-ui-*.png` (evidencia), `HISTORIAL-SESIONES.md`.
 
 ### (2026-09 · 38 — El app se llama `AppADM`: JorFel es la empresa, no el producto)
