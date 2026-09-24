@@ -141,7 +141,7 @@ Reglas que ya costaron un bug o que salieron de una decisión explícita del usu
 
 ## Historial de sesiones
 
-El detalle de cada sesión —objective, decisiones con su porqué, evidencias, `Next Move` y archivos tocados— está en **`HISTORIAL-SESIONES.md`** (más reciente primero; el último bloque es **·38, el app se llama AppADM** — JorFel es la empresa, no el producto —; al final del archivo hay un **apéndice con la referencia de funciones y la tabla de colecciones**).
+El detalle de cada sesión —objective, decisiones con su porqué, evidencias, `Next Move` y archivos tocados— está en **`HISTORIAL-SESIONES.md`** (más reciente primero; el último bloque es **·39, la pantalla y el icono del puente (v1.5)**; al final del archivo hay un **apéndice con la referencia de funciones y la tabla de colecciones**).
 
 
 ⚠️ **Por qué está separado**: el entorno carga `AGENTS.md` con un presupuesto (~64 KB) y lo **trunca** si se pasa. Acá queda solo lo que **gobierna**; al cerrar una sesión el bloque va **al historial** y en `## Estado actual` se actualiza solo lo que cambió de fondo.
