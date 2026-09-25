@@ -171,6 +171,7 @@
       <tr><td><strong>GERENTE</strong></td><td>Ventas, reportes, inventario (sin config ni usuarios)</td><td>Supervisor de sucursal</td></tr>
       <tr><td><strong>CAJERO</strong></td><td>PDV, turnos, cobrar ventas pendientes, clientes</td><td>Personal de caja</td></tr>
       <tr><td><strong>VENDEDOR</strong></td><td>PDV para enviar ventas a caja (no cobra directamente)</td><td>Vendedor de piso</td></tr>
+      <tr><td><strong>ALMACEN</strong></td><td>Inventario, kardex, compras, proveedores, rotación y costos. <strong>No</strong> tiene ventas (PDV), caja, reportes financieros ni configuración</td><td>Almacenero / encargado de depósito</td></tr>
       <tr><td><strong>PERSONALIZADO</strong></td><td>Lo que el admin le configure</td><td>Acceso limitado</td></tr>
     </tbody>
   </table>
@@ -938,8 +939,8 @@
     <div class="step"><strong>Toca "Nuevo Usuario"</strong>.</div>
     <div class="step"><strong>Nombre y email</strong> (el email es único en Firebase Auth).</div>
     <div class="step"><strong>Contraseña</strong> (mínimo 6 caracteres).</div>
-    <div class="step"><strong>Rol</strong>: ADMIN, GERENTE, CAJERO, VENDEDOR, PERSONALIZADO.</div>
-    <div class="step"><strong>Caja asignada</strong> (si es CAJERO o VENDEDOR): selecciona la caja de la lista.</div>
+    <div class="step"><strong>Rol</strong>: ADMIN, GERENTE, CAJERO, VENDEDOR, ALMACEN, PERSONALIZADO.</div>
+    <div class="step"><strong>Caja asignada</strong> (si es CAJERO o VENDEDOR): selecciona la caja de la lista. ⚠️ El rol <strong>ALMACEN</strong> no está en caja: no emite comprobantes ni abre turno.</div>
     <div class="step"><strong>Permisos</strong>: si es PERSONALIZADO, configura permiso por permiso.</div>
     <div class="step"><strong>Series de comprobante</strong> (opcional): si la caja tiene series propias, se completan automáticamente.</div>
     <div class="step"><strong>Crear</strong>.</div>
@@ -953,8 +954,13 @@
       <tr><td>GERENTE</td><td>Todos excepto: usuarios, configuración, eliminar producto, rectificar turno, proveedores</td></tr>
       <tr><td>CAJERO</td><td>PDV, turnos, dashboard, clientes, reportes, imprimir, abrir/cerrar turno, cobrar crédito, egresos, ver/cobrar/cancelar ventas pendientes</td></tr>
       <tr><td>VENDEDOR</td><td>PDV (solo enviar a caja), turnos, clientes, imprimir</td></tr>
+      <tr><td>ALMACEN</td><td>Inventario, kardex, rotación de inventario, compras, proveedores, ver costos, crear/editar/eliminar producto y ajustar stock. <strong>Sin</strong> PDV, turnos, reportes financieros, clientes, egresos ni configuración</td></tr>
     </tbody>
   </table>
+  <div class="tip">
+    <div class="tip-label">💡 Para qué sirve el rol ALMACEN</div>
+    <p>Es el rol del <strong>almacenero</strong>: entra a cargar la mercadería, corregir el stock, ver el kardex y los costos, y pedirle al proveedor — <strong>sin</strong> acceso a la caja ni a lo que se vende. Sirve para que el depósito trabaje sin darle a esa persona la llave del dinero ni la de la configuración. ⚠️ Como no tiene el Dashboard Gerencial, <strong>tampoco ve la tarjeta de Alertas</strong> (ver <em>11.10</em>): las alertas de stock las ve quien tenga ese dashboard.</p>
+  </div>
 
   <h3>13.3 Desactivar / activar</h3>
   <p>En la lista de usuarios, toca el checkbox al lado del nombre para activar/desactivar. Un usuario desactivado no puede iniciar sesión.</p>
