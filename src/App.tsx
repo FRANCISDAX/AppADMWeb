@@ -3,6 +3,7 @@ import * as React from 'react'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
 import { useTheme } from '@/hooks/use-theme'
+import { useSunatAuto } from '@/hooks/use-sunat-auto'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { LoadingSquare } from '@/components/loading-square'
@@ -83,6 +84,11 @@ function Shell() {
   const { user, loading, logout } = useAuth()
   const { nombre: nombrePerfil, tienePermiso, loading: permisosLoading } = usePermisos()
   const { theme, toggle } = useTheme()
+  // 🔑 **Envío automático a SUNAT**, montado en el Shell (no en una pantalla): tiene que correr en
+  // cualquier sección y en cualquier equipo —cuantos más abiertos, más chance de declarar a tiempo—,
+  // y dos pestañas no pueden mandar el mismo comprobante (reclamo transaccional). No hace nada si el
+  // negocio lo apagó en Configuración → SUNAT, ni si no hay sesión, ni sin conexión.
+  useSunatAuto()
   const [seccion, setSeccion] = React.useState<string | null>(null)
   const [abiertas, setAbiertas] = React.useState<Record<string, boolean>>({ Operación: true, Reportes: true })
   const [toast, setToast] = React.useState<string | null>(null)

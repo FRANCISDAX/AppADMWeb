@@ -118,6 +118,7 @@ export function useAlertas(): UseAlertas {
       turnosCerradosHoy: datos.turnosCerradosHoy,
       documentosHoy: datos.documentosHoy,
       avisosYape: datos.avisosYape,
+      documentosSunat: datos.documentosSunat,
     })
   }, [datos, config, productos, ahora])
 

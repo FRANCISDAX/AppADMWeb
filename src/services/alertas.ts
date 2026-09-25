@@ -26,8 +26,10 @@ import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import type { DocumentoAlerta, TurnoAlerta } from '@/lib/alertas'
 import type { LatidoPuenteYape } from '@/lib/puente'
+import type { DocumentoSunat } from '@/lib/sunat-auto'
 import type { PagoYape } from '@/lib/yape'
 import { leerPuenteYape } from '@/services/puente'
+import { cargarDocumentosSunatPendientes } from '@/services/sunat-auto'
 import { obtenerPagosYapeDelDia } from '@/services/yape'
 
 /** Todo lo que el tablero necesita, tal como sale de Firestore (el catálogo lo agrega el hook). */
@@ -37,6 +39,12 @@ export type ContextoAlertasFirestore = {
   turnosCerradosHoy: TurnoAlerta[]
   documentosHoy: DocumentoAlerta[]
   avisosYape: PagoYape[]
+  /**
+   * Los documentos que **esperan a SUNAT** (pendientes, con error o rechazados).
+   * ⚠️ **No son los del día**: un comprobante sin declarar puede tener días y el plazo se mide justo
+   * contra eso; los trae `services/sunat-auto.ts` con una igualdad por estado (sin índice compuesto).
+   */
+  documentosSunat: DocumentoSunat[]
 }
 
 /**
@@ -98,7 +106,7 @@ function aDocumento(id: string, data: Record<string, unknown>): DocumentoAlerta 
  */
 export async function cargarContextoAlertas(ahora: number = Date.now()): Promise<ContextoAlertasFirestore> {
   const desde = inicioDelDiaISO(ahora)
-  const [latido, turnosAbiertos, turnosCerrados, documentos, avisosYape] = await Promise.all([
+  const [latido, turnosAbiertos, turnosCerrados, documentos, avisosYape, documentosSunat] = await Promise.all([
     leerPuenteYape(),
     getDocs(query(collection(db, COL.TURNOS), where('estado', '==', 'abierto'))),
     getDocs(
@@ -106,6 +114,7 @@ export async function cargarContextoAlertas(ahora: number = Date.now()): Promise
     ),
     getDocs(query(collection(db, COL.DOCUMENTOS), where('fecha', '>=', desde))),
     obtenerPagosYapeDelDia(),
+    cargarDocumentosSunatPendientes(),
   ])
 
   return {
@@ -114,6 +123,7 @@ export async function cargarContextoAlertas(ahora: number = Date.now()): Promise
     turnosCerradosHoy: turnosCerrados.docs.map((d) => aTurno(d.id, d.data() as Record<string, unknown>)),
     documentosHoy: documentos.docs.map((d) => aDocumento(d.id, d.data() as Record<string, unknown>)),
     avisosYape,
+    documentosSunat,
   }
 }
 

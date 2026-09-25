@@ -7,6 +7,11 @@ import {
   ALERTA_TURNO_ABIERTO_HORAS_POR_DEFECTO,
   ALERTA_YAPE_SIN_USAR_MINUTOS_POR_DEFECTO,
 } from '@/lib/alertas'
+import {
+  DIAS_VENCIMIENTO_POR_DEFECTO,
+  INTERVALO_AUTO_MINUTOS_POR_DEFECTO,
+  MAX_POR_PASADA_POR_DEFECTO,
+} from '@/lib/sunat-auto'
 
 export type Afectacion = { codigo: string; label: string }
 
@@ -150,5 +155,19 @@ export const CONFIG_POR_DEFECTO = {
   alertaDiferenciaCaja: ALERTA_DIFERENCIA_CAJA_POR_DEFECTO,
   alertaAnulacionesDia: ALERTA_ANULACIONES_DIA_POR_DEFECTO,
   alertaDescuentoPorcentaje: ALERTA_DESCUENTO_PORCENTAJE_POR_DEFECTO,
+  // 🔑 **Envío automático a SUNAT** (`lib/sunat-auto.ts` es la regla única): un comprobante
+  // electrónico **no tiene calidad de factura** hasta que SUNAT devuelve el CDR, y hasta hoy el envío
+  // dependía de que alguien entrara a `Reportes → Registro SUNAT` y apretara *Enviar* documento por
+  // documento. Con esto se manda solo; **el botón manual sigue funcionando igual**, esté el automático
+  // prendido o apagado (y es la salida para lo que el automático ya no manda: lo vencido y lo
+  // rechazado).
+  // ⚠️ **`sunatAutoDiasVencimiento` es un solo número para todo lo que va a SUNAT**: las facturas
+  // vencen a los 3 días calendario (RS 000003-2023/SUNAT) y las boletas a los 7; se usa el más
+  // estricto. Sirve para **avisar** (alerta de comprobantes por vencer) y para **frenar** el envío
+  // automático de lo vencido. El plazo legal de cada documento no cambia por configurarlo.
+  sunatAutoEnvio: true,
+  sunatAutoDiasVencimiento: DIAS_VENCIMIENTO_POR_DEFECTO,
+  sunatAutoIntervaloMinutos: INTERVALO_AUTO_MINUTOS_POR_DEFECTO,
+  sunatAutoMaxPorPasada: MAX_POR_PASADA_POR_DEFECTO,
 }
 

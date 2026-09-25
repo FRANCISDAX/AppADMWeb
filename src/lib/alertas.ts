@@ -44,6 +44,17 @@ import {
   type ConfigYape,
   type PagoYape,
 } from './yape.ts'
+import {
+  autoEnvioSunatActivo,
+  diasVencimientoSunat,
+  estadoEnvioSunat,
+  etiquetaSunat,
+  pendientesDeEnvioSunat,
+  textoVencimientoSunat,
+  urgenciaVencimientoSunat,
+  type ConfigSunatAuto,
+  type DocumentoSunat,
+} from './sunat-auto.ts'
 
 // ─── Umbrales (los mismos números que arranca `CONFIG_POR_DEFECTO`) ───────────
 
@@ -64,14 +75,15 @@ export const ALERTA_DESCUENTO_PORCENTAJE_POR_DEFECTO = 0
  * Lo que la app entiende de la configuración del negocio para armar alertas.
  * ⚠️ Todos opcionales: una config guardada antes de esta función no rompe nada.
  */
-export type ConfigAlertas = ConfigYape & {
-  alertaStockBajo?: boolean
-  alertaYapeSinUsarMinutos?: number
-  alertaTurnoAbiertoHoras?: number
-  alertaDiferenciaCaja?: number
-  alertaAnulacionesDia?: number
-  alertaDescuentoPorcentaje?: number
-}
+export type ConfigAlertas = ConfigYape &
+  ConfigSunatAuto & {
+    alertaStockBajo?: boolean
+    alertaYapeSinUsarMinutos?: number
+    alertaTurnoAbiertoHoras?: number
+    alertaDiferenciaCaja?: number
+    alertaAnulacionesDia?: number
+    alertaDescuentoPorcentaje?: number
+  }
 
 /** Los umbrales ya resueltos (con los valores por defecto aplicados). */
 export type UmbralesAlertas = {
@@ -115,6 +127,8 @@ export type ReglaAlerta =
   | 'diferencia-caja'
   | 'anulaciones'
   | 'descuentos'
+  | 'sunat-pendiente'
+  | 'sunat-rechazado'
 
 export type Alerta = {
   /**
@@ -185,6 +199,12 @@ export type ContextoAlertas = {
   documentosHoy?: readonly DocumentoAlerta[]
   /** Avisos de Yape del día (los mismos que ve el panel del PDV). */
   avisosYape?: readonly PagoYape[]
+  /**
+   * Documentos que **esperan a SUNAT** (pendientes, con error o rechazados).
+   * ⚠️ No son «los del día»: un comprobante sin declarar puede tener días, y el plazo se mide justo
+   * contra eso. Los trae `services/sunat-auto.ts` con una consulta por estado — no se filtra acá.
+   */
+  documentosSunat?: readonly DocumentoSunat[]
 }
 
 // ─── Utilidades de texto ────────────────────────────────────────────────────
@@ -527,8 +547,93 @@ export function alertaDescuentos(ctx: ContextoAlertas): Alerta | null {
   }
 }
 
-// ─── Evaluación ─────────────────────────────────────────────────────────────
+/**
+ * **Comprobantes sin declarar en SUNAT** (envío automático, 24/09/2026).
+ *
+ * 🔑 **Por qué existe**: un comprobante electrónico **no tiene calidad de factura** hasta que SUNAT
+ * devuelve el CDR, y el plazo es corto (**factura: 3 días calendario**). Hasta hoy, si nadie entraba a
+ * `Reportes → Registro SUNAT` a apretar *Enviar*, el comprobante quedaba `pendiente` **para siempre**
+ * y **nadie se enteraba**: no hay ninguna pantalla que muestre los pendientes por sí sola. El envío
+ * automático (`lib/sunat-auto.ts`) los manda solo, y esta alerta cubre los dos huecos que deja:
+ *
+ * 1. **Lo que el automático ya no manda** —pasó el plazo, o el envío se apaga— y hay que mandar a
+ *    mano; y lo que **todavía no venció**, que es el aviso temprano (vence hoy o mañana = urgente).
+ * 2. **Lo que SUNAT RECHAZÓ**: eso no se reintenta nunca solo (daría el mismo rechazo) y pide una
+ *    persona que corrija y reemita. Es una alerta **crítica**: ese comprobante no está declarado.
+ *
+ * ⚠️ **Informa, no bloquea** (como todas): el envío fallido no impide vender ni cobrar. Y el aviso no
+ * depende del interruptor del envío automático —si está apagado, el problema **sigue existiendo**, es
+ * más: es la única forma de que alguien se acuerde de mandarlos a mano.
+ */
+export function alertasSunat(ctx: ContextoAlertas, ahora: number): Alerta[] {
+  const docs = ctx.documentosSunat ?? []
+  if (docs.length === 0) return []
+  const dias = diasVencimientoSunat(ctx.config)
+  const opciones = { ahora, dias }
+  const salida: Alerta[] = []
 
+  const pendientes = pendientesDeEnvioSunat(docs, opciones)
+  if (pendientes.length > 0) {
+    const vencidos = pendientes.filter((d) => urgenciaVencimientoSunat(d, ahora, dias) === 'vencido')
+    const urgente = pendientes.some((d) => {
+      const u = urgenciaVencimientoSunat(d, ahora, dias)
+      return u === 'vencido' || u === 'critico'
+    })
+    const auto = autoEnvioSunatActivo(ctx.config)
+    // 🔑 Si los envíos están **fallando** (el documento quedó en `error`: la API no responde, el
+    // navegador bloquea el pedido, falta la URL), decirlo acá: es la diferencia entre «se van a mandar
+    // solos» —que es lo que el usuario creería— y «el automático está intentando y no puede».
+    const conError = pendientes.filter((d) => estadoEnvioSunat(d) === 'error').length
+    salida.push({
+      id: 'sunat-pendiente',
+      regla: 'sunat-pendiente',
+      severidad: urgente ? 'critico' : 'aviso',
+      titulo:
+        pendientes.length === 1
+          ? `El comprobante ${etiquetaSunat(pendientes[0])} está sin enviar a SUNAT`
+          : `${pendientes.length} comprobantes sin enviar a SUNAT`,
+      detalle: `${listarNombres(
+        pendientes.map((d) => `${etiquetaSunat(d)} (${textoVencimientoSunat(d, ahora, dias)})`),
+        3,
+      )}. El plazo con el que se mide es de ${dias} día(s) desde la emisión (el de la factura).${
+        conError > 0
+          ? ` ⚠️ ${conError} quedaron con ERROR en el último intento de envío: el automático lo está intentando y no puede (revisa la URL de la API en Configuración → SUNAT).`
+          : ''
+      }`,
+      accion: vencidos.length > 0
+        ? `Hay ${vencidos.length} vencido(s): el envío automático ya no los manda (una factura vencida no recupera su calidad de factura electrónica). Revísalos y mándalos a mano —o evalúa anularlos— en Reportes → Registro SUNAT.`
+        : auto
+          ? 'Se envían solos en la próxima pasada (Configuración → SUNAT → Envío automático). Si quieres mandarlos ya, usa Enviar a SUNAT en Reportes → Registro SUNAT.'
+          : 'El envío automático está apagado (Configuración → SUNAT): mándalos con el botón Enviar a SUNAT en Reportes → Registro SUNAT.',
+      seccion: 'reportes',
+    })
+  }
+
+  const rechazados = docs.filter(
+    (d) => estadoEnvioSunat(d) === 'rechazado' && String(d.estado ?? '') !== 'anulada' && String(d.estado ?? '') !== 'cancelado',
+  )
+  if (rechazados.length > 0) {
+    salida.push({
+      id: 'sunat-rechazado',
+      regla: 'sunat-rechazado',
+      severidad: 'critico',
+      titulo:
+        rechazados.length === 1
+          ? `SUNAT rechazó el comprobante ${etiquetaSunat(rechazados[0])}`
+          : `SUNAT rechazó ${rechazados.length} comprobantes`,
+      detalle: `${listarNombres(
+        rechazados.map((d) => `${etiquetaSunat(d)}${d.sunat?.cdrDesc ? `: ${d.sunat.cdrDesc}` : ''}`),
+        3,
+      )}. Un comprobante rechazado no está declarado: no se reintenta solo porque el mismo XML daría el mismo rechazo.`,
+      accion: 'Mira el motivo, corrige el dato (RUC, DNI, serie o correlativo) y reemite el comprobante; si ya no corresponde, emite una nota.',
+      seccion: 'reportes',
+    })
+  }
+
+  return salida
+}
+
+// ─── Evaluación ─────────────────────────────────────────────────────────────
 const ORDEN: Record<SeveridadAlerta, number> = { critico: 0, aviso: 1, info: 2 }
 
 /**
@@ -544,6 +649,7 @@ export function evaluarAlertas(ctx: ContextoAlertas): Alerta[] {
   const turno = alertaTurnoAbierto(ctx, ahora)
   if (turno) alertas.push(turno)
   alertas.push(...alertasStock(ctx))
+  alertas.push(...alertasSunat(ctx, ahora))
   const dif = alertaDiferenciaCaja(ctx)
   if (dif) alertas.push(dif)
   alertas.push(...alertasYape(ctx, ahora))

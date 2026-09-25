@@ -26,6 +26,7 @@ import {
   alertaPuente,
   alertaTurnoAbierto,
   alertasStock,
+  alertasSunat,
   alertasVisibles,
   alertasYape,
   contarPendientes,
@@ -39,6 +40,7 @@ import {
   type TurnoAlerta,
 } from './alertas.ts'
 import type { LatidoPuenteYape } from './puente.ts'
+import type { DocumentoSunat } from './sunat-auto.ts'
 import type { PagoYape } from './yape.ts'
 
 /**
@@ -280,6 +282,119 @@ describe('cierres, anulaciones y descuentos', () => {
     assert.equal(alertaDescuentos({ documentosHoy: [{ ...quince, estado: 'anulada' }], config: { alertaDescuentoPorcentaje: 10 } }), null)
     // Y en 0, apagada (el default: el número lo pone el dueño).
     assert.equal(alertaDescuentos({ documentosHoy: [quince] }), null)
+  })
+})
+
+// ─── SUNAT: lo que nadie ve si no entra a buscarlo ──────────────────────────
+
+describe('comprobantes sin declarar en SUNAT', () => {
+  /**
+   * Un comprobante emitido a las **22:00 del 24/09/2026** (`AHORA` es esa misma noche): con el plazo
+   * de 3 días vence el **27/09**.
+   */
+  const docSunat = (extra: Partial<DocumentoSunat> = {}): DocumentoSunat => ({
+    id: '2026-9_BOLETA-B001-000042',
+    tipoDoc: 'BOLETA',
+    serieNumero: 'B001-000042',
+    estado: 'pagado',
+    fecha: new Date(2026, 8, 24, 22, 0, 0, 0).toISOString(),
+    numero: 42,
+    serie: 'B001',
+    sunat: { estado: 'pendiente', serie: 'B001', numero: 42 },
+    ...extra,
+  })
+  const enDias = (n: number) => new Date(AHORA + n * 24 * HORA).getTime()
+
+  test('un comprobante pendiente con margen es AVISO, no urgencia', () => {
+    const alertas = alertasSunat({ documentosSunat: [docSunat()] }, AHORA)
+    assert.equal(alertas.length, 1)
+    const a = alertas[0]
+    assert.equal(a.severidad, 'aviso')
+    assert.equal(a.id, 'sunat-pendiente')
+    assert.equal(a.regla, 'sunat-pendiente')
+    assert.equal(a.seccion, 'reportes')
+    assert.match(a.titulo, /B001-000042/)
+    assert.match(a.detalle, /vence en 3 días/)
+  })
+
+  test('cuando vence hoy o mañana pasa a URGENTE, y un vencido también', () => {
+    // El mismo comprobante, mirado dos días después: quedan 1 día.
+    assert.equal(alertasSunat({ documentosSunat: [docSunat()] }, enDias(2))[0].severidad, 'critico')
+    // Y al día siguiente del vencimiento: vencido.
+    const vencido = alertasSunat({ documentosSunat: [docSunat()] }, enDias(4))[0]
+    assert.equal(vencido.severidad, 'critico')
+    assert.match(vencido.detalle, /venció/)
+    // 🔑 La acción dice lo que de verdad pasa: el automático ya no lo manda.
+    assert.match(vencido.accion, /ya no los manda/)
+  })
+
+  test('varios se juntan en UNA alerta (no una por comprobante)', () => {
+    const docs = [docSunat(), docSunat({ id: 'x', serieNumero: 'F001-000007', tipoDoc: 'FACTURA', serie: 'F001', numero: 7, sunat: { estado: 'pendiente', serie: 'F001', numero: 7 } })]
+    const a = alertasSunat({ documentosSunat: docs }, AHORA)[0]
+    assert.equal(a.titulo, '2 comprobantes sin enviar a SUNAT')
+    assert.match(a.detalle, /B001-000042/)
+    assert.match(a.detalle, /F001-000007/)
+  })
+
+  test('apagar el envío automático NO apaga el aviso: cambia lo que hay que hacer', () => {
+    const conAuto = alertasSunat({ documentosSunat: [docSunat()], config: { sunatAutoEnvio: true } }, AHORA)[0]
+    assert.match(conAuto.accion, /Se envían solos/)
+    const sinAuto = alertasSunat({ documentosSunat: [docSunat()], config: { sunatAutoEnvio: false } }, AHORA)[0]
+    assert.match(sinAuto.accion, /envío automático está apagado/)
+    // El aviso sigue estando: el comprobante sin declarar es el mismo problema.
+    assert.equal(sinAuto.regla, 'sunat-pendiente')
+  })
+
+  test('el plazo configurable cambia la urgencia (a 7 días, el mismo comprobante no urge)', () => {
+    // Emitido el 24/09: con 3 días vence hoy a las 23:59 (crítico); con 7, recién el 1/10.
+    const luego = enDias(3)
+    assert.equal(alertasSunat({ documentosSunat: [docSunat()] }, luego)[0].severidad, 'critico')
+    const con7 = alertasSunat({ documentosSunat: [docSunat()], config: { sunatAutoDiasVencimiento: 7 } }, luego)[0]
+    assert.equal(con7.severidad, 'aviso')
+    assert.match(con7.detalle, /plazo con el que se mide es de 7 día/)
+  })
+
+  test('lo ACEPTADO y lo ANULADO no son noticia; una NV y un pedido tampoco', () => {
+    const vacio = (docs: DocumentoSunat[]) => alertasSunat({ documentosSunat: docs }, AHORA)
+    assert.deepEqual(vacio([docSunat({ sunat: { estado: 'aceptado', serie: 'B001', numero: 42 } })]), [])
+    assert.deepEqual(vacio([docSunat({ estado: 'anulada' })]), [])
+    // Una nota de venta y un pedido **no van a SUNAT**: verlos acá sería una falsa alarma todos los días.
+    assert.deepEqual(vacio([docSunat({ tipoDoc: 'NV', sunat: { consolidado: true } })]), [])
+    assert.deepEqual(vacio([docSunat({ tipoDoc: 'PENDIENTE', sunat: null })]), [])
+    assert.deepEqual(vacio([]), [])
+  })
+
+  test('lo RECHAZADO por SUNAT es crítico y trae el motivo', () => {
+    // 🔑 Es el caso que más se pierde: el envío automático **no** lo reintenta (el mismo XML daría el
+    // mismo rechazo) y sin esta alerta el comprobante quedaba rechazado y en silencio.
+    const rechazado = docSunat({ sunat: { estado: 'rechazado', serie: 'B001', numero: 42, cdrDesc: 'El RUC del emisor no existe' } })
+    const alertas = alertasSunat({ documentosSunat: [rechazado] }, AHORA)
+    assert.equal(alertas.length, 1)
+    assert.equal(alertas[0].severidad, 'critico')
+    assert.equal(alertas[0].regla, 'sunat-rechazado')
+    assert.match(alertas[0].detalle, /El RUC del emisor no existe/)
+    assert.match(alertas[0].accion, /corrige el dato/)
+    // Un rechazado y un pendiente conviven: son dos alertas distintas, con id propio.
+    const dos = alertasSunat({ documentosSunat: [rechazado, docSunat()] }, AHORA)
+    assert.deepEqual(dos.map((a) => a.id), ['sunat-pendiente', 'sunat-rechazado'])
+  })
+
+  test('si los envíos están FALLANDO, el detalle lo dice (no promete lo que no pasa)', () => {
+    // Un `error` es «se intentó y no se pudo» (API caída, URL mal, el navegador bloqueando el pedido):
+    // sin decirlo, el usuario creería que el automático se está ocupando.
+    const conError = docSunat({ sunat: { estado: 'error', serie: 'B001', numero: 42, error: 'Failed to fetch' } })
+    const a = alertasSunat({ documentosSunat: [conError] }, AHORA)[0]
+    assert.match(a.detalle, /quedaron con ERROR en el último intento/)
+    assert.match(a.detalle, /Configuración → SUNAT/)
+    // Y un pendiente que nunca se intentó no lo dice (no hay que alarmar de más).
+    const limpio = alertasSunat({ documentosSunat: [docSunat()] }, AHORA)[0]
+    assert.doesNotMatch(limpio.detalle, /ERROR/)
+  })
+
+  test('el id es estable: es lo que hace que posponer sirva', () => {
+    const uno = alertasSunat({ documentosSunat: [docSunat()] }, AHORA)[0]
+    const otro = alertasSunat({ documentosSunat: [docSunat({ id: 'otro', serieNumero: 'B001-000099' })] }, AHORA)[0]
+    assert.equal(uno.id, otro.id)
   })
 })
 

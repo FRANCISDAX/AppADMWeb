@@ -1,4 +1,4 @@
-import { AlertTriangle, BellRing, Building2, Check, CloudUpload, CreditCard, FlaskConical, Loader2, Package, Percent, Printer, Receipt, Smartphone, Tag, Trash2, Truck, Users, X } from 'lucide-react'
+import { AlertTriangle, BellRing, Building2, Check, CloudUpload, CreditCard, FlaskConical, Loader2, Package, Percent, Printer, Receipt, Send, Smartphone, Tag, Trash2, Truck, Users, X } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,7 @@ import { obtenerSeriesOcupadas } from '@/services/usuarios'
 import { borrarAvisosDePrueba, crearAvisoDePrueba } from '@/services/yape'
 import { guardarPromocionVolumen, eliminarPromocionVolumen, listarPromocionesVolumen, type PromocionVolumen } from '@/services/promociones-volumen'
 import { cargarCajas, guardarCaja, eliminarCaja, CAJA_POR_DEFECTO, type Caja } from '@/services/cajas'
+import { enviarPendientesSunatAutomatico } from '@/services/sunat-auto'
 import { moverPedidosDeCaja } from '@/services/ventas'
 
 const TABS = [
@@ -68,6 +69,9 @@ export function Configuracion() {
   /** Aviso de prueba de Yape (pestaña Yape): monto y estado del botón. */
   const [montoPrueba, setMontoPrueba] = React.useState('0.10')
   const [creandoPrueba, setCreandoPrueba] = React.useState(false)
+  /** Envío manual de los comprobantes pendientes (pestaña SUNAT). */
+  const [enviandoSunat, setEnviandoSunat] = React.useState(false)
+  const { confirm } = useNotifications()
 
   // Series globales vs. series por caja: las cajas sin serie propia numeran con
   // la global, así que un choque significa compartir contador de correlativos.
@@ -116,6 +120,45 @@ export function Configuracion() {
       setToast('❌ No se pudo conectar: ' + (e as Error).message)
     } finally {
       setProbando(false)
+    }
+  }
+
+  /**
+   * **Enviar los pendientes ahora** (pestaña SUNAT) — el envío **manual** en bloque.
+   *
+   * 🔑 **Existe con el automático prendido o apagado**, que es lo que pidió el usuario: apagar el
+   * automático no puede dejar al negocio sin forma de declarar (ni con una sola menos que hoy).
+   * ⚠️ Manda comprobantes **reales** a SUNAT, así que pide confirmación; y usa **la misma** pasada que
+   * el automático (misma regla, mismo orden, mismo reclamo), no una copia.
+   */
+  async function enviarPendientesSunat() {
+    const ok = await confirm({
+      title: 'Enviar pendientes a SUNAT',
+      message:
+        'Se van a enviar a SUNAT los comprobantes que están sin declarar (los ya aceptados no se repiten, y lo que SUNAT rechazó no se reintenta).\n\nEs un envío real: SUNAT devuelve el CDR de cada comprobante.\n\n¿Continuar?',
+      okText: 'Enviar',
+    })
+    if (!ok) return
+    setEnviandoSunat(true)
+    setToast('⏳ Enviando a SUNAT…')
+    try {
+      const r = await enviarPendientesSunatAutomatico({ config, dispositivo: 'config-web', respetarInterruptor: false })
+      if (r.esperando === 0) {
+        setToast('✅ No hay comprobantes pendientes de SUNAT')
+      } else {
+        const partes = [`${r.aceptados} aceptado(s)`]
+        if (r.rechazados > 0) partes.push(`${r.rechazados} rechazado(s)`)
+        if (r.conError > 0) partes.push(`${r.conError} con error`)
+        if (r.omitidos > 0) partes.push(`${r.omitidos} sin enviar`)
+        setToast(`${r.aceptados > 0 ? '✅' : '⚠️'} SUNAT: ${partes.join(', ')} de ${r.esperando} pendiente(s)`)
+      }
+      // El motivo del primer fallo, para no dejar al admin sin saber qué pasó.
+      const fallo = r.detalle.find((d) => !d.ok && d.mensaje)
+      if (fallo) setToast(`❌ ${fallo.etiqueta}: ${fallo.mensaje}`)
+    } catch (e) {
+      setToast(`❌ No se pudo enviar: ${(e as Error).message}`)
+    } finally {
+      setEnviandoSunat(false)
     }
   }
 
@@ -336,6 +379,115 @@ export function Configuracion() {
             <div className="space-y-3">
               <Field label="Modo Prueba" k="sunatApiUrlTest" placeholder="https://.../prod" />
               <Field label="Producción" k="sunatApiUrlProd" placeholder="https://.../prod" />
+            </div>
+          </div>
+
+          {/* 🔑 **Envío automático a SUNAT** (`lib/sunat-auto.ts` es la regla única). Un comprobante
+              electrónico no tiene calidad de factura hasta que SUNAT devuelve el CDR, y hasta hoy eso
+              dependía de que alguien entrara a Reportes → Registro SUNAT y apretara Enviar documento
+              por documento. ⚠️ Apagar el automático **no** quita el botón manual: sigue igual, y es
+              la salida para lo que el automático no manda (lo vencido y lo rechazado). */}
+          <div className="rounded-xl border bg-card p-5 shadow-card">
+            <div className="mb-1 flex items-center gap-2">
+              <Send className="h-5 w-5 text-primary" />
+              <h2 className="font-bold">Envío automático a SUNAT</h2>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Manda solo los comprobantes que quedaron <b>sin declarar</b> (boletas, facturas y sus notas de
+              crédito/débito) mientras haya una pantalla abierta, y también al volver el internet. Las{' '}
+              <b>notas de venta y los pedidos no van a SUNAT</b>. El botón <b>Enviar a SUNAT</b> del Registro
+              SUNAT sigue funcionando igual, con esto prendido o apagado.
+            </p>
+
+            <button
+              onClick={() => set('sunatAutoEnvio', !config.sunatAutoEnvio)}
+              className={cn(
+                'flex w-full items-start justify-between gap-3 rounded-lg border p-3 text-left text-sm cursor-pointer',
+                config.sunatAutoEnvio ? 'border-emerald-300 bg-emerald-50' : 'border-input',
+              )}
+            >
+              <span>
+                <span className={cn('font-medium', config.sunatAutoEnvio && 'text-emerald-700')}>
+                  Enviar los comprobantes pendientes automáticamente
+                </span>
+                <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                  Si está apagado, los comprobantes se quedan pendientes hasta que alguien los mande a mano
+                  (el Registro SUNAT los sigue mostrando). <b>Lo ya aceptado no se manda dos veces</b> y lo
+                  que SUNAT <b>rechazó</b> no se reintenta solo.
+                </span>
+              </span>
+              <span
+                className={cn(
+                  'shrink-0 rounded-md px-2.5 py-1 text-xs font-bold text-white',
+                  config.sunatAutoEnvio ? 'bg-emerald-600' : 'bg-slate-400',
+                )}
+              >
+                {config.sunatAutoEnvio ? 'SÍ' : 'NO'}
+              </span>
+            </button>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div>
+                <Label>Días de plazo</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={30}
+                  inputMode="numeric"
+                  value={String(config.sunatAutoDiasVencimiento ?? '')}
+                  onChange={(e) => set('sunatAutoDiasVencimiento', Math.max(1, Math.min(30, Number(e.target.value) || 0)))}
+                  className="mt-1"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  El plazo con el que se <b>avisa</b> y con el que se <b>frena</b> el envío automático. La
+                  factura vence a los <b>3</b> días calendario y la boleta a los 7: se usa un solo número
+                  (el más estricto) para todo lo que va a SUNAT.
+                </p>
+              </div>
+              <div>
+                <Label>Revisar cada (min)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={120}
+                  inputMode="numeric"
+                  value={String(config.sunatAutoIntervaloMinutos ?? '')}
+                  onChange={(e) => set('sunatAutoIntervaloMinutos', Math.max(1, Math.min(120, Number(e.target.value) || 0)))}
+                  className="mt-1"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Cada cuánto mira si hay algo pendiente en las pantallas abiertas. Un envío que falló por
+                  conexión se reintenta recién a los 15 min (para no golpear la API con lo mismo).
+                </p>
+              </div>
+              <div>
+                <Label>Máximo por revisión</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  inputMode="numeric"
+                  value={String(config.sunatAutoMaxPorPasada ?? '')}
+                  onChange={(e) => set('sunatAutoMaxPorPasada', Math.max(1, Math.min(50, Number(e.target.value) || 0)))}
+                  className="mt-1"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Cuántos comprobantes se mandan de una vez, de a uno y empezando por el que <b>vence
+                  antes</b> (los comprobantes van antes que sus notas).
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button variant="secondary" onClick={enviarPendientesSunat} disabled={enviandoSunat || saving}>
+                {enviandoSunat ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {enviandoSunat ? 'Enviando…' : 'Enviar pendientes ahora'}
+              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                Manda <b>ahora</b> lo que esté pendiente, con el automático prendido o apagado. Es un envío
+                real: SUNAT devuelve el CDR de cada comprobante. Si guardaste cambios arriba, guarda la
+                configuración primero.
+              </span>
             </div>
           </div>
 
