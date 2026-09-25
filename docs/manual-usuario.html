@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.13 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.14 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -822,6 +822,8 @@
       <tr><td><strong>Diferencia de caja</strong></td><td>Un turno se cerró con un faltante o un sobrante por encima de lo que toleras.</td><td>Revisar</td></tr>
       <tr><td><strong>Anulaciones del día</strong></td><td>Se anularon más comprobantes de lo normal, y <strong>quién</strong> los anuló.</td><td>Revisar</td></tr>
       <tr><td><strong>Descuentos fuera de rango</strong></td><td>Una venta salió con un descuento mayor al que fijaste (se mide sobre el precio de lista de la venta, no sobre lo cobrado).</td><td>Revisar</td></tr>
+      <tr><td><strong>Comprobantes sin enviar a SUNAT</strong></td><td>Quedaron comprobantes sin declarar. Dice <strong>cuántos y cuándo vencen</strong> («vence en 2 días», «vence hoy», «venció ayer»); si alguno quedó con <strong>error</strong> en el último intento, lo dice (suele ser la URL de la API mal configurada, ver <em>12.2</em>).</td><td>Urgente si vence hoy, mañana o ya venció</td></tr>
+      <tr><td><strong>SUNAT rechazó un comprobante</strong></td><td>La SUNAT lo recibió y lo observó: <strong>ese comprobante no está declarado</strong>. Trae el motivo que devolvió la SUNAT. No se reintenta solo porque el mismo archivo daría el mismo rechazo.</td><td>Urgente</td></tr>
       <tr><td><strong>Caja abierta</strong></td><td>Información del día: quién tiene la caja abierta en este momento. <strong>No es una alarma.</strong></td><td>Info</td></tr>
     </tbody>
   </table>
@@ -850,7 +852,24 @@
   <p>Datos que aparecen en los comprobantes: Razón Social, RUC, Dirección, Logo, Mensaje legal. También: Régimen tributario, Región exonerada de IGV (Amazonía), Conteo ciego.</p>
 
   <h3>12.2 SUNAT</h3>
-  <p>Configuración de facturación electrónica: URL de APIs, modo prueba/producción, series de comprobantes, punto de emisión, tope de DNI para boletas (S/ 700).</p>
+  <p>Configuración de facturación electrónica: URL de APIs, modo prueba/producción, series de comprobantes, punto de emisión, tope de DNI para boletas (S/ 700) y el receptor de la boleta consolidada.</p>
+  <p><strong>Envío automático a SUNAT</strong> (ver <em>16.1</em>) — es lo único de esta pestaña que conviene tocar con cuidado, porque manda comprobantes reales:</p>
+  <table>
+    <thead><tr><th>Opción</th><th>Qué hace</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Enviar los comprobantes pendientes automáticamente (SÍ / NO)</strong></td><td>Prende o apaga el envío solo. <strong>Apagarlo no quita nada manual</strong>: el botón <em>Enviar a SUNAT</em> del Registro sigue funcionando, y también el de esta pantalla.</td></tr>
+      <tr><td><strong>Días de plazo</strong></td><td>Con cuántos días se avisa y se frena el envío automático (por defecto <strong>3</strong>, el plazo de la factura). El plazo legal de cada documento no cambia por configurar esto.</td></tr>
+      <tr><td><strong>Revisar cada (min)</strong></td><td>Cada cuánto mira si hay algo pendiente (por defecto <strong>10</strong>). Un envío que falló por conexión se reintenta recién a los 15 minutos, para no golpear el servicio con lo mismo.</td></tr>
+      <tr><td><strong>Máximo por revisión</strong></td><td>Cuántos manda de una vez (por defecto <strong>5</strong>), empezando por el que vence antes y siempre con los comprobantes delante de sus notas.</td></tr>
+      <tr><td><strong>Enviar pendientes ahora</strong></td><td>Manda en el momento todo lo que esté pendiente. Es un envío <strong>real</strong>: pide confirmación. Funciona con el automático prendido o apagado.</td></tr>
+    </tbody>
+  </table>
+  <div class="warning">
+    <div class="warning-label">⚠️ Si el envío automático falla siempre</div>
+    <p>Lo más probable es que la <strong>URL de la API</strong> de esta misma pestaña esté mal o no sea alcanzable desde el
+      navegador. La señal es el aviso del tablero: <em>«quedaron con ERROR en el último intento de envío»</em>. Los
+      comprobantes <strong>no se pierden</strong>: quedan pendientes y se pueden mandar a mano cuando la URL esté bien.</p>
+  </div>
 
   <h3>12.3 Impresora</h3>
   <p>URL del servidor de impresión térmica. Botón "Probar servidor" para verificar conexión.</p>
@@ -921,6 +940,7 @@
       <tr><td><strong>Diferencia de caja (S/)</strong></td><td>Desde qué diferencia se avisa, sin importar el signo: un faltante y un sobrante se revisan igual (por defecto S/ 1). Se mira en los turnos <strong>ya cerrados</strong>.</td></tr>
       <tr><td><strong>Anulaciones en el día</strong></td><td>A partir de cuántos comprobantes anulados en el día se avisa, y con qué cajero (por defecto 3). No dice que anular esté mal: dice que hoy se anuló más de lo normal.</td></tr>
       <tr><td><strong>Descuentos por encima de… (%)</strong></td><td>Desde qué porcentaje avisa un descuento, medido sobre el <strong>precio de lista</strong> de la venta. Viene <strong>apagada</strong>: el número lo pone cada negocio.</td></tr>
+      <tr><td><strong>Comprobantes sin enviar a SUNAT</strong></td><td>Las dos alertas de SUNAT <strong>no tienen umbral acá</strong>: se prenden y se apagan con el envío automático, y el plazo que usan es el de <em>Configuración → SUNAT → Días de plazo</em> (ver <em>12.2</em>).</td></tr>
     </tbody>
   </table>
   <div class="tip">
@@ -1069,21 +1089,52 @@
       digital</strong> del negocio, lo empaqueta y lo envía. La SUNAT responde con la constancia de recepción (el
       <em>CDR</em>), que vuelve a la aplicación y queda guardada en el documento de venta.</li>
   </ul>
-  <p><strong>Importante:</strong> la aplicación web <strong>no envía comprobantes por sí sola</strong>. Si el servicio
-    de emisión no está disponible o el equipo no tiene internet, la venta se registra igual y el comprobante queda
-    <strong>emitido en el sistema con su número</strong>, pero el envío queda <strong>pendiente</strong> hasta que el
-    servicio responda. Es una separación intencional: el certificado digital y las claves de SUNAT viven únicamente en
-    el servicio, nunca en el navegador.</p>
+  <p><strong>Importante:</strong> si el servicio de emisión no está disponible o el equipo no tiene internet, la venta se
+    registra igual y el comprobante queda <strong>emitido en el sistema con su número</strong>, pero el envío queda
+    <strong>pendiente</strong> hasta que el servicio responda. Es una separación intencional: el certificado digital y
+    las claves de SUNAT viven únicamente en el servicio, nunca en el navegador.</p>
+  <p>La aplicación web <strong>sí manda los comprobantes pendientes</strong> (ver <em>16.1</em>): lo que no hace es
+    firmarlos — de eso se encarga el servicio.</p>
+
+  <h3>16.1 El envío automático (el comprobante no espera a que alguien apriete Enviar)</h3>
+  <p>Un comprobante electrónico <strong>no tiene calidad de factura hasta que la SUNAT devuelve su constancia</strong>, y
+    el plazo es corto: <strong>3 días calendario para la factura</strong> (7 para la boleta). Antes había que entrar a
+    <em>Reportes → Registro SUNAT</em> y enviarlos <strong>de a uno</strong>: si nadie entraba, quedaban pendientes para
+    siempre. Ahora la aplicación <strong>los envía sola</strong>, mientras haya una pantalla abierta (y también cuando
+    vuelve el internet, después de un corte).</p>
+  <table>
+    <thead><tr><th>Qué</th><th>Cómo funciona</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Qué se envía solo</strong></td><td>Boletas, facturas y sus <strong>notas de crédito/débito</strong>. Las <strong>notas de venta</strong> y los <strong>pedidos</strong> <em>no</em> van a la SUNAT.</td></tr>
+      <tr><td><strong>Qué nunca se envía solo</strong></td><td>Lo que <strong>ya está aceptado</strong> (no se manda dos veces), lo que la SUNAT <strong>rechazó</strong> (hay que corregirlo: el mismo archivo daría el mismo rechazo), lo <strong>anulado</strong>, y lo que <strong>ya pasó el plazo</strong>.</td></tr>
+      <tr><td><strong>El plazo</strong></td><td><strong>3 días</strong> desde la emisión (el de la factura, para todo lo que va a la SUNAT). Es configurable y con él el tablero avisa lo que está por vencer.</td></tr>
+      <tr><td><strong>Las notas esperan</strong></td><td>Una nota de crédito/débito se manda <strong>después</strong> de que su comprobante esté aceptado: al revés, la SUNAT la rechaza.</td></tr>
+      <tr><td><strong>El botón manual sigue igual</strong></td><td>Sirve para cualquier comprobante —incluso los vencidos o rechazados— y funciona <strong>igual con el envío automático apagado</strong>.</td></tr>
+      <tr><td><strong>Si algo no se puede enviar</strong></td><td>El comprobante queda en <strong>error</strong>, se reintenta solo y el tablero lo avisa (ver <em>11.10</em>). La venta <strong>nunca</strong> se bloquea por esto.</td></tr>
+    </tbody>
+  </table>
+  <div class="tip">
+    <div class="tip-label">💡 Dónde se configura</div>
+    <p>En <em>Configuración → SUNAT → Envío automático a SUNAT</em> (ver <em>12.2</em>): se prende o se apaga, se cambian
+      los días de plazo, cada cuánto revisa y cuántos manda por vez; y está el botón <strong>Enviar pendientes
+      ahora</strong> para mandarlos en el momento.</p>
+  </div>
+  <div class="warning">
+    <div class="warning-label">⚠️ Se envía mientras haya una pantalla abierta</div>
+    <p>El envío lo hace <strong>el navegador</strong>: si el local está cerrado y nadie abre la aplicación, no se manda
+      nada. Por eso el tablero avisa de los comprobantes por vencer o vencidos, y por eso conviene <strong>mirar el
+      Registro SUNAT</strong> antes de cerrar el día (sobre todo si hubo un corte de internet).</p>
+  </div>
 
   <h3>Qué significa cada estado del envío</h3>
   <table>
     <thead><tr><th>Estado</th><th>Qué significa</th><th>Qué hacer</th></tr></thead>
     <tbody>
-      <tr><td><strong>Pendiente</strong></td><td>El comprobante está emitido y todavía no se envió (por ejemplo, no había internet).</td><td>Enviarlo desde <em>Reportes → SUNAT</em> cuando haya conexión. El comprobante no se pierde.</td></tr>
+      <tr><td><strong>Pendiente</strong></td><td>El comprobante está emitido y todavía no se envió (por ejemplo, no había internet).</td><td>Se envía <strong>solo</strong> en la próxima revisión (ver <em>16.1</em>); si lo quieres mandar ya, usa <strong>Enviar a SUNAT</strong> en <em>Reportes → Registro SUNAT</em>. El comprobante no se pierde.</td></tr>
       <tr><td><strong>Aceptado</strong></td><td>La SUNAT lo recibió y devolvió su constancia (CDR).</td><td>Nada: la constancia queda guardada en el sistema.</td></tr>
       <tr><td><strong>Ya registrado</strong></td><td>La SUNAT ya tenía ese comprobante (por ejemplo, se envió dos veces por un corte de conexión).</td><td>Nada: el sistema lo marca como aceptado y no se duplica.</td></tr>
       <tr><td><strong>Rechazado</strong></td><td>La SUNAT lo recibió pero lo observó; el motivo viene en el detalle.</td><td>Leer el motivo y corregir lo que indica. Consultar con el administrador antes de rehacer nada.</td></tr>
-      <tr><td><strong>Error</strong></td><td>No se pudo completar el envío (sin internet o el servicio no respondió a tiempo).</td><td><strong>Reintentar el envío del mismo comprobante</strong>, nunca emitir uno nuevo para la misma venta.</td></tr>
+      <tr><td><strong>Error</strong></td><td>No se pudo completar el envío (sin internet o el servicio no respondió a tiempo).</td><td>Se <strong>reintenta solo</strong> (ver <em>16.1</em>). Si el tablero avisa que quedaron con error, revisa la URL de la API en <em>Configuración → SUNAT</em>. Nunca emitas un comprobante nuevo para la misma venta.</td></tr>
     </tbody>
   </table>
 
@@ -1100,8 +1151,10 @@
 
   <h3>Recomendaciones de operación</h3>
   <ul>
-    <li>Revisar <strong>una vez al día</strong> en <em>Reportes → SUNAT</em> que no queden comprobantes en estado
-      pendiente o con error; enviarlos antes de cerrar el turno.</li>
+    <li>El envío <strong>ya no depende de que alguien lo haga a mano</strong> (ver <em>16.1</em>): lo que queda por
+      revisar <strong>una vez al día</strong> en <em>Reportes → Registro SUNAT</em> son los <strong>rechazados</strong>
+      (hay que corregirlos) y los <strong>vencidos</strong> — los que pasaron los 3 días, que el automático ya no manda
+      y el tablero marca en rojo.</li>
     <li><strong>No emitir un comprobante nuevo</strong> para una venta que muestra error: se reintenta el mismo; si se
       emitiera otro, la venta quedaría declarada dos veces.</li>
     <li>Ante dudas con un comprobante rechazado, <strong>consultar al administrador</strong> antes de anular o rehacer.</li>
@@ -1399,7 +1452,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.13</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.14</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

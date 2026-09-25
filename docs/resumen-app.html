@@ -416,6 +416,7 @@
           <li>Productos agotados y bajo el mínimo</li>
           <li>Avisos de Yape sin usar o que el sistema no entiende</li>
           <li>Diferencias de caja, anulaciones y descuentos fuera de rango</li>
+          <li>Comprobantes sin enviar a la SUNAT (con su plazo) y los <strong>rechazados</strong> por la SUNAT</li>
           <li>Umbrales configurables (0 = apagada)</li>
           <li>Se puede posponer por usuario; nada bloquea una venta</li>
         </ul>
@@ -655,12 +656,31 @@
           certificado digital</strong> del negocio y lo envía, devolviendo la constancia de recepción (CDR) que queda
           guardada en el documento de venta.</li>
       </ul>
-      <p>La aplicación web <strong>no envía comprobantes por sí sola</strong>: si el servicio no está disponible o el
-        negocio no tiene internet, la venta se registra y el comprobante queda emitido con su número, con el envío
-        <strong>pendiente</strong> hasta que el servicio responda. Es una separación intencional: el certificado digital
-        y las claves de SUNAT viven únicamente en el servicio, nunca en el navegador.</p>
+      <p>La aplicación web <strong>no firma los comprobantes</strong> —eso es del servicio, donde viven el certificado y
+        las claves— pero <strong>sí los envía</strong>: si el servicio no está disponible o el negocio no tiene internet,
+        la venta se registra y el comprobante queda emitido con su número, con el envío <strong>pendiente</strong>, y se
+        manda solo en cuanto se puede.</p>
       <p>El estado de cada envío (pendiente, aceptado, ya registrado, rechazado o con error) se consulta en
         <em>Reportes → SUNAT</em>; el manual de usuario dedica la sección 16 a la operación de este componente.</p>
+    </div>
+
+    <div class="card">
+      <h3>⚡ Envío automático a SUNAT</h3>
+      <p>Un comprobante electrónico <strong>no tiene calidad de factura hasta que la SUNAT devuelve su constancia</strong>,
+        y el plazo es corto: <strong>3 días calendario para la factura</strong>. Antes había que entrar al registro y
+        enviarlos de a uno; si nadie entraba, quedaban pendientes para siempre. Ahora se mandan solos.</p>
+      <ul>
+        <li>Se envía solo: <strong>boletas, facturas y sus notas</strong> de crédito/débito, con <strong>plazo de 3
+          días</strong> (configurable) y empezando por el que vence antes</li>
+        <li><strong>Nunca se manda solo</strong> lo ya aceptado (no se declara dos veces), lo que la SUNAT
+          <strong>rechazó</strong> (se corrige, no se insiste) ni lo vencido</li>
+        <li>Las <strong>notas de venta y los pedidos</strong> no van a la SUNAT: la NV se declara en la boleta consolidada</li>
+        <li>Una <strong>nota espera</strong> a que su comprobante esté aceptado: al revés la SUNAT la rechaza</li>
+        <li>El <strong>botón manual sigue igual</strong>, y funciona con el automático apagado</li>
+        <li>Dos pantallas abiertas <strong>no mandan el mismo comprobante dos veces</strong></li>
+        <li>Si no se puede enviar, el comprobante queda <strong>pendiente</strong> y el tablero avisa: la venta
+          <strong>nunca se bloquea</strong> por esto</li>
+      </ul>
     </div>
   </div>
 
@@ -818,7 +838,7 @@
   <!-- Footer -->
   <div class="footer">
     <p><strong>AppADM</strong> — Sistema de Punto de Venta e Inventario</p>
-    <p>CIBERSOFT CyS · 2026 · Versión 1.7 — Septiembre 2026</p>
+    <p>CIBERSOFT CyS · 2026 · Versión 1.8 — Septiembre 2026</p>
   </div>
 
 </div>
