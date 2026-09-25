@@ -305,7 +305,7 @@ export function Reportes() {
   async function handleCorregir() {
     if (!corregirDoc) return
     if (corregirTipo === 'transferencia' && !corregirRef.trim()) {
-      toast('Ingresá la referencia de la transferencia', 'warning'); return
+      toast('Ingresa la referencia de la transferencia', 'warning'); return
     }
     setProcesando(true)
     const r = await corregirTipoPago(corregirDoc.id, corregirTipo, corregirRef.trim())
@@ -404,7 +404,7 @@ export function Reportes() {
     if (!notaDoc) return
     // Una NC/ND también afecta caja/stock → exige turno abierto (igual que los comprobantes).
     const turno = await buscarTurnoAbierto(user?.uid, tienePermiso('verTodo'))
-    if (!turno) { toast('🚫 No hay un turno abierto. Abrí un turno antes de emitir la nota.', 'error'); return }
+    if (!turno) { toast('🚫 No hay un turno abierto. Abre un turno antes de emitir la nota.', 'error'); return }
     setCreandoNota(true)
     const motivo = TIPOS_NOTA_SUNAT.find((t) => t.codigo === notaMotivo && t.tipo === (notaTipo === 'NC' ? 'credito' : 'debito'))?.label || ''
     const r = await crearNotaCreditoDebito({

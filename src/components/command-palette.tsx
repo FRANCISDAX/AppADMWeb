@@ -240,7 +240,7 @@ export function CommandPalette({ onNavigate, tienePermiso }: { onNavigate: (secc
 
           {!busqueda.trim() && (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              Escribí para buscar…
+              Escribe para buscar…
             </div>
           )}
         </div>

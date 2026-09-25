@@ -204,8 +204,8 @@ export function Compras() {
     return (
       <div className="py-24 text-center text-muted-foreground">
         <ShoppingBag className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium">No tenés acceso al módulo de Compras por Fecha</p>
-        <p className="text-xs">Pedí el permiso «compras» al administrador.</p>
+        <p className="text-sm font-medium">No tienes acceso al módulo de Compras por Fecha</p>
+        <p className="text-xs">Pide el permiso «compras» al administrador.</p>
       </div>
     )
   }
@@ -346,7 +346,7 @@ export function Compras() {
       ) : (
         <div className="rounded-2xl border bg-card py-20 text-center text-muted-foreground shadow-card">
           <CalendarDays className="mx-auto mb-2 h-9 w-9 text-muted-foreground/30" />
-          <p className="text-sm font-medium">Elegí una fecha y buscá las compras</p>
+          <p className="text-sm font-medium">Elige una fecha y busca las compras</p>
         </div>
       )}
     </div>

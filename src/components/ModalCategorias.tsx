@@ -59,7 +59,7 @@ export function ModalCategorias({ onClose }: { onClose: () => void }) {
   }, [])
 
   async function crear() {
-    if (!nombre.trim()) return toast('Escribí el nombre de la categoría', 'error')
+    if (!nombre.trim()) return toast('Escribe el nombre de la categoría', 'error')
     setGuardando(true)
     const r = await guardarCategoria({ nombre, icono })
     setGuardando(false)
@@ -110,7 +110,7 @@ export function ModalCategorias({ onClose }: { onClose: () => void }) {
     const ok = await confirm({
       title: 'Borrar categoría',
       message: usados > 0
-        ? `"${c.nombre}" la usan ${usados} producto${usados === 1 ? '' : 's'}; no se puede borrar. ¿Querés desactivarla?`
+        ? `"${c.nombre}" la usan ${usados} producto${usados === 1 ? '' : 's'}; no se puede borrar. ¿Quieres desactivarla?`
         : `¿Borrar la categoría "${c.nombre}"?`,
       okText: usados > 0 ? 'Desactivar' : 'Borrar',
       destructive: usados === 0,

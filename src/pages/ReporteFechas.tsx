@@ -62,8 +62,8 @@ export function ReporteFechas() {
     return (
       <div className="py-24 text-center text-muted-foreground">
         <CalendarDays className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium">No tenés acceso al Reporte por Fechas</p>
-        <p className="text-xs">Pedí el permiso «reporteFechas» al administrador.</p>
+        <p className="text-sm font-medium">No tienes acceso al Reporte por Fechas</p>
+        <p className="text-xs">Pide el permiso «reporteFechas» al administrador.</p>
       </div>
     )
   }

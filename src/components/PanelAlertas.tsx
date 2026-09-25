@@ -166,7 +166,7 @@ export function PanelAlertas({ onIr }: { onIr?: (seccion: string) => void } = {}
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2 text-xs text-muted-foreground"
-                    title={`Ocultar esta alerta por ${POSPONER_HORAS} h (podés volver a mostrarla)`}
+                    title={`Ocultar esta alerta por ${POSPONER_HORAS} h (puedes volver a mostrarla)`}
                     onClick={() => void posponer(a.id)}
                   >
                     <EyeOff className="mr-0.5 h-3 w-3" /> Posponer

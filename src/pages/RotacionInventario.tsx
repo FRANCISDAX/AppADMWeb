@@ -164,7 +164,7 @@ export function RotacionInventario() {
           {([
             { key: 'top', label: '🏆 Top 10', icon: Trophy, tip: 'Los 10 productos que más rotan. Son los que más se venden y generan movimiento.' },
             { key: 'bottom', label: '⚠️ Bottom 10', icon: AlertTriangle, tip: 'Los 10 productos que menos rotan. Podrían estar estancados o próximos a vencer.' },
-            { key: 'buscar', label: '🔍 Buscar', icon: Search, tip: 'Buscá cualquier producto por nombre o categoría para ver su rotación específica.' },
+            { key: 'buscar', label: '🔍 Buscar', icon: Search, tip: 'Busca cualquier producto por nombre o categoría para ver su rotación específica.' },
           ] as const).map((v) => (
             <Tooltip key={v.key} content={<span className="text-center">{v.tip}</span>} side="bottom">
               <button
@@ -281,7 +281,7 @@ export function RotacionInventario() {
           )}
           {!busqueda.trim() && (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              Escribí el nombre de un producto para ver su rotación
+              Escribe el nombre de un producto para ver su rotación
             </div>
           )}
         </div>

@@ -862,7 +862,7 @@ export async function moverPedidosDeCaja({
   usuario?: string
 }): Promise<{ success: boolean; movidos: number; error?: string }> {
   try {
-    if (!origen || !destino) return { success: false, movidos: 0, error: 'Elegí las dos cajas' }
+    if (!origen || !destino) return { success: false, movidos: 0, error: 'Elige las dos cajas' }
     if (origen === destino) return { success: false, movidos: 0, error: 'Las cajas son la misma' }
 
     const snap = await getDocs(

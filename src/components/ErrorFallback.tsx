@@ -54,7 +54,7 @@ export function ErrorFallback({
           <div className="min-w-0">
             <h2 className="font-bold">Algo se rompió en esta pantalla</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              El error quedó <span className="font-semibold">registrado automáticamente</span> (Auditoría → Errores). Podés reintentar; tus datos no se ven
+              El error quedó <span className="font-semibold">registrado automáticamente</span> (Auditoría → Errores). Puedes reintentar; tus datos no se ven
               afectados.
             </p>
           </div>

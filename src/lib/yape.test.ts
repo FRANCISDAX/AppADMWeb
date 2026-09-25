@@ -240,7 +240,7 @@ test('un aviso que coincide con el total se destaca (es el caso normal: el clien
 test('sin carrito el aviso no se puede aplicar (y se dice por qué)', () => {
   const r = aplicarYapeEnVenta(aviso(), 0)
   assert.equal(r.ok, false)
-  assert.match(r.motivo ?? '', /Agregá productos/)
+  assert.match(r.motivo ?? '', /Agrega productos/)
 })
 
 test('un aviso por MÁS que la venta se aplica topeado y se avisa: Yape no da vuelto', () => {

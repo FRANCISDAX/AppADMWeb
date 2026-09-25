@@ -51,7 +51,7 @@ export function Usuarios() {
     return (
       <div className="py-24 text-center text-muted-foreground">
         <UsersIcon className="mx-auto mb-2 h-9 w-9 text-muted-foreground/40" />
-        <p className="text-sm font-medium">No tenés acceso a Gestión de Usuarios</p>
+        <p className="text-sm font-medium">No tienes acceso a Gestión de Usuarios</p>
       </div>
     )
   }

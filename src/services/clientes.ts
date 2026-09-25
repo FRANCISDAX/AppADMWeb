@@ -314,7 +314,7 @@ export async function registrarCobro(documentoId: string, monto: number, tipoPag
       if (turnoId) {
         const turnoRef = doc(db, COL.TURNOS, turnoId)
         turnoSnap = await tx.get(turnoRef)
-        if (!turnoSnap.exists() || turnoSnap.data().estado !== 'abierto') throw new Error('El turno ya no está abierto. Abrí un turno antes de cobrar.')
+        if (!turnoSnap.exists() || turnoSnap.data().estado !== 'abierto') throw new Error('El turno ya no está abierto. Abre un turno antes de cobrar.')
       }
 
       const venta = snap.data().venta || {}

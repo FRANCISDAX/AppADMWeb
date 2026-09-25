@@ -57,10 +57,10 @@ export function evaluarVentaCredito({ total, estado }: { total: number; estado: 
   const disponible = disponibleDe(estado)
 
   if (!estado.existe) {
-    return { permitido: false, motivo: 'El cliente no está registrado. Cargalo en Clientes para venderle a crédito.', saldoDespues, excedente: 0, disponible }
+    return { permitido: false, motivo: 'El cliente no está registrado. Cárgalo en Clientes para venderle a crédito.', saldoDespues, excedente: 0, disponible }
   }
   if (!estado.activo) {
-    return { permitido: false, motivo: 'El cliente no tiene crédito activo. Activalo en su ficha para venderle a crédito.', saldoDespues, excedente: 0, disponible }
+    return { permitido: false, motivo: 'El cliente no tiene crédito activo. Actívalo en su ficha para venderle a crédito.', saldoDespues, excedente: 0, disponible }
   }
   if (estado.limite <= SIN_LIMITE) {
     // Sin límite configurado: se permite (es el valor por defecto de las fichas).

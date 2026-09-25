@@ -288,7 +288,7 @@ export function alertaTurnoAbierto(ctx: ContextoAlertas, ahora: number): Alerta 
           ? 'Hay un turno de otro día sin cerrar'
           : `Hay ${viejos.length} turnos de otros días sin cerrar`,
       detalle: `${listarNombres(viejos.map(quien), 3)}. Un turno abierto no tiene contado, así que esa plata no se rindió.`,
-      accion: 'Cerralo desde Turnos (o Arqueo de caja) con el conteo real del cajón.',
+      accion: 'Ciérralo desde Turnos (o Arqueo de caja) con el conteo real del cajón.',
       seccion: 'turnos',
     }
   }
@@ -302,7 +302,7 @@ export function alertaTurnoAbierto(ctx: ContextoAlertas, ahora: number): Alerta 
         severidad: 'aviso',
         titulo: `${largos.length === 1 ? 'Un turno lleva' : `${largos.length} turnos llevan`} más de ${umbrales.turnoAbiertoHoras} h abiertos`,
         detalle: `${listarNombres(largos.map(quien), 3)}. Un turno largo junta muchas ventas en un solo documento y hace más difícil ubicar un descuadre.`,
-        accion: 'Si el turno ya terminó, cerralo; si el local sigue abierto, partí el día en turnos (mañana / tarde).',
+        accion: 'Si el turno ya terminó, ciérralo; si el local sigue abierto, partí el día en turnos (mañana / tarde).',
         seccion: 'turnos',
       }
     }
@@ -343,7 +343,7 @@ export function alertasStock(ctx: ContextoAlertas): Alerta[] {
       severidad: 'critico',
       titulo: `${agotados.length} producto(s) agotados`,
       detalle: `${listarNombres(agotados.map((p) => p.nombre || p.id))}. Un producto agotado no se puede vender: el cajero lo descubre con el cliente adelante.`,
-      accion: 'Cargá la compra en Inventario o revisá si el stock quedó mal por un ajuste.',
+      accion: 'Carga la compra en Inventario o revisa si el stock quedó mal por un ajuste.',
       seccion: 'inventario',
     })
   }
@@ -354,7 +354,7 @@ export function alertasStock(ctx: ContextoAlertas): Alerta[] {
       severidad: 'aviso',
       titulo: `${bajos.length} producto(s) bajo el mínimo`,
       detalle: `${listarNombres(bajos.map((p) => p.nombre || p.id))}.`,
-      accion: 'Pedile al proveedor antes de que se corte (el mínimo se carga por producto en Inventario).',
+      accion: 'Pídele al proveedor antes de que se corte (el mínimo se carga por producto en Inventario).',
       seccion: 'inventario',
     })
   }
@@ -399,7 +399,7 @@ export function alertasYape(ctx: ContextoAlertas, ahora: number): Alerta[] {
         3,
       ),
       accion:
-        'Si era el pago de una venta, revisá esa caja; si no era de una venta (o ya lo cobraste por otro medio), marcalo como ignorado para que deje de figurar.',
+        'Si era el pago de una venta, revisa esa caja; si no era de una venta (o ya lo cobraste por otro medio), marcalo como ignorado para que deje de figurar.',
       seccion: 'pdv',
     })
   }
@@ -412,7 +412,7 @@ export function alertasYape(ctx: ContextoAlertas, ahora: number): Alerta[] {
       severidad: 'aviso',
       titulo: `${raros.length} aviso(s) de Yape con un estado que el sistema no reconoce`,
       detalle: `${listarNombres(raros.map((p) => etiquetaYape(p)), 3)}. Un aviso con un estado desconocido no se puede usar en el PDV: se muestra para que el problema no pase inadvertido.`,
-      accion: 'Revisá la versión del puente instalada en el celular: probablemente escribe un estado que esta versión del app no conoce.',
+      accion: 'Revisa la versión del puente instalada en el celular: probablemente escribe un estado que esta versión del app no conoce.',
       seccion: 'reportes',
     })
   }
@@ -450,7 +450,7 @@ export function alertaDiferenciaCaja(ctx: ContextoAlertas): Alerta | null {
       }),
       3,
     ),
-    accion: 'Mirá el arqueo de ese turno: si el conteo estuvo mal, se rectifica con permiso y queda registrado.',
+    accion: 'Mira el arqueo de ese turno: si el conteo estuvo mal, se rectifica con permiso y queda registrado.',
     seccion: 'auditoriaCaja',
   }
 }
@@ -479,7 +479,7 @@ export function alertaAnulaciones(ctx: ContextoAlertas): Alerta | null {
     severidad: 'aviso',
     titulo: `${anuladas.length} comprobantes anulados hoy`,
     detalle: `${detalle.join(' · ')}. El umbral configurado es ${lim}.`,
-    accion: 'Mirá el motivo de cada anulación en Auditoría; si son ventas reales anuladas para no declararlas, es un problema fiscal, no de caja.',
+    accion: 'Mira el motivo de cada anulación en Auditoría; si son ventas reales anuladas para no declararlas, es un problema fiscal, no de caja.',
     seccion: 'auditoria',
   }
 }
@@ -522,7 +522,7 @@ export function alertaDescuentos(ctx: ContextoAlertas): Alerta | null {
       casos.map((c) => `${c.etiqueta}: ${c.pct.toFixed(1)}% (${soles(c.monto)}) · ${c.cajero}`),
       3,
     ),
-    accion: 'Revisá si el descuento estaba autorizado. (Este aviso es de control: no bloquea la venta.)',
+    accion: 'Revisa si el descuento estaba autorizado. (Este aviso es de control: no bloquea la venta.)',
     seccion: 'reportes',
   }
 }

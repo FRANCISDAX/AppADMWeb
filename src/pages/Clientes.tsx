@@ -43,8 +43,8 @@ export function Clientes() {
     return (
       <div className="py-24 text-center text-muted-foreground">
         <UserRound className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium">No tenés acceso al módulo de Clientes</p>
-        <p className="text-xs">Pedí el permiso «clientes» al administrador.</p>
+        <p className="text-sm font-medium">No tienes acceso al módulo de Clientes</p>
+        <p className="text-xs">Pide el permiso «clientes» al administrador.</p>
       </div>
     )
   }
@@ -262,7 +262,7 @@ function Lista({ onAbrir, onNuevo }: { onAbrir: (id: string) => void; onNuevo: (
         <div className="py-16 text-center text-muted-foreground">
           <UserRound className="mx-auto mb-2 h-9 w-9 text-muted-foreground/40" />
           <p className="text-sm font-medium">Buscar clientes</p>
-          <p className="text-xs text-muted-foreground/70">Usá la búsqueda o tocá «Todos» para ver el listado completo</p>
+          <p className="text-xs text-muted-foreground/70">Usa la búsqueda o toca «Todos» para ver el listado completo</p>
         </div>
       )}
 

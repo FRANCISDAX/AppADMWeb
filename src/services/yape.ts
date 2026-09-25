@@ -244,7 +244,7 @@ export async function crearAvisoDePrueba({
   pagadorNombre?: string
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   const limpio = Math.round((Number(monto) || 0) * 100) / 100
-  if (!(limpio > 0)) return { success: false, error: 'Poné un monto mayor a 0 para el aviso de prueba.' }
+  if (!(limpio > 0)) return { success: false, error: 'Pon un monto mayor a 0 para el aviso de prueba.' }
   try {
     const ref = await addDoc(collection(db, COL.PAGOS_YAPE), limpiarUndefined({
       monto: limpio,
@@ -315,11 +315,11 @@ function exigirUsable(pago: PagoYape, opciones: OpcionesAviso, accion: 'reservar
     usado: `Ese yape ya se usó${pago.documento ? ` en ${pago.documento}` : ''}.`,
     ignorado: 'Ese aviso fue ignorado.',
     anulado: 'Ese aviso fue anulado (la venta se anuló y la plata volvió al cliente).',
-    vencido: 'Ese aviso ya venció: pedile al cliente que revise su celular o cobralo como transferencia.',
+    vencido: 'Ese aviso ya venció: pídele al cliente que revise su celular o cobralo como transferencia.',
     reservado: accion === 'ignorar'
-      ? `Otro cajero${deOtro} está usando ese aviso. Esperá a que termine o se libere.`
+      ? `Otro cajero${deOtro} está usando ese aviso. Espera a que termine o se libere.`
       : `Otro cajero${deOtro} tomó ese aviso primero. Refrescá la lista.`,
-    desconocido: 'Ese aviso tiene un estado que el sistema no reconoce: revisá el puente de Yape.',
+    desconocido: 'Ese aviso tiene un estado que el sistema no reconoce: revisa el puente de Yape.',
   }
   throw new Error(mensajes[situacion] ?? 'Ese aviso no se puede usar.')
 }
@@ -380,7 +380,7 @@ export async function confirmarPagoYapeEnVenta({
         throw new Error(`Ese yape ya se usó${pago.documento ? ` en ${pago.documento}` : ''}.`)
       }
       if (estado === 'ignorado' || estado === 'anulado') {
-        throw new Error('Ese aviso fue descartado: revisá el cruce de Yape en el cierre.')
+        throw new Error('Ese aviso fue descartado: revisa el cruce de Yape en el cierre.')
       }
       // Se confirma también si la reserva ya venció (el cajero cobró igual): la venta existe y
       // no se puede deshacer, así que el aviso queda usado y el problema se ve en el cierre.

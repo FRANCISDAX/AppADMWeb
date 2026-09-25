@@ -517,7 +517,7 @@ export function Pdv() {
       usuarioId: user?.uid || '',
     })
     if (!r.success) {
-      setToast(`⚠️ La venta se guardó, pero el aviso de Yape no se pudo confirmar: ${r.error ?? ''} Revisá el cruce de Yape en el cierre.`)
+      setToast(`⚠️ La venta se guardó, pero el aviso de Yape no se pudo confirmar: ${r.error ?? ''} Revisa el cruce de Yape en el cierre.`)
     }
   }
 
@@ -681,10 +681,10 @@ export function Pdv() {
   /** Cobra el pedido activo: usa el mismo camino que ya existía (`cobrarVentaPendiente`). */
   async function cobrarPedido() {
     if (!pedidoActivo) return
-    if (!tienePermiso('cobrarVenta')) return setToast('🚫 No tenés permiso para cobrar')
+    if (!tienePermiso('cobrarVenta')) return setToast('🚫 No tienes permiso para cobrar')
     const { buscarTurnoAbierto } = await import('@/services/turnos')
     const turnoActivo = await buscarTurnoAbierto(user?.uid, tienePermiso('verTodo'))
-    if (!turnoActivo) return setToast('🚫 No hay un turno abierto. Abrí un turno antes de cobrar.')
+    if (!turnoActivo) return setToast('🚫 No hay un turno abierto. Abre un turno antes de cobrar.')
 
     const tipoDocPedido: 'NV' | 'BOLETA' | 'FACTURA' = tipoComp === 'nv' ? 'NV' : tipoComp === 'boleta' ? 'BOLETA' : 'FACTURA'
     // Las mismas validaciones del PDV (Factura → RUC; Boleta sobre el tope → DNI).
@@ -893,12 +893,12 @@ export function Pdv() {
       setManualCliente(true)
       setDniConsultado(false)
       setClienteNombre('')
-      setToast('⚠️ No se encontró el documento. Podés ingresarlo manualmente.')
+      setToast('⚠️ No se encontró el documento. Puedes ingresarlo manualmente.')
     } catch {
       // Sin conexión / API caída → modo manual.
       setDniConsultado(false)
       setManualCliente(true)
-      setToast('⚠️ Sin conexión a SUNAT. Podés ingresar el cliente manualmente.')
+      setToast('⚠️ Sin conexión a SUNAT. Puedes ingresar el cliente manualmente.')
     } finally {
       setConsultando(false)
     }
@@ -909,7 +909,7 @@ export function Pdv() {
     const dni = clienteDni.trim()
 
     // Toda venta (incluida la not a de venta) necesita al menos un producto.
-    if (Object.keys(cart).length === 0 && Object.keys(manualItems).length === 0) return setToast('⚠️ Agregá al menos un producto para vender')
+    if (Object.keys(cart).length === 0 && Object.keys(manualItems).length === 0) return setToast('⚠️ Agrega al menos un producto para vender')
 
     if (tipoComp === 'factura') {
       if (!/^\d{11}$/.test(dni)) return setToast('⚠️ Para FACTURA ingresa el RUC del cliente (11 dígitos)')
@@ -955,13 +955,13 @@ export function Pdv() {
     } else {
       // El tope, el vuelto y el "falta" los define lib/pagos.ts: acá solo se
       // muestra el motivo de que no se pueda cobrar todavía.
-      if (resumen.pagos.length === 0) return setToast('⚠️ Elegí al menos una forma de pago')
+      if (resumen.pagos.length === 0) return setToast('⚠️ Elige al menos una forma de pago')
       if (!resumen.puedeCobrar) return setToast(`⚠️ ${resumen.motivo ?? 'El pago no cubre el total'}`)
     }
 
     // El cierre del turno invalida la venta: solo se puede cobrar con turno abierto.
     const turno = await buscarTurnoAbierto(user?.uid, tienePermiso('verTodo'))
-    if (!turno) return setToast('🚫 No hay un turno abierto. Abrí un turno antes de vender.')
+    if (!turno) return setToast('🚫 No hay un turno abierto. Abre un turno antes de vender.')
 
     // --- Protección de margen mínimo ---
     const hoy = new Date()
@@ -1129,7 +1129,7 @@ export function Pdv() {
   }
 
   async function enviarACaja() {
-    if (Object.keys(cart).length === 0 && Object.keys(manualItems).length === 0) return setToast('⚠️ Agregá al menos un producto')
+    if (Object.keys(cart).length === 0 && Object.keys(manualItems).length === 0) return setToast('⚠️ Agrega al menos un producto')
 
     // ⚠️ El pedido **no** lleva comprobante: se manda como pedido (`PED-…`) y el cajero, al
     // cobrarlo, elige NV / boleta / factura y recién ahí se asigna la serie y el correlativo.
@@ -1243,7 +1243,7 @@ export function Pdv() {
       if (!res.success && res.duplicado) {
         const otro = await confirm({
           title: '¿Enviar otro pedido igual?',
-          message: `Ya enviaste este mismo pedido (${res.codigoPedido}) hace menos de 15 minutos y todavía está esperando en caja.\n\nSi es la MISMA venta, cancelá: el cajero va a cobrar el pedido que ya está en su lista.\nSi es OTRA venta con los mismos productos, confirmá y se envía un pedido nuevo.`,
+          message: `Ya enviaste este mismo pedido (${res.codigoPedido}) hace menos de 15 minutos y todavía está esperando en caja.\n\nSi es la MISMA venta, cancelá: el cajero va a cobrar el pedido que ya está en su lista.\nSi es OTRA venta con los mismos productos, confirma y se envía un pedido nuevo.`,
           okText: 'Enviar otro igual',
         })
         if (!otro) return setToast(`ℹ️ No se envió nada: el pedido ${res.codigoPedido} ya está en caja`)
@@ -1729,7 +1729,7 @@ export function Pdv() {
                     placeholder="Nombre / Razón Social (manual)"
                     className="mt-1.5"
                   />
-                  <p className="mt-1 text-[11px] text-amber-600">Sin conexión / no encontrado — ingresá el nombre manualmente.</p>
+                  <p className="mt-1 text-[11px] text-amber-600">Sin conexión / no encontrado — ingresa el nombre manualmente.</p>
                 </>
               ) : (
                 clienteNombre && (
@@ -1791,7 +1791,7 @@ export function Pdv() {
                     </p>
                   )}
                   <p className="text-[10px] text-amber-700 dark:text-amber-300">
-                    El monto es el cotizado por el vendedor: no se recalcula. Elegí comprobante y forma de pago abajo.
+                    El monto es el cotizado por el vendedor: no se recalcula. Elige comprobante y forma de pago abajo.
                   </p>
                 </div>
                 <Button size="sm" variant="outline" onClick={soltarPedido}>Cancelar</Button>
@@ -1820,7 +1820,7 @@ export function Pdv() {
               <div className="py-10 text-center text-muted-foreground">
                 <ShoppingCart className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
                 <p className="text-sm font-medium">Carrito vacío</p>
-                <p className="text-xs">Agregá productos desde el catálogo.</p>
+                <p className="text-xs">Agrega productos desde el catálogo.</p>
               </div>
             ) : (
               <>
@@ -2053,12 +2053,12 @@ export function Pdv() {
               </div>
 
               {!hayProductos && (
-                <p className="text-[11px] text-muted-foreground">Agregá productos al carrito para elegir la forma de pago.</p>
+                <p className="text-[11px] text-muted-foreground">Agrega productos al carrito para elegir la forma de pago.</p>
               )}
 
               {hayProductos && !pagoCredito && pagos.length === 0 && !grupoTransf && (
                 <p className="text-[11px] text-muted-foreground">
-                  Elegí con qué paga el cliente. Se pueden combinar varias formas (y el sistema valida que no se pase del total).
+                  Elige con qué paga el cliente. Se pueden combinar varias formas (y el sistema valida que no se pase del total).
                 </p>
               )}
 
@@ -2183,7 +2183,7 @@ export function Pdv() {
               {/* Tope del negocio: se avisa y se bloquea el cobro hasta que lo bajen */}
               {revisionDescuento.excede && (
                 <p className="rounded-lg bg-destructive/10 p-2 text-[11px] font-semibold text-destructive">
-                  {revisionDescuento.mensaje} Bajalo a {descuentoGlobalTipo === 'porcentaje' ? `${revisionDescuento.valorAjustado}%` : fmt(revisionDescuento.valorAjustado)} para poder cobrar, o pedile al administrador que suba el tope en <em>Configuración → Empresa</em>.
+                  {revisionDescuento.mensaje} Bajalo a {descuentoGlobalTipo === 'porcentaje' ? `${revisionDescuento.valorAjustado}%` : fmt(revisionDescuento.valorAjustado)} para poder cobrar, o pídele al administrador que suba el tope en <em>Configuración → Empresa</em>.
                 </p>
               )}
 
@@ -2314,14 +2314,14 @@ export function Pdv() {
           <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="bg-primary px-5 py-4 text-center text-white">
               <p className="text-lg font-bold">Embalaje y Otros</p>
-              <p className="text-sm opacity-90">Seleccioná un producto</p>
+              <p className="text-sm opacity-90">Selecciona un producto</p>
               <p className="mt-1 text-[11px] opacity-80">Se registran en la categoría VARIOS y no descuentan stock</p>
             </div>
             <div className="max-h-[60vh] overflow-y-auto p-5">
               {(cfg?.plantillasManuales ?? []).length === 0 ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">
                   No hay plantillas configuradas.<br />
-                  Pedile al admin que las cree en Configuración → Plantillas.
+                  Pídele al admin que las cree en Configuración → Plantillas.
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
@@ -2412,7 +2412,7 @@ export function Pdv() {
                 <div className="h-56 w-56 animate-pulse rounded-xl bg-muted" />
               )}
               <p className="text-center text-xs text-muted-foreground">
-                Abrí la cámara del celular y escaneá el código para ver tu compra en tiempo real.
+                Abre la cámara del celular y escaneá el código para ver tu compra en tiempo real.
               </p>
               {displayUrlRef.current && (
                 <button

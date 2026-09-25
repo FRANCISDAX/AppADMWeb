@@ -274,8 +274,8 @@ export function aplicarYapeEnVenta(
 ): { ok: boolean; monto: number; motivo?: string; aviso?: string } {
   const t = redondear2(Math.max(0, Number(total) || 0))
   const monto = redondear2(Math.max(0, Number(pago.monto) || 0))
-  if (t <= 0) return { ok: false, monto: 0, motivo: 'Agregá productos al carrito antes de aplicar el aviso.' }
-  if (monto <= 0) return { ok: false, monto: 0, motivo: 'El aviso no tiene monto: revisá el correo o el puente.' }
+  if (t <= 0) return { ok: false, monto: 0, motivo: 'Agrega productos al carrito antes de aplicar el aviso.' }
+  if (monto <= 0) return { ok: false, monto: 0, motivo: 'El aviso no tiene monto: revisa el correo o el puente.' }
   if (monto > t + TOLERANCIA) {
     return {
       ok: true,

@@ -77,13 +77,13 @@ export function PanelVentasPendientes({
   }, [cargar])
 
   function cancelar(v: DocumentoVenta) {
-    if (!tienePermiso('cancelarVentaPendiente')) return toast('🚫 No tenés permiso para eliminar', 'error')
+    if (!tienePermiso('cancelarVentaPendiente')) return toast('🚫 No tienes permiso para eliminar', 'error')
     setCancelandoId(v.id)
     setMotivoCancel('')
   }
 
   async function confirmarCancelacion(v: DocumentoVenta) {
-    if (!motivoCancel.trim()) return toast('⚠️ Ingresá un motivo')
+    if (!motivoCancel.trim()) return toast('⚠️ Ingresa un motivo')
     const ok = await confirm({
       title: '¿Eliminar esta venta?',
       message: '⚠️ El pedido NO se borra: queda registrado como eliminado, con tu motivo y quién lo eliminó (queda el rastro en Auditoría). No hay comprobante que anular y el stock nunca se tocó.',
@@ -214,7 +214,7 @@ export function PanelVentasPendientes({
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
           {!cajaId && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              Tu usuario no tiene una caja asignada: se muestran los pedidos de <strong>todas las cajas</strong>. Pedile al administrador que te asigne una en <em>Usuarios → Editar</em> para que las series del comprobante sean las de tu caja.
+              Tu usuario no tiene una caja asignada: se muestran los pedidos de <strong>todas las cajas</strong>. Pídele al administrador que te asigne una en <em>Usuarios → Editar</em> para que las series del comprobante sean las de tu caja.
             </p>
           )}
 

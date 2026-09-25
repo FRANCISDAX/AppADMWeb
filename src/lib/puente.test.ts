@@ -76,7 +76,7 @@ test('cada estado dice qué hacer (un aviso rojo sin instrucción no sirve)', ()
   ]
   assert.equal(new Set(textos).size, 4, 'los cuatro estados tienen que decir cosas distintas')
   assert.match(textos[0], /no yapeó nadie/, 'activo: si no hay avisos, no yapeó nadie')
-  assert.match(textos[2], /Revisá el celular/, 'caído: hay que ir al celular')
+  assert.match(textos[2], /Revisa el celular/, 'caído: hay que ir al celular')
   assert.match(textoDelPuente(latido(), AHORA), new RegExp(`late cada ${LATIDO_MINUTOS} min|Puente activo`))
 })
 

@@ -112,13 +112,13 @@ export function recomendacionDelPuente(
 ): string {
   switch (estadoDelPuente(latido, ahora)) {
     case 'sin-datos':
-      return 'Revisá el celular: tiene que estar encendido, con internet, con el acceso a notificaciones dado y la cuenta del puente cargada.'
+      return 'Revisa el celular: tiene que estar encendido, con internet, con el acceso a notificaciones dado y la cuenta del puente cargada.'
     case 'activo':
       return 'Si no aparecen avisos, es que no yapeó nadie.'
     case 'demorado':
-      return 'Puede ser un corte de internet del celular o que el sistema lo esté durmiendo: si sigue así, mirá el celular.'
+      return 'Puede ser un corte de internet del celular o que el sistema lo esté durmiendo: si sigue así, mira el celular.'
     default:
-      return 'Revisá el celular del Yape antes de seguir cobrando por Yape: los avisos de este rato no entraron.'
+      return 'Revisa el celular del Yape antes de seguir cobrando por Yape: los avisos de este rato no entraron.'
   }
 }
 

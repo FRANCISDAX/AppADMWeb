@@ -364,11 +364,11 @@ export function Inventario() {
 
   async function guardarAjuste() {
     const prod = productos.find((p) => p.id === ajusteProductoId)
-    if (!prod) return setToast('⚠️ Seleccioná un producto')
+    if (!prod) return setToast('⚠️ Selecciona un producto')
     const cant = parseInt(ajusteCantidad)
-    if (!cant || cant <= 0) return setToast('⚠️ Ingresá una cantidad válida')
+    if (!cant || cant <= 0) return setToast('⚠️ Ingresa una cantidad válida')
     const stockActual = prod.stock ?? 0
-    if (ajusteTipo === 'salida' && cant > stockActual) return setToast('⚠️ No podés sacar más de lo que hay en stock')
+    if (ajusteTipo === 'salida' && cant > stockActual) return setToast('⚠️ No puedes sacar más de lo que hay en stock')
     setAjusteGuardando(true)
     try {
       const nuevoStock = ajusteTipo === 'entrada' ? stockActual + cant : stockActual - cant
@@ -574,7 +574,7 @@ export function Inventario() {
       const raw = tomaConteos[p.id]
       return raw !== '' && raw != null && !isNaN(parseInt(raw))
     })
-    if (productosConConteo.length === 0) return setToast('⚠️ Ingresá al menos un conteo')
+    if (productosConConteo.length === 0) return setToast('⚠️ Ingresa al menos un conteo')
     const conDiferencia = productosConConteo.filter((p) => {
       const fisico = parseInt(tomaConteos[p.id])
       return fisico !== (p.stock ?? 0)
@@ -638,7 +638,7 @@ export function Inventario() {
   function validar(): string | null {
     if (!form.nombre.trim()) return 'El nombre es obligatorio'
     if (!(parseFloat(form.precioVenta) > 0)) return 'El precio de venta es obligatorio'
-    if (!form.categoria.trim()) return 'Elegí una categoría'
+    if (!form.categoria.trim()) return 'Elige una categoría'
     const nombreDup = productos.some((p) => p.id !== editando?.id && p.nombre?.toLowerCase() === form.nombre.trim().toLowerCase())
     if (nombreDup) return `El nombre "${form.nombre.trim()}" ya existe`
     if (!editando && form.codigo.trim()) {
@@ -740,8 +740,8 @@ export function Inventario() {
     return (
       <div className="py-24 text-center text-muted-foreground">
         <Package className="mx-auto mb-2 h-9 w-9 text-muted-foreground/40" />
-        <p className="text-sm font-medium">No tenés acceso al módulo de Inventario</p>
-        <p className="text-xs">Pedí el permiso «inventario» al administrador.</p>
+        <p className="text-sm font-medium">No tienes acceso al módulo de Inventario</p>
+        <p className="text-xs">Pide el permiso «inventario» al administrador.</p>
       </div>
     )
   }
@@ -828,7 +828,7 @@ export function Inventario() {
           {valorizado.sinCosto > 0 && (
             <span
               className="rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-600"
-              title="Productos con stock pero sin ningún costo cargado: en el reporte valen S/ 0, así que el total valorizado está por debajo del real. Cargales el Precio Compra (editar producto) para que el inventario valorizado sea real."
+              title="Productos con stock pero sin ningún costo cargado: en el reporte valen S/ 0, así que el total valorizado está por debajo del real. Cárgales el Precio Compra (editar producto) para que el inventario valorizado sea real."
             >
               ⚠️ {valorizado.sinCosto} sin costo (valen S/ 0)
             </span>
@@ -1103,7 +1103,7 @@ export function Inventario() {
                 <Label>Categoría *</Label>
                 {categoriasFormulario.length === 0 ? (
                   <p className="mt-1 rounded-lg bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-600 dark:text-amber-500">
-                    No hay categorías activas. Creá una en <span className="font-semibold">Configuración → Categorías</span>.
+                    No hay categorías activas. Crea una en <span className="font-semibold">Configuración → Categorías</span>.
                   </p>
                 ) : (
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -1217,7 +1217,7 @@ export function Inventario() {
                 </label>
                 {form.isKit && (
                   <div className="mt-3 space-y-2">
-                    <p className="text-[11px] text-muted-foreground">Agregá los productos que componen el kit. El stock del kit se calcula automáticamente desde los componentes.</p>
+                    <p className="text-[11px] text-muted-foreground">Agrega los productos que componen el kit. El stock del kit se calcula automáticamente desde los componentes.</p>
                     {form.kitItems.map((ki, idx) => (
                       <div key={idx} className="flex items-center gap-2">
                         <select
@@ -1362,7 +1362,7 @@ export function Inventario() {
             <div className="flex items-center justify-between border-b px-6 py-4">
               <div>
                 <h2 className="font-bold">Toma de Inventario</h2>
-                <p className="text-xs text-muted-foreground">Ingresá la cantidad física de cada producto</p>
+                <p className="text-xs text-muted-foreground">Ingresa la cantidad física de cada producto</p>
               </div>
               <button onClick={() => setTomaAbierto(false)} className="text-muted-foreground hover:text-foreground cursor-pointer" aria-label="Cerrar">✕</button>
             </div>

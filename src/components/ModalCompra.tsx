@@ -113,13 +113,13 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
       if (p) {
         setDocProv({ ...p, confirmado: true })
       } else {
-        setAvisoProv('No se encontró el documento. Revisá el número o ingresá manualmente.')
+        setAvisoProv('No se encontró el documento. Revisa el número o ingresa manualmente.')
         setModoProv('manual')
         setDocProv((d) => ({ ...d, documento: id, tipoDocumento: id.length === 11 ? 'RUC' : 'DNI', confirmado: false }))
       }
     } catch (e) {
       console.error('❌ Error consultando proveedor:', e)
-      setAvisoProv('No se pudo consultar (¿sin internet?). Ingresá manualmente.')
+      setAvisoProv('No se pudo consultar (¿sin internet?). Ingresa manualmente.')
       setModoProv('manual')
       setDocProv((d) => ({ ...d, documento: id, tipoDocumento: id.length === 11 ? 'RUC' : 'DNI', confirmado: false }))
     }
@@ -197,7 +197,7 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
           <div>
             <Label className="mb-1 block">Productos de la compra</Label>
             {carrito.length === 0 ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">Agregá productos arriba</p>
+              <p className="py-4 text-center text-xs text-muted-foreground">Agrega productos arriba</p>
             ) : (
               <div className="divide-y rounded-xl border">
                 {carrito.map((i) => {

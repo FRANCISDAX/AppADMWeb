@@ -232,7 +232,7 @@ export function ReporteAvisosYape() {
         )}
         {resumen.desconocidos > 0 && (
           <p className="border-b bg-destructive/10 px-4 py-2 text-[11px] text-destructive">
-            {resumen.desconocidos} aviso(s) con un estado que el sistema no reconoce: revisá el puente.
+            {resumen.desconocidos} aviso(s) con un estado que el sistema no reconoce: revisa el puente.
           </p>
         )}
         {resumen.pruebas > 0 && (

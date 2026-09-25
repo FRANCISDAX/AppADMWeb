@@ -161,7 +161,7 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
     setCobrando(true)
     try {
       const turno = await buscarTurnoAbierto(user?.uid, tienePermiso('verTodo'))
-      if (!turno) { toast('🚫 No hay un turno abierto. Abrí un turno antes de cobrar.', 'error'); return }
+      if (!turno) { toast('🚫 No hay un turno abierto. Abre un turno antes de cobrar.', 'error'); return }
       const r = await registrarCobro(cobroDoc.id, monto, cobroTipo, turno.id, cobroOperacion || undefined)
       if (r.success) {
         if (cliente) await actualizarSaldoCredito(cliente.id as string)
@@ -271,7 +271,7 @@ export function ClienteDetalle({ clave, nuevo, onBack }: { clave?: string; nuevo
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 El PDV <span className="font-semibold">bloquea la venta a crédito</span> cuando el saldo del cliente más la venta supera este límite.{' '}
-                <span className="font-semibold">Dejalo en 0 para no poner límite.</span>
+                <span className="font-semibold">Déjalo en 0 para no poner límite.</span>
               </p>
             </>
           )}

@@ -38,8 +38,8 @@ export function Proveedores() {
     return (
       <div className="py-24 text-center text-muted-foreground">
         <Truck className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium">No tenés acceso al módulo de Proveedores</p>
-        <p className="text-xs">Pedí el permiso «proveedores» al administrador.</p>
+        <p className="text-sm font-medium">No tienes acceso al módulo de Proveedores</p>
+        <p className="text-xs">Pide el permiso «proveedores» al administrador.</p>
       </div>
     )
   }
@@ -168,7 +168,7 @@ function Lista({ onAbrir, onNuevo }: { onAbrir: (id: string) => void; onNuevo: (
         <div className="py-16 text-center text-muted-foreground">
           <Truck className="mx-auto mb-2 h-9 w-9 text-muted-foreground/40" />
           <p className="text-sm font-medium">Buscar proveedores</p>
-          <p className="text-xs text-muted-foreground/70">Escribí un nombre o RUC/DNI para buscar</p>
+          <p className="text-xs text-muted-foreground/70">Escribe un nombre o RUC/DNI para buscar</p>
         </div>
       )}
 

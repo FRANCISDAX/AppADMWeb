@@ -119,8 +119,8 @@ export function ArqueoCaja() {
     return (
       <div className="py-24 text-center text-muted-foreground">
         <Banknote className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium">No tenés acceso al módulo de Arqueo de Caja</p>
-        <p className="text-xs">Pedí el permiso «arqueoCaja» al administrador.</p>
+        <p className="text-sm font-medium">No tienes acceso al módulo de Arqueo de Caja</p>
+        <p className="text-xs">Pide el permiso «arqueoCaja» al administrador.</p>
       </div>
     )
   }
@@ -370,7 +370,7 @@ export function ArqueoCaja() {
                           </span>
                         </div>
                         <p className="mt-1.5 text-[10px] text-muted-foreground">
-                          Turno aún <b>abierto</b>: podés ir verificando si el efectivo cuadra. Al cerrarlo se registra el contado definitivo.
+                          Turno aún <b>abierto</b>: puedes ir verificando si el efectivo cuadra. Al cerrarlo se registra el contado definitivo.
                         </p>
                         {contadoIngresado && !diffTurnoOk && (
                           <DiagnosticoPanel

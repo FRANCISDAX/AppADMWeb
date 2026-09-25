@@ -63,8 +63,8 @@ export function ReporteTurnos() {
     return (
       <div className="py-24 text-center text-muted-foreground">
         <CalendarRange className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium">No tenés acceso al módulo de Reporte por Turnos</p>
-        <p className="text-xs">Pedí el permiso «reporteTurnos» al administrador.</p>
+        <p className="text-sm font-medium">No tienes acceso al módulo de Reporte por Turnos</p>
+        <p className="text-xs">Pide el permiso «reporteTurnos» al administrador.</p>
       </div>
     )
   }

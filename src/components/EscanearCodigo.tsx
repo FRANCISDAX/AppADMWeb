@@ -107,7 +107,7 @@ export function EscanearCodigo({ onDetectado, open, onClose }: EscanearCodigoPro
       setUsaTrasera(trasera)
     } catch (e) {
       console.error('Error al iniciar cámara:', e)
-      setErrorCamara('No se pudo acceder a la cámara. Verificá los permisos del navegador.')
+      setErrorCamara('No se pudo acceder a la cámara. Verifica los permisos del navegador.')
       setModo('manual')
     }
   }

@@ -56,7 +56,7 @@ export async function abrirTurno({ tipoTurno, montoInicial, usuarioId, usuarioNo
       const apertura = existente.fechaApertura
         ? new Date(existente.fechaApertura).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
         : 'fecha desconocida'
-      return { success: false, error: `Ya tenés un turno ${existente.tipoTurno || ''} abierto desde el ${apertura}.` }
+      return { success: false, error: `Ya tienes un turno ${existente.tipoTurno || ''} abierto desde el ${apertura}.` }
     }
     const nuevoTurno = {
       usuarioId,
@@ -93,7 +93,7 @@ export async function cerrarTurno({ turnoId, montoFinalEfectivo, observaciones, 
       const t = snap.data()
       // Solo el dueño del turno puede cerrarlo, salvo supervisor (verTodo / admin).
       if (t.usuarioId && t.usuarioId !== usuarioId && !esSupervisor) {
-        throw new Error('Solo podés cerrar tu propio turno.')
+        throw new Error('Solo puedes cerrar tu propio turno.')
       }
       const totalVentas = t.totalVentas || 0
       const totalGastos = t.totalGastos || 0

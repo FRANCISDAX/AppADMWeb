@@ -31,7 +31,7 @@ export async function registrarEgreso(egreso: Omit<Egreso, 'id' | 'createdAt'>):
   try {
     if (!egreso.monto || egreso.monto <= 0) return { success: false, error: 'El monto debe ser mayor a 0.' }
     if (!egreso.descripcion?.trim()) return { success: false, error: 'La descripción es obligatoria.' }
-    if (!egreso.categoria) return { success: false, error: 'Seleccioná una categoría.' }
+    if (!egreso.categoria) return { success: false, error: 'Selecciona una categoría.' }
 
     await addDoc(collection(db, COL.EGRESOS), {
       ...egreso,

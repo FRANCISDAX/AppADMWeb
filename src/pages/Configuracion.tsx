@@ -123,7 +123,7 @@ export function Configuracion() {
     return (
       <div className="py-24 text-center text-muted-foreground">
         <CloudUpload className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium">No tenés acceso a Configuración</p>
+        <p className="text-sm font-medium">No tienes acceso a Configuración</p>
       </div>
     )
   }
@@ -378,7 +378,7 @@ export function Configuracion() {
                   className="mt-1"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Se imprime en la boleta y se declara a SUNAT. Si lo dejás vacío, vuelve a
+                  Se imprime en la boleta y se declara a SUNAT. Si lo dejas vacío, vuelve a
                   <span className="font-semibold"> «CONSUMIDOR FINAL»</span>.
                 </p>
               </div>
@@ -393,7 +393,7 @@ export function Configuracion() {
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
                   <span className="font-semibold">00000000</span> = documento que no domina (lo habitual en una consolidada).
-                  ⚠️ Cambiar el nombre o el documento es una decisión fiscal: confirmalo con tu contador.
+                  ⚠️ Cambiar el nombre o el documento es una decisión fiscal: confírmalo con tu contador.
                 </p>
               </div>
             </div>
@@ -445,7 +445,7 @@ export function Configuracion() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   Con qué afectación se declaran los items manuales del PDV (los de <span className="font-semibold">"Embalaje y Otros"</span>: hielo, bolsas,
                   embalaje) cuando llevan comprobante. <span className="font-semibold">Tiene que coincidir con la afectación de tu catálogo</span>: si los
-                  productos son exonerados (20) y el manual va gravado (10), el comprobante le suma 18% de IGV y declara más de lo que cobrás.
+                  productos son exonerados (20) y el manual va gravado (10), el comprobante le suma 18% de IGV y declara más de lo que cobras.
                 </p>
               </div>
             </div>
@@ -745,7 +745,7 @@ export function Configuracion() {
                   </Button>
                 </div>
                 <p className="mt-1.5 text-[10px] text-muted-foreground">
-                  Para verlo tenés que estar en el PDV (el aviso sale en el panel «Yape», arriba del
+                  Para verlo tienes que estar en el PDV (el aviso sale en el panel «Yape», arriba del
                   carrito) y con los avisos encendidos acá arriba.
                 </p>
               </div>
@@ -962,7 +962,7 @@ function ListasPrecioTab({ listas, setListas }: { listas: ListaPrecio[]; setList
 const TIPOS_PROMO = [
   { value: '3x2', label: '3×2' },
   { value: '2da_50', label: '2da al 50%' },
-  { value: 'lleva_paga', label: 'Llevá X pagá Y' },
+  { value: 'lleva_paga', label: 'Llevá X paga Y' },
   { value: 'porcentaje', label: '% por volumen' },
   { value: 'monto_fijo', label: 'Monto fijo' },
 ] as const
@@ -1041,7 +1041,7 @@ function PromocionesTab() {
     if (form.tipo === 'lleva_paga') {
       const l = parseInt(form.lleva) || 0
       const p = parseInt(form.paga) || 0
-      if (l <= 0 || p <= 0) { setGuardando(false); return toast('⚠️ Ingrese llevá y pagá válidos') }
+      if (l <= 0 || p <= 0) { setGuardando(false); return toast('⚠️ Ingrese llevá y paga válidos') }
       valor = l * 100 + p
     } else if (form.tipo === 'porcentaje') {
       valor = parseFloat(form.valor) || 0
@@ -1141,7 +1141,7 @@ function PromocionesTab() {
                   <Input type="number" inputMode="numeric" value={form.lleva} onChange={(e) => setForm({ ...form, lleva: e.target.value })} placeholder="4" />
                 </div>
                 <div>
-                  <Label>Pagá (unidades)</Label>
+                  <Label>Paga (unidades)</Label>
                   <Input type="number" inputMode="numeric" value={form.paga} onChange={(e) => setForm({ ...form, paga: e.target.value })} placeholder="3" />
                 </div>
               </div>

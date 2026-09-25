@@ -201,7 +201,7 @@ export function CierreCaja({ turno, conteoCiego = false, pagosYape, onConfirm, o
     <div className="space-y-4">
       {conteoCiego ? (
         <div className="rounded-xl border border-dashed p-3 text-xs text-muted-foreground">
-          <b>Conteo ciego activado.</b> Contá el cajón y escribí el total: el sistema recién
+          <b>Conteo ciego activado.</b> Cuenta el cajón y escribe el total: el sistema recién
           después te muestra cuánto debería haber y la diferencia.
         </div>
       ) : (
@@ -248,7 +248,7 @@ export function CierreCaja({ turno, conteoCiego = false, pagosYape, onConfirm, o
         <div className="rounded-xl border p-3">
           <div className="text-sm font-bold">Cobros por billetera (opcional)</div>
           <p className="mb-2 text-[11px] text-muted-foreground">
-            Escribí lo que <b>realmente te llegó</b> a cada una. Si no lo revisaste, dejalas vacías.
+            Escribe lo que <b>realmente te llegó</b> a cada una. Si no lo revisaste, déjalas vacías.
           </p>
           <div className="space-y-2">
             {medios.map((m) => {
@@ -317,14 +317,14 @@ export function CierreCaja({ turno, conteoCiego = false, pagosYape, onConfirm, o
           {!cargandoYape && avisosYape.length === 0 && yapeSistema > 0 && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
               ⚠️ El turno tiene <b>{fmt(yapeSistema)}</b> cobrados por Yape pero <b>no llegó ningún aviso</b> al
-              PDV: revisá que el puente de Yape esté andando (y que los avisos no hayan quedado vencidos sin
+              PDV: revisa que el puente de Yape esté andando (y que los avisos no hayan quedado vencidos sin
               usarse). Si los cobros por Yape se cargaron a mano, es normal y esta línea no marca ningún error.
             </p>
           )}
 
           {avisosYape.length > 0 && cruceYape !== 0 && (            <p className="mt-2 rounded-lg bg-muted/40 p-2 text-[11px] text-muted-foreground">
               Diferencia: <b className="num">{fmt(cruceYape)}</b>. Son cobros por Yape cargados a mano (sin aviso)
-              o avisos que no se llegaron a usar. Revisalos antes de cerrar: si son ventas por Yape que no tienen
+              o avisos que no se llegaron a usar. Revísalos antes de cerrar: si son ventas por Yape que no tienen
               aviso detrás, no hay prueba de que la plata haya llegado.
             </p>
           )}

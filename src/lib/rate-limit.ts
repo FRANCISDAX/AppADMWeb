@@ -45,7 +45,7 @@ export function verificarRateLimit(accion: string): string | null {
 
   if (registros.length >= config.maxOps) {
     const segundos = Math.ceil(config.ventanaMs / 1000)
-    return `Demasiadas operaciones de "${accion}". Esperá ${segundos} segundos.`
+    return `Demasiadas operaciones de "${accion}". Espera ${segundos} segundos.`
   }
 
   registros.push(ahora)

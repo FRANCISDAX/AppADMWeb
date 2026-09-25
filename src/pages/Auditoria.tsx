@@ -157,7 +157,7 @@ export default function Auditoria() {
     return (
       <div className="py-20 text-center text-muted-foreground">
         <Shield className="mx-auto mb-3 h-10 w-10 opacity-40" />
-        <p>No tenés acceso a Auditoría.</p>
+        <p>No tienes acceso a Auditoría.</p>
       </div>
     )
   }

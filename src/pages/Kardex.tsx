@@ -62,8 +62,8 @@ export function Kardex() {
     return (
       <div className="py-24 text-center text-muted-foreground">
         <BookOpen className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium">No tenés acceso al Kardex por Producto</p>
-        <p className="text-xs">Pedí el permiso «kardex» al administrador.</p>
+        <p className="text-sm font-medium">No tienes acceso al Kardex por Producto</p>
+        <p className="text-xs">Pide el permiso «kardex» al administrador.</p>
       </div>
     )
   }
@@ -72,8 +72,8 @@ export function Kardex() {
 
   async function consultar() {
     const producto = productos.find((p) => p.id === productoId)
-    if (!producto) { toast('Seleccioná un producto.', 'warning'); return }
-    if (!desde || !hasta) { toast('Seleccioná el rango de fechas.', 'warning'); return }
+    if (!producto) { toast('Selecciona un producto.', 'warning'); return }
+    if (!desde || !hasta) { toast('Selecciona el rango de fechas.', 'warning'); return }
     setCargando(true)
     setKardex(null)
     try {
@@ -81,7 +81,7 @@ export function Kardex() {
       setKardex(r)
     } catch (e) {
       console.error('❌ Error consultando kardex:', e)
-      toast('No se pudo consultar el kardex. Verificá los índices de Firestore.', 'error')
+      toast('No se pudo consultar el kardex. Verifica los índices de Firestore.', 'error')
     } finally {
       setCargando(false)
     }

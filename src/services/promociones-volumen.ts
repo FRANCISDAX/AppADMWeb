@@ -20,7 +20,7 @@ export type PromocionVolumen = {
 export async function guardarPromocionVolumen(promo: Omit<PromocionVolumen, 'id'> & { id?: string }): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
     if (!promo.nombre.trim()) return { success: false, error: 'El nombre es obligatorio.' }
-    if (promo.productoIds.length === 0) return { success: false, error: 'Seleccioná al menos un producto.' }
+    if (promo.productoIds.length === 0) return { success: false, error: 'Selecciona al menos un producto.' }
 
     if (promo.id) {
       await updateDoc(doc(db, COL.PROMOCIONES_VOLUMEN, promo.id), promo as Record<string, unknown>)

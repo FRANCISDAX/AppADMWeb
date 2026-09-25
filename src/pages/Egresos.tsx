@@ -103,8 +103,8 @@ export default function Egresos() {
 
   async function handleGuardar() {
     const monto = parseFloat(formMonto)
-    if (!monto || monto <= 0) { toast('⚠️ Ingresá un monto válido', 'warning'); return }
-    if (!formDesc.trim()) { toast('⚠️ Ingresá una descripción', 'warning'); return }
+    if (!monto || monto <= 0) { toast('⚠️ Ingresa un monto válido', 'warning'); return }
+    if (!formDesc.trim()) { toast('⚠️ Ingresa una descripción', 'warning'); return }
 
     setSaving(true)
     try {
@@ -177,7 +177,7 @@ export default function Egresos() {
     exportarExcel([{ name: 'Egresos', headers: ['Fecha', 'Descripción', 'Categoría', 'Tipo Pago', 'Proveedor', 'Comprobante', 'Monto'], rows }], 'Egresos')
   }
 
-  if (!tienePermiso('egresos')) return <div className="p-8 text-center text-muted-foreground">No tenés acceso a este módulo.</div>
+  if (!tienePermiso('egresos')) return <div className="p-8 text-center text-muted-foreground">No tienes acceso a este módulo.</div>
 
   return (
     <div className="space-y-4">

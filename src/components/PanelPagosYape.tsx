@@ -181,7 +181,7 @@ export function PanelPagosYape({
     if (esAvisoDePrueba(pago)) {
       const ok = await confirm({
         title: 'Es un aviso de PRUEBA',
-        message: `${etiquetaYape(pago)}\n\nLo creaste desde Configuración → Yape: NO entró plata. Si lo aplicás, la venta va a quedar registrada como pagada por Yape (y en el cruce del cierre va a figurar como PRUEBA).\n\n¿Seguir?`,
+        message: `${etiquetaYape(pago)}\n\nLo creaste desde Configuración → Yape: NO entró plata. Si lo aplicas, la venta va a quedar registrada como pagada por Yape (y en el cruce del cierre va a figurar como PRUEBA).\n\n¿Seguir?`,
         okText: 'Usar igual',
       })
       if (!ok) return
@@ -399,7 +399,7 @@ export function PanelPagosYape({
       {resumen.desconocidos > 0 && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
           ⚠️ Hay {resumen.desconocidos} aviso(s) de Yape con un estado que el sistema no reconoce. No se
-          muestran para no aplicar algo que no se entiende: revisá el puente de Yape.
+          muestran para no aplicar algo que no se entiende: revisa el puente de Yape.
         </p>
       )}
     </div>

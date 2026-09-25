@@ -114,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/15 text-3xl">⚠️</div>
             <h2 className="text-lg font-extrabold">Sesión en otro dispositivo</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Esta cuenta ya está activa en otro dispositivo. Si continuás acá, se cerrará la sesión del otro dispositivo.
+              Esta cuenta ya está activa en otro dispositivo. Si continúas acá, se cerrará la sesión del otro dispositivo.
             </p>
             <div className="mt-5 flex gap-2">
               <Button variant="outline" className="flex-1" onClick={logout}>Cerrar sesión</Button>

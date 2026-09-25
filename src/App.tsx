@@ -299,7 +299,7 @@ function Shell() {
                 <WifiOff className="h-4 w-4 shrink-0" />
                 <div>
                   <span className="font-semibold">Sin conexión a internet.</span>{' '}
-                  Podés consultar productos y clientes. Las ventas requieren conexión.{' '}
+                  Puedes consultar productos y clientes. Las ventas requieren conexión.{' '}
                   <span className="font-semibold">Tu sesión no se cerrará por inactividad mientras estés sin conexión.</span>
                 </div>
               </div>

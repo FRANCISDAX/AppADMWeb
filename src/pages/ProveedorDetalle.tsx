@@ -64,7 +64,7 @@ export function ProveedorDetalle({ clave, nuevo, onBack }: { clave?: string; nue
 
   async function buscarSunat() {
     const id = numDocInput.trim()
-    if (id.length < 8) { toast('Ingresá un DNI (8) o RUC (11)', 'warning'); return }
+    if (id.length < 8) { toast('Ingresa un DNI (8) o RUC (11)', 'warning'); return }
     setConsultandoSunat(true)
     try {
       const p = await consultarProveedor(id)
