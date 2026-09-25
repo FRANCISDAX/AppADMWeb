@@ -145,7 +145,7 @@ Reglas que ya costaron un bug o que salieron de una decisión explícita del usu
 
 ## Historial de sesiones
 
-El detalle de cada sesión —objective, decisiones con su porqué, evidencias, `Next Move` y archivos tocados— está en **`HISTORIAL-SESIONES.md`** (más reciente primero; el último bloque es **·41, el rótulo «Ref» del pago**; al final del archivo hay un **apéndice con la referencia de funciones y la tabla de colecciones**).
+El detalle de cada sesión —objective, decisiones con su porqué, evidencias, `Next Move` y archivos tocados— está en **`HISTORIAL-SESIONES.md`** (más reciente primero; el último bloque es **·42, las alertas proactivas**; al final del archivo hay un **apéndice con la referencia de funciones y la tabla de colecciones**).
 
 
 ⚠️ **Por qué está separado**: el entorno carga `AGENTS.md` con un presupuesto (~64 KB) y lo **trunca** si se pasa. Acá queda solo lo que **gobierna**; al cerrar una sesión el bloque va **al historial** y en `## Estado actual` se actualiza solo lo que cambió de fondo.
@@ -183,12 +183,12 @@ El detalle de cada sesión —objective, decisiones con su porqué, evidencias, 
 
 ### Documentos del producto (`docs/`)
 
-`docs/manual-usuario.html` (manual de usuario, con su PDF) y `docs/resumen-app.html` (resumen comercial). Los PDF se regeneran **sin abrir el navegador a mano** con Chrome headless:
+`docs/manual-usuario.html` (manual de usuario, con PDF) y `docs/resumen-app.html` (resumen comercial). Los PDF se regeneran **sin abrir el navegador a mano** con Chrome headless:
 `& "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new --disable-gpu --no-pdf-header-footer --print-to-pdf="<ruta ABSOLUTA del pdf>" "file:///<ruta ABSOLUTA del html>"`
 
 ⚠️ **Actualizarlos NO requiere deploy** (`docs/` no está en `public/` y la app no los linkea): alcanza con el commit. Si el manual cambia de fondo, subir la versión en la portada y en el footer. **Los PDF están versionados en el repo a pedido del usuario** (17/09).
 
-- 🔑 **La configuración recomendada vive en los dos documentos**: en el **manual**, la **sección 17 «Configuración Recomendada»** (límites 🟢🟡🔴 con sus pruebas) y el **Anexo A** (equipo, periféricos, red y **A.7 sin internet**); en el **resumen**, la homónima. ⚠️ **Las dos salen del bloque de pruebas de carga de arriba**: si una medición cambia hay que actualizar los dos HTML **y regenerar los PDF**. Versiones: manual **2.12**, resumen **1.6**. ⚠️ **El app es `AppADM`** (**JorFel** = la empresa que lo usa, no el producto).
+- 🔑 **La configuración recomendada vive en los dos documentos**: en el **manual**, la **sección 17 «Configuración Recomendada»** (límites 🟢🟡🔴 con sus pruebas) y el **Anexo A** (equipo, periféricos, red y **A.7 sin internet**); en el **resumen**, la homónima. ⚠️ **Las dos salen del bloque de pruebas de carga de arriba**: si una medición cambia hay que actualizar los dos HTML **y regenerar los PDF**. Versiones: manual **2.13**, resumen **1.7**. ⚠️ **El app es `AppADM`** (**JorFel** = la empresa que lo usa, no el producto).
 - ⚠️ **El PDF del resumen también necesita `@page { size: A4 }`**: sin eso Chrome usa **Letter** (216×279 mm) y sale distinto al manual. Verificado: los dos PDF dan `MediaBox [0 0 594.96 841.92]` = 210×297 mm.
 
 No test framework is configured. No CI workflows exist.
