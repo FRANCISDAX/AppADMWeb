@@ -96,6 +96,20 @@ export const PERMISOS_POR_ROL: Record<string, Record<string, boolean>> = {
     // interruptor por usuario (`Usuarios → Editar`) y el tope máximo en `Configuración → Empresa`.
     aplicarDescuento: true,
   },
+  ALMACEN: {
+    ...ALL_FALSE,
+    inventario: true,
+    kardex: true,
+    compras: true,
+    proveedores: true,
+    rotacionInventario: true,
+    crearProducto: true,
+    editarProducto: true,
+    eliminarProducto: true,
+    ajustarStock: true,
+    verCostos: true,
+    informacion: true,
+  },
 }
 
 export const MODULOS = [
@@ -157,7 +171,7 @@ export const LABELS_PERMISOS: Record<string, string> = {
   aplicarDescuento: 'Aplicar descuento manual',
 }
 
-export const ROLES = ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR', 'PERSONALIZADO']
+export const ROLES = ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR', 'ALMACEN', 'PERSONALIZADO']
 
 export function permisosPorRol(rol: string): Record<string, boolean> {
   return { ...(PERMISOS_POR_ROL[rol] || PERMISOS_POR_ROL.CAJERO) }
