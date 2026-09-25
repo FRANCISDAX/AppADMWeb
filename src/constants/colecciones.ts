@@ -22,4 +22,7 @@ export const COL = {
   /** **Latido del puente** (la señal de vida del celular del Yape), cada 5 min. El web solo lo
    *  lee para avisar si el puente se cayó. Ver `services/puente.ts`. */
   PUENTE_YAPE: 'tblPuenteYape',
+  /** **Alertas proactivas**: qué alertas **pospuse** (y hasta cuándo) cada usuario, para no volver a
+   *  verlas en la recarga siguiente. Un documento por usuario. Ver `services/alertas.ts`. */
+  ALERTAS_VISTAS: 'tblAlertasVistas',
 } as const

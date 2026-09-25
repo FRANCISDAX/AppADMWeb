@@ -347,7 +347,7 @@ function Shell() {
                   ) : seccion === 'configuracion' ? (
                     <Configuracion />
                   ) : seccion === 'dashboard' ? (
-                    <DashboardGerencial />
+                    <DashboardGerencial onNavigate={(s: string) => setSeccion(s)} />
                   ) : seccion === 'dashboardOperaciones' ? (
                     <DashboardOperaciones onNavigate={(s) => setSeccion(s)} />
                   ) : seccion === 'auditoria' ? (

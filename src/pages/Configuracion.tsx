@@ -1,4 +1,4 @@
-import { AlertTriangle, Building2, Check, CloudUpload, CreditCard, FlaskConical, Loader2, Package, Percent, Printer, Receipt, Smartphone, Tag, Trash2, Truck, Users, X } from 'lucide-react'
+import { AlertTriangle, BellRing, Building2, Check, CloudUpload, CreditCard, FlaskConical, Loader2, Package, Percent, Printer, Receipt, Smartphone, Tag, Trash2, Truck, Users, X } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,6 +27,7 @@ const TABS = [
   { id: 'listas', label: 'Listas de Precio', icon: Tag },
   { id: 'promos', label: 'Promociones', icon: Percent },
   { id: 'yape', label: 'Yape', icon: Smartphone },
+  { id: 'alertas', label: 'Alertas', icon: BellRing },
   { id: 'cajas', label: 'Cajas', icon: CreditCard },
 ] as const
 
@@ -60,7 +61,7 @@ type Cfg = typeof CONFIG_POR_DEFECTO
 export function Configuracion() {
   const { tienePermiso, nombre: nombreUsuario } = usePermisos()
   const { config, setConfig, loading, saving, guardar } = useConfiguracion()
-  const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora' | 'envio' | 'plantillas' | 'listas' | 'promos' | 'yape' | 'cajas'>('empresa')
+  const [tab, setTab] = React.useState<'empresa' | 'sunat' | 'impresora' | 'envio' | 'plantillas' | 'listas' | 'promos' | 'yape' | 'alertas' | 'cajas'>('empresa')
   const [toast, setToast] = React.useState<string | null>(null)
   const [probando, setProbando] = React.useState(false)
   const [seriesOcupadas, setSeriesOcupadas] = React.useState<SerieOcupada[]>([])
@@ -753,6 +754,8 @@ export function Configuracion() {
         </div>
       )}
 
+      {tab === 'alertas' && <AlertasTab config={config} set={set} />}
+
       {tab === 'cajas' && <CajasTab />}
 
       {/* 🔑 **Un guardado bloqueado tiene que decir POR QUÉ, en cualquier pestaña.** El botón de
@@ -1239,6 +1242,126 @@ function PromocionesTab() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * **Alertas proactivas** (`lib/alertas.ts` es la regla única): acá se decide **qué** se avisa y
+ * **desde qué número**. ⚠️ **`0` = regla apagada** (misma convención que el tope de descuento y el
+ * límite de crédito): son avisos, no candados, y **ninguno bloquea** una venta ni un cierre.
+ */
+function AlertasTab({ config, set }: { config: Cfg; set: <K extends keyof Cfg>(key: K, value: Cfg[K]) => void }) {
+  const num = (valor: unknown) => String(valor ?? '')
+  const campo = (
+    clave: keyof Cfg,
+    titulo: string,
+    ayuda: string,
+    extra: { min?: number; max?: number; paso?: number; sufijo: string; decimales?: boolean },
+  ) => {
+    const valor = Number(config[clave]) || 0
+    return (
+      <div className="rounded-lg border p-3">
+        <Label className="font-medium">
+          {titulo} {extra.sufijo && <span className="text-muted-foreground">({extra.sufijo})</span>}
+        </Label>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">{ayuda}</p>
+        <div className="mt-2 flex items-center gap-2">
+          <Input
+            type="number"
+            inputMode={extra.decimales ? 'decimal' : 'numeric'}
+            min={extra.min ?? 0}
+            max={extra.max}
+            step={extra.paso ?? 1}
+            placeholder="0"
+            value={num(config[clave])}
+            onChange={(e) => {
+              const n = Number(e.target.value) || 0
+              const tope = extra.max ?? Number.POSITIVE_INFINITY
+              set(clave, Math.max(extra.min ?? 0, Math.min(tope, extra.decimales ? n : Math.round(n * 100) / 100)))
+            }}
+            className="h-8 w-24 text-xs"
+          />
+          <span className="text-xs text-muted-foreground">{valor === 0 ? 'Apagada' : `Avisa desde ${valor} ${extra.sufijo}`}</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border bg-card p-5 shadow-card">
+        <div className="mb-1 flex items-center gap-2">
+          <BellRing className="h-5 w-5 text-primary" />
+          <h2 className="font-bold">Alertas proactivas</h2>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Lo que ya está mal, sin que nadie tenga que ir a buscarlo: sale arriba del <b>Dashboard Gerencial</b> y se
+          revisa solo cada 5 minutos (o con el botón <b>Revisar ahora</b>).{' '}
+          <b>Ninguna alerta bloquea una venta, un cobro ni un cierre</b>: avisan, y el control real sigue siendo la
+          persona. <b>0 = regla apagada.</b>
+        </p>
+
+        <div className="space-y-3">
+          <button
+            onClick={() => set('alertaStockBajo', !config.alertaStockBajo)}
+            className={cn(
+              'flex w-full items-start justify-between gap-3 rounded-lg border p-3 text-left text-sm cursor-pointer',
+              config.alertaStockBajo ? 'border-amber-300 bg-amber-50' : 'border-input',
+            )}
+          >
+            <span>
+              <span className={cn('font-medium', config.alertaStockBajo && 'text-amber-700')}>
+                Avisar por stock agotado y bajo el mínimo
+              </span>
+              <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                <b>Agotado</b> es una venta perdida (el cajero lo descubre con el cliente adelante) y se marca
+                urgente; <b>bajo el mínimo</b> es un aviso para pedir antes de que se corte. El mínimo se carga por
+                producto en Inventario: un producto con el mínimo en <b>0</b> solo puede avisar cuando se agota.
+              </span>
+            </span>
+            <span
+              className={cn(
+                'shrink-0 rounded-md px-2.5 py-1 text-xs font-bold text-white',
+                config.alertaStockBajo ? 'bg-amber-600' : 'bg-slate-400',
+              )}
+            >
+              {config.alertaStockBajo ? 'SÍ' : 'NO'}
+            </span>
+          </button>
+
+          {campo(
+            'alertaYapeSinUsarMinutos',
+            'Avisos de Yape sin usar',
+            'Un aviso vencido y sin aplicar puede ser un cobro por Yape que nadie registró… o plata que no era de una venta (el Yape del negocio también recibe pagos personales). Por eso es un aviso, no una urgencia, y la salida es marcarlo como ignorado.',
+            { sufijo: 'min', max: 1440 },
+          )}
+          {campo(
+            'alertaTurnoAbiertoHoras',
+            'Turno abierto demasiadas horas',
+            'Un turno de un día anterior sin cerrar se avisa SIEMPRE (esa plata nunca se rindió y el arqueo del día no la ve); este número es para el turno de hoy que se quedó abierto.',
+            { sufijo: 'h', max: 48 },
+          )}
+          {campo(
+            'alertaDiferenciaCaja',
+            'Diferencia de caja al cerrar',
+            'Se mide sin importar el signo: un faltante y un sobrante se revisan igual. Se mira recién en los turnos YA cerrados (hasta entonces no hay contado).',
+            { sufijo: 'S/', max: 1000, paso: 0.5, decimales: true },
+          )}
+          {campo(
+            'alertaAnulacionesDia',
+            'Anulaciones en el día',
+            'No dice que esté mal anular: dice que hoy se anuló más de lo normal y quién lo hizo. Lo que no se puede hacer es «cuadrar» la caja anulando ventas reales (eso es un problema fiscal).',
+            { sufijo: 'anulaciones', max: 100 },
+          )}
+          {campo(
+            'alertaDescuentoPorcentaje',
+            'Descuentos por encima de…',
+            'Se mide sobre el BRUTO de la venta (total + descuento). Es un control distinto del tope del descuento manual de la pestaña Empresa: este mira lo que quedó registrado igual (incluidas las ventas del admin, que no pasan por ese tope). Apagado por defecto: el número lo pone el negocio.',
+            { sufijo: '%', max: 100 },
+          )}
+        </div>
       </div>
     </div>
   )

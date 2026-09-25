@@ -1,4 +1,13 @@
 // Mismo enum de SUNAT que constants/Tributario.js en la app RN.
+import {
+  ALERTA_ANULACIONES_DIA_POR_DEFECTO,
+  ALERTA_DESCUENTO_PORCENTAJE_POR_DEFECTO,
+  ALERTA_DIFERENCIA_CAJA_POR_DEFECTO,
+  ALERTA_STOCK_POR_DEFECTO,
+  ALERTA_TURNO_ABIERTO_HORAS_POR_DEFECTO,
+  ALERTA_YAPE_SIN_USAR_MINUTOS_POR_DEFECTO,
+} from '@/lib/alertas'
+
 export type Afectacion = { codigo: string; label: string }
 
 export const TIPO_AFECTACION: Afectacion[] = [
@@ -129,5 +138,17 @@ export const CONFIG_POR_DEFECTO = {
     { id: 'mayorista', nombre: 'Mayorista', defecto: false },
     { id: 'preferencial', nombre: 'Preferencial', defecto: false },
   ] as { id: string; nombre: string; defecto: boolean }[],
+  // 🔑 **Alertas proactivas** (`lib/alertas.ts` es la regla única): el tablero avisa de lo que ya
+  // está mal sin que nadie tenga que ir a buscarlo (el puente caído, un turno de otro día sin
+  // cerrar, stock agotado, avisos de Yape sin usar, diferencias de caja, anulaciones y descuentos).
+  // ⚠️ **`0` = regla APAGADA** (misma convención que `descuentoMaximoPorcentaje` y `limiteCredito`);
+  // `alertaStockBajo` es un interruptor. Los valores iniciales salen del propio módulo de alertas
+  // para que no existan dos listas de números que se puedan contradecir.
+  alertaStockBajo: ALERTA_STOCK_POR_DEFECTO,
+  alertaYapeSinUsarMinutos: ALERTA_YAPE_SIN_USAR_MINUTOS_POR_DEFECTO,
+  alertaTurnoAbiertoHoras: ALERTA_TURNO_ABIERTO_HORAS_POR_DEFECTO,
+  alertaDiferenciaCaja: ALERTA_DIFERENCIA_CAJA_POR_DEFECTO,
+  alertaAnulacionesDia: ALERTA_ANULACIONES_DIA_POR_DEFECTO,
+  alertaDescuentoPorcentaje: ALERTA_DESCUENTO_PORCENTAJE_POR_DEFECTO,
 }
 

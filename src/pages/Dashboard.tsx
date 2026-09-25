@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase'
 import { COL } from '@/constants/colecciones'
 import { cn } from '@/lib/utils'
 import { ModalDetalleVenta } from '@/components/ModalDetalleVenta'
+import { PanelAlertas } from '@/components/PanelAlertas'
 
 const fmt = (n: number) => 'S/ ' + n.toFixed(2)
 
@@ -36,7 +37,7 @@ type MetodosPago = {
   otros: number
 }
 
-export function Dashboard() {
+export function Dashboard({ onNavigate }: { onNavigate?: (seccion: string) => void } = {}) {
   const [ventasHoy, setVentasHoy] = React.useState(0)
   const [transacciones, setTransacciones] = React.useState(0)
   const [ventasRecientes, setVentasRecientes] = React.useState<VentaReciente[]>([])
@@ -163,6 +164,11 @@ export function Dashboard() {
           </p>
         </div>
       </div>
+
+      {/* Alertas proactivas: lo que ya está mal, primero y sin tener que ir a buscarlo.
+          ⚠️ Va arriba de los números a propósito: un total de ventas no dice que el puente de Yape
+          esté caído (la plata entró y el PDV no lo sabe) ni que haya un turno de ayer sin cerrar. */}
+      <PanelAlertas onIr={onNavigate} />
 
       {/* Tarjetas principales */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

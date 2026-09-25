@@ -10,7 +10,7 @@
  * instaló, no tiene la cuenta cargada o no tiene el permiso) y eso es un estado distinto de
  * «estaba andando y se murió».
  */
-import { doc, onSnapshot } from 'firebase/firestore'
+import { doc, getDoc, onSnapshot } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { msDeFechaYape } from '@/lib/yape'
@@ -38,6 +38,21 @@ function aLatido(data: Record<string, unknown>): LatidoPuenteYape {
     ...(texto(data.android) ? { android: texto(data.android) } : {}),
     ...(Number.isFinite(version) ? { version } : {}),
   }
+}
+
+/**
+ * Lectura **puntual** del latido (un solo documento).
+ *
+ * 🔑 La usan las alertas proactivas (`services/alertas.ts`): el tablero no necesita el canal en vivo
+ * —se revisa cuando se abre y con el botón *Revisar ahora*— y suscribirse a `tblPuenteYape` desde una
+ * pantalla que casi nadie mira dejaría un listener abierto por nada.
+ *
+ * ⚠️ Devuelve `null` cuando el documento **no existe** (el puente nunca escribió): eso es
+ * `sin-datos`, no un error. Un fallo de lectura sí se distingue: lanza.
+ */
+export async function leerPuenteYape(): Promise<LatidoPuenteYape | null> {
+  const snap = await getDoc(doc(db, COL.PUENTE_YAPE, 'estado'))
+  return snap.exists() ? aLatido(snap.data() as Record<string, unknown>) : null
 }
 
 /**
