@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.17 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.18 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -607,6 +607,11 @@
     <p>Si el flete o el empaque se pagan aparte, hoy se cargan como <strong>gasto</strong> (<em>Egresos</em>) y <strong>no</strong> entran al costo del producto: el margen que ves es el de la mercadería sola. Si quieres que entren al costo, hay que repartirlos <strong>dentro del precio de la compra</strong> de cada ítem.</p>
   </div>
 
+  <div class="tip">
+    <div class="tip-label">💡 El comprobante del proveedor (lo que pide el Registro de Compras)</div>
+    <p>En el mismo modal hay un bloque <strong>«Comprobante del proveedor»</strong>: el <strong>tipo</strong> (factura, boleta, nota de crédito…), la <strong>serie</strong> (por ejemplo <code>F001</code>), el <strong>número</strong> y la <strong>fecha de emisión</strong>. Se guardan con la compra y son lo que arma el <strong>Registro de Compras</strong> de SUNAT (ver <em>11.5</em>): si faltan, esa compra aparece con un <strong>aviso</strong>, porque el sistema no inventa un dato del papel.</p>
+  </div>
+
   <div class="warning">
     <div class="warning-label">⚠️ El costo es lo que PAGASTE (y el IGV de afuera es costo)</div>
     <p>Cuando compras <strong>fuera de la región</strong>, la factura viene <strong>con IGV</strong>: carga el <strong>total de la factura</strong>. Ese IGV <strong>no se recupera</strong> —las ventas son exoneradas, así que no hay crédito fiscal que usar— y por eso <strong>es parte del costo</strong>. Cuando compras <strong>en la región</strong>, la factura no lleva IGV y se carga tal cual.</p>
@@ -617,7 +622,7 @@
     <div class="tip-label">💡 Si tu empresa SÍ recupera el IGV de sus compras (empresa de Lima)</div>
     <p>Un negocio que <strong>compra y vende gravado</strong> usa el IGV de la factura como <strong>crédito fiscal</strong>: no es un costo, es plata que se descuenta de lo que se debe declarar. Para esa empresa existe el interruptor <strong>«Recupero el IGV de mis compras»</strong> en <em>Configuración → Empresa</em> (viene <strong>apagado</strong>, que es lo correcto cuando el IGV no se recupera, como en la región).</p>
     <p style="margin-top:6px;">Con el interruptor <strong>prendido</strong>: en el ingreso de mercadería cargas el <strong>total de la factura</strong> —igual que siempre— y el sistema guarda el <strong>costo sin IGV</strong>. La pantalla te muestra la cuenta que va a quedar: <em>«S/ 118.00 − IGV S/ 18.00 = S/ 100.00 el costo»</em>. El <strong>total pagado no cambia</strong> (es lo que salió de la caja) y el costo sin IGV es el que se usa para el <strong>margen</strong> y para valorizar el inventario.</p>
-    <p style="margin-top:6px;">⚠️ Si <strong>algún proveedor te factura sin IGV</strong> (un exonerado, un RUS, una boleta interna), toca el botón <em>«¿la factura viene sin IGV?»</em> en la línea de ese producto: así el monto se guarda tal cual y no se le inventa un IGV que la factura no tenía.</p>
+    <p style="margin-top:6px;">⚠️ Si <strong>algún proveedor te factura sin IGV</strong> (un exonerado, un RUS, una boleta interna), toca el botón <em>«la factura trae IGV»</em> en la línea de ese producto: queda en <em>«la factura no trae IGV»</em> y el monto se guarda tal cual, sin inventarle un IGV que la factura no tenía.</p>
   </div>
 
   <div class="tip">
@@ -833,7 +838,15 @@
   <p>Agrupado por vendedor: cantidad de documentos, total ventas, ticket promedio, desglose por tipo de pago (efectivo, transferencia, crédito). Incluye gráfica comparativa.</p>
 
   <h3>11.5 Registro SIRE</h3>
-  <p>Reporte para la Declaración Jurada de la SUNAT. Muestra: boletas, facturas, notas, anulados. Formato compatible con SIRE.</p>
+  <p>Reporte para la Declaración Jurada de la SUNAT, con <strong>dos pestañas</strong>: <strong>📤 Ventas</strong> y <strong>📥 Compras</strong>.</p>
+  <p><strong>📤 Ventas</strong>: boletas, facturas, notas y anulados del mes, con su botón <strong>Exportar CSV</strong>.</p>
+  <p><strong>📥 Compras</strong>: las compras del mes <strong>como las pide SUNAT en el Registro de Compras (RCE)</strong>. Van <strong>una fila por comprobante del proveedor</strong> (no una por producto: las líneas de una misma factura se suman). Arriba están los totales —<strong>Comprobantes</strong>, <strong>Base gravada (DG)</strong>, <strong>IGV (DG)</strong>, <strong>No gravadas</strong> y <strong>Total compras</strong>— y cada fila muestra el <strong>CAR de 27 dígitos</strong> (RUC + tipo + serie + número, tal como lo pide SUNAT), el proveedor con su RUC, la base, el IGV, lo no gravado y el total. El botón <strong>Exportar CSV</strong> descarga <code>RCE_compras_AAAAMM.txt</code>.</p>
+  <ul>
+    <li><strong>DG</strong> son las compras <strong>con derecho a crédito fiscal</strong>; <strong>DGNG</strong>, las que <strong>no</strong> lo tienen (por ejemplo cuando el IGV es costo, ver <em>5.7</em>). Van en columnas separadas porque así lo pide SUNAT.</li>
+    <li>Una <strong>nota de crédito del proveedor</strong> (una devolución) <strong>resta</strong> del registro: aparece en negativo.</li>
+    <li>Si a una compra le falta el <strong>tipo, la serie o el número</strong> del comprobante del proveedor, arriba de la tabla sale un <strong>aviso ámbar</strong> diciendo qué le falta y a qué compra. El sistema <strong>no inventa</strong> ese dato: se completa cargando el comprobante (ver <em>5.7</em>).</li>
+    <li>⚠️ La exportación es una <strong>planilla con los campos del RCE</strong> para revisar y cargar; <strong>no</strong> es el archivo oficial que SUNAT valida en su propuesta (el CAR definitivo lo asigna SUNAT).</li>
+  </ul>
 
   <h3>11.6 Rotación de Inventario</h3>
   <p>Qué productos se venden rápido y cuáles se estancan. Útil para decisiones de compra.</p>
@@ -1521,7 +1534,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.17</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.18</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

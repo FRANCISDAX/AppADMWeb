@@ -68,7 +68,12 @@ describe('el costo de una compra se separa en un solo lugar', () => {
     const src = leer('components/ModalCompra.tsx')
     assert.match(src, /costoDeCompra\(costoBaseItem/)
     assert.match(src, /igvRecuperable: config\.igvRecuperable/, 'le pasa la config al servicio (una sola decisión)')
-    assert.match(src, /yaSinIgv: i\.yaSinIgv/, 'y la excepción del proveedor que factura sin IGV')
+    // 🔑 **`traeIgv` es un dato del PAPEL** (lo que dice el comprobante del proveedor), no del producto: es lo
+    // que decide si el costo se guarda sin IGV **y** cómo entra la línea en el Registro de Compras. El modal y
+    // el servicio tienen que usar el mismo criterio (`!traeIgv` ⇒ el monto cargado no trae IGV que separar).
+    assert.match(src, /const traeIgv = i\.traeIgv \?\? Boolean\(config\.igvRecuperable\)/, 'el ítem decide con el papel')
+    assert.match(src, /traeIgv: i\.traeIgv \?\? Boolean\(config\.igvRecuperable\)/, 'y se lo pasa al servicio')
+    assert.match(src, /yaSinIgv: !traeIgv/, 'la separación del costo usa el mismo dato')
   })
 })
 

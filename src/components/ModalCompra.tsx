@@ -12,6 +12,7 @@ import { costoPorUnidadBase } from '@/lib/valorizacion'
 import { costoDeCompra } from '@/lib/precio-venta'
 import { esGravado } from '@/lib/sunat-importes'
 import { useConfiguracion } from '@/hooks/use-configuracion'
+import { TIPOS_COMPROBANTE_COMPRA } from '@/lib/registro-compras'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
@@ -25,7 +26,7 @@ type Presentacion = { id: string; nombre: string; factor: number }
 type DocProveedor = Proveedor & { confirmado: boolean }
 // `costoTexto` guarda el texto crudo del precio para permitir escribir decimales
 // sin que se "coman" al parsear; el valor numérico se deriva con parseDecimal.
-type CartItem = { id: string; nombre: string; cantidad: number; costoTexto: string; factor: number; presentacionId: string; presentacionNombre: string; /** El monto cargado **ya viene sin IGV** (el proveedor facturó sin IGV). */ yaSinIgv?: boolean }
+type CartItem = { id: string; nombre: string; cantidad: number; costoTexto: string; factor: number; presentacionId: string; presentacionNombre: string; /** ¿El comprobante del proveedor trae IGV? (dato del PAPEL, no del producto). */ traeIgv?: boolean }
 
 // Presentaciones de compra de un producto. Si no tiene, devuelve la unidad base (factor 1).
 const getPresCompra = (p: Producto): Presentacion[] => {
@@ -45,6 +46,13 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
   const [q, setQ] = React.useState('')
   const [carrito, setCarrito] = React.useState<CartItem[]>([])
   const [nota, setNota] = React.useState('')
+  /**
+   * 🔑 **El comprobante del proveedor**: tipo, serie, número y fecha de emisión. Es lo que pide el
+   * **Registro de Compras (SUNAT · RCE)** — de acá sale el **CAR** de 27 dígitos (`lib/registro-compras.ts`) —
+   * y antes no se capturaba en ningún lado (solo había una nota libre). Es **opcional** para no trabar la
+   * carga del día: si falta, el registro lo avisa en vez de inventar el dato.
+   */
+  const [comprobante, setComprobante] = React.useState({ tipoComprobante: '01', serie: '', numero: '', fechaEmision: new Date().toISOString().slice(0, 10) })
   const [procesando, setProcesando] = React.useState(false)
   const [tipoPago, setTipoPago] = React.useState<'Transferencia' | 'caja'>('Transferencia')
   const [turnoId, setTurnoId] = React.useState<string | null>(null)
@@ -154,7 +162,7 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
     // Crea/actualiza el proveedor (si no existe lo guarda en la colección Proveedor).
     await guardarProveedor({ id: docProv.documento?.trim() || undefined, nombre: docProv.nombre, documento: docProv.documento, tipoDocumento: docProv.tipoDocumento, direccion: docProv.direccion, telefono: docProv.telefono, correo: docProv.correo })
     const r = await registrarCompra({
-      items: carrito.map((i) => ({ productoId: i.id.split('__')[0], productoNombre: i.nombre, cantidad: i.cantidad, costoUnitario: parseDecimal(i.costoTexto), factor: i.factor, presentacionId: i.presentacionId, presentacionNombre: i.presentacionNombre, yaSinIgv: i.yaSinIgv })),
+      items: carrito.map((i) => ({ productoId: i.id.split('__')[0], productoNombre: i.nombre, cantidad: i.cantidad, costoUnitario: parseDecimal(i.costoTexto), factor: i.factor, presentacionId: i.presentacionId, presentacionNombre: i.presentacionNombre, traeIgv: i.traeIgv ?? Boolean(config.igvRecuperable) })),
       proveedor: docProv.nombre,
       proveedorId: docProv.documento?.trim() || docProv.nombre.trim().toLowerCase().replace(/\s+/g, '_'),
       proveedorDireccion: docProv.direccion,
@@ -162,6 +170,7 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
       tipoPago,
       turnoId,
       igvRecuperable: config.igvRecuperable,
+      comprobante,
     })
     setProcesando(false)
     if (r.success) {
@@ -215,10 +224,15 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
                   const costoItem = parseDecimal(i.costoTexto)
                   /** El costo por **unidad base** que se está por guardar (misma cuenta que el servicio). */
                   const costoBaseItem = costoPorUnidadBase(costoItem, i.factor)
-                  const { costo: costoNeto, igvSeparado, separaIgv } = costoDeCompra(costoBaseItem, {
+                  // 🔑 **¿El comprobante del proveedor trae IGV?** Es un dato del PAPEL, no del producto: acá se
+                  // compra en Lima con factura y el mismo producto se puede vender exonerado (`'20'`). Decide
+                  // dos cosas: si el costo se guarda sin IGV (cuando el negocio recupera el crédito) y cómo
+                  // entra la línea en el **Registro de Compras** (base + IGV, o adquisición no gravada).
+                  const traeIgv = i.traeIgv ?? Boolean(config.igvRecuperable)
+                  const { costo: costoNeto, igvSeparado } = costoDeCompra(costoBaseItem, {
                     igvRecuperable: config.igvRecuperable,
                     afectacion: String(prod?.tipoAfectacion || ''),
-                    yaSinIgv: i.yaSinIgv,
+                    yaSinIgv: !traeIgv,
                   })
                   /** ¿Este ítem entra en la lógica de separar el IGV? (negocio que lo recupera + producto gravado). */
                   const aplicaIgv = Boolean(config.igvRecuperable) && esGravado(String(prod?.tipoAfectacion || ''))
@@ -258,25 +272,31 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
                           {fmt(costoItem)} ÷ {i.factor} = <span className="font-bold text-foreground">{fmt(costoPorUnidadBase(costoItem, i.factor))}</span> por unidad base
                         </div>
                       )}
-                      {/* 🔑 **Si el IGV de la compra es crédito fiscal**, el costo que se guarda es el
-                          **neto**: acá se ve el mismo número que va a quedar (`costoDeCompra`, la regla
-                          que usa `registrarCompra`). Sin eso, el margen se mediría contra un costo
-                          inflado. ⚠️ Si el proveedor facturó **sin IGV** (exonerado, RUS, boleta
-                          interna), el interruptor de la izquierda deja el monto tal cual. */}
-                      {aplicaIgv && costoBaseItem > 0 && (
+                      {/* 🔑 **¿La factura del proveedor trae IGV?** Se marca acá y sirve para dos cosas:
+                          (1) si el negocio **recupera el crédito fiscal**, el costo que se guarda es el
+                          **neto** —acá se ve el mismo número que va a quedar, `costoDeCompra`, la regla que
+                          usa `registrarCompra`—; (2) es lo que el **Registro de Compras** necesita para
+                          declarar base + IGV en lugar de una adquisición no gravada.
+                          ⚠️ Se muestra **siempre** (no solo con el interruptor prendido): una compra en Lima
+                          trae IGV aunque el negocio no pueda usarlo como crédito (esta región). */}
+                      {costoBaseItem > 0 && (
                         <div className="flex w-full items-center justify-between gap-2 text-[10px] text-muted-foreground">
                           <button
                             type="button"
-                            onClick={() => setCarrito((p) => p.map((x) => x.id === i.id ? { ...x, yaSinIgv: !x.yaSinIgv } : x))}
+                            onClick={() => setCarrito((p) => p.map((x) => x.id === i.id ? { ...x, traeIgv: !(x.traeIgv ?? Boolean(config.igvRecuperable)) } : x))}
                             className="cursor-pointer rounded border px-1.5 py-0.5 hover:bg-muted"
                           >
-                            {i.yaSinIgv ? 'la factura viene CON IGV' : '¿la factura viene sin IGV?'}
+                            {traeIgv ? 'la factura trae IGV' : 'la factura no trae IGV'}
                           </button>
                           <span>
-                            {separaIgv ? (
-                              <>{fmt(costoBaseItem)} − IGV {fmt(igvSeparado)} = <span className="font-bold text-foreground">{fmt(costoNeto)}</span> el costo</>
+                            {traeIgv ? (
+                              aplicaIgv ? (
+                                <>{fmt(costoBaseItem)} − IGV {fmt(igvSeparado)} = <span className="font-bold text-foreground">{fmt(costoNeto)}</span> el costo</>
+                              ) : (
+                                <>con IGV en la factura · el costo queda <span className="font-bold text-foreground">{fmt(costoNeto)}</span> (el IGV no es crédito: es costo)</>
+                              )
                             ) : (
-                              <>se guarda <span className="font-bold text-foreground">{fmt(costoNeto)}</span> tal cual (la factura no trae IGV)</>
+                              <>se guarda <span className="font-bold text-foreground">{fmt(costoNeto)}</span> tal cual (sin IGV)</>
                             )}
                           </span>
                         </div>
@@ -348,10 +368,34 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
             )}
           </div>
 
-          {/* Nota */}
-          <div>
-            <Label className="mb-1 block">Nota (opcional)</Label>
-            <Input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="N° de factura / observación" />
+          {/* Comprobante del proveedor — es lo que pide el Registro de Compras (SUNAT · RCE) */}
+          <div className="rounded-xl border p-3">
+            <Label className="mb-1 block">Comprobante del proveedor</Label>
+            <p className="mb-2 text-[11px] text-muted-foreground">
+              Con estos datos se arma el <b>Registro de Compras</b> (Reportes → Registro SIRE → Compras). Si no
+              los tenés a mano, la compra se registra igual y el registro te avisa cuál falta.
+            </p>
+            <div className="mb-2 flex flex-wrap gap-1">
+              {TIPOS_COMPROBANTE_COMPRA.map((t) => (
+                <button
+                  key={t.codigo}
+                  type="button"
+                  onClick={() => setComprobante((c) => ({ ...c, tipoComprobante: t.codigo }))}
+                  className={cn(
+                    'cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-semibold',
+                    comprobante.tipoComprobante === t.codigo ? 'border-primary bg-primary text-white' : 'bg-background hover:bg-accent',
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Input value={comprobante.serie} onChange={(e) => setComprobante((c) => ({ ...c, serie: e.target.value.toUpperCase() }))} placeholder="Serie (F001)" />
+              <Input value={comprobante.numero} onChange={(e) => setComprobante((c) => ({ ...c, numero: e.target.value }))} placeholder="Número" inputMode="numeric" />
+              <Input type="date" value={comprobante.fechaEmision} onChange={(e) => setComprobante((c) => ({ ...c, fechaEmision: e.target.value }))} />
+              <Input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota (opcional)" />
+            </div>
           </div>
 
           {/* Tipo de pago */}

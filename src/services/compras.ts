@@ -1,4 +1,4 @@
-import { collection, doc, type DocumentSnapshot } from 'firebase/firestore'
+import { collection, doc, getDocs, query, type DocumentSnapshot, where } from 'firebase/firestore'
 import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
@@ -7,8 +7,9 @@ import { costoPorUnidadBase } from '@/lib/valorizacion'
 import { costoDeCompra } from '@/lib/precio-venta'
 import { valorizacionDeMovimiento } from '@/services/kardex'
 import { registrarCambioPrecio } from '@/services/historial-precios'
+import type { CompraRegistro, ItemCompraRegistro } from '@/lib/registro-compras'
 
-type ItemCompra = { productoId: string; productoNombre: string; codigo?: string; cantidad: number; costoUnitario: number; factor?: number; presentacionId?: string; presentacionNombre?: string; /** El monto cargado **ya viene sin IGV** (el proveedor facturó sin IGV): no se separa nada. */ yaSinIgv?: boolean }
+type ItemCompra = { productoId: string; productoNombre: string; codigo?: string; cantidad: number; costoUnitario: number; factor?: number; presentacionId?: string; presentacionNombre?: string; /** ¿El comprobante del proveedor trae IGV? (dato del papel, para el Registro de Compras). */ traeIgv?: boolean }
 
 /** Lo que devuelve la compra por cada producto, para poder registrar el cambio de costo. */
 export type ResultadoCompra = {
@@ -32,6 +33,7 @@ export async function registrarCompra({
   tipoPago = 'Transferencia',
   turnoId,
   igvRecuperable = false,
+  comprobante = {},
 }: {
   items: ItemCompra[]
   proveedor: string
@@ -43,6 +45,8 @@ export async function registrarCompra({
   turnoId?: string | null
   /** `config.igvRecuperable`: ¿el IGV de esta compra es crédito fiscal? Ver `costoDeCompra`. */
   igvRecuperable?: boolean
+  /** El comprobante del proveedor (tipo, serie, número y fecha de emisión): es lo que pide el Registro de Compras. */
+  comprobante?: { tipoComprobante?: string; serie?: string; numero?: string; fechaEmision?: string }
 }): Promise<{ success: boolean; error?: string; compraId?: string; totalPagado?: number; resultados?: ResultadoCompra[] }> {
   const lista = (items || []).filter((i) => i && i.cantidad > 0)
   if (lista.length === 0) return { success: false, error: 'Selecciona al menos un producto.' }
@@ -104,7 +108,10 @@ export async function registrarCompra({
         const { costo, igvSeparado, separaIgv } = costoDeCompra(costoBase, {
           igvRecuperable,
           afectacion: String(data.tipoAfectacion || ''),
-          yaSinIgv: item.yaSinIgv,
+          // 🔑 **El IGV se separa del costo solo si el papel lo trae y el negocio lo recupera**. `traeIgv`
+          // describe el comprobante del proveedor (`item.traeIgv`), no el producto: acá se compra en Lima con
+          // factura y se puede vender exonerado.
+          yaSinIgv: !item.traeIgv,
         })
         const valorizado = valorizacionDeMovimiento({
           tipoMovimiento: 'compra',
@@ -154,6 +161,20 @@ export async function registrarCompra({
             // referencia para cuadrar contra el papel. El costo con el que se valorizó está en
             // `costoUnitario` (arriba, `camposMovimiento`), que es el neto cuando se separó el IGV.
             ...(separaIgv ? { igvSeparado, costoConIgv: item.costoUnitario } : {}),
+            // 🔑 **Lo que el Registro de Compras (SUNAT · RCE) necesita saber del comprobante del proveedor**:
+            // sin el tipo y el serie/número, la fila no se puede anotar (de ahí sale el CAR de 27 dígitos,
+            // `lib/registro-compras.ts`). Se guarda en **cada movimiento** de la compra (es un dato del
+            // comprobante, no del producto) para poder armar el registro sin leer otra colección.
+            tipoComprobante: comprobante.tipoComprobante || '',
+            serieComprobante: comprobante.serie || '',
+            numeroComprobante: comprobante.numero || '',
+            fechaEmisionComprobante: comprobante.fechaEmision || '',
+            // ⚠️ **`traeIgv` es lo que dice el PAPEL, no la afectación del producto**: una compra en Lima
+            // puede traer IGV para un producto que acá se vende exonerado. `igvConCredito` (el interruptor
+            // del negocio) decide si ese IGV va a las columnas **DG** o **DGNG** del registro; se guarda
+            // **con la compra** para que el registro no cambie si mañana se cambia la config.
+            traeIgv: Boolean(item.traeIgv),
+            ...(item.traeIgv ? { igvConCredito: Boolean(igvRecuperable) } : {}),
             cantidadPresentacion: item.cantidad,
             factorConversion: factor,
             presentacionId: item.presentacionId || 'unidad',
@@ -218,4 +239,79 @@ export async function registrarCompra({
     console.error('❌ Error registrando compra:', e)
     return { success: false, error: (e as Error).message }
   }
+}
+
+/**
+ * **Las compras de un mes, agrupadas por comprobante** — para el **Registro de Compras (SUNAT · RCE)**.
+ *
+ * 🔑 **Se leen los movimientos del kardex, no una colección de compras**: una compra **es** un grupo de
+ * movimientos con el mismo `metadata.compraId`, y ahí está todo lo que el registro necesita (proveedor y su
+ * RUC, tipo/serie/número del comprobante, el importe de cada línea y si esa línea traía IGV).
+ *
+ * ⚠️ **La consulta es un solo rango de fechas** (`fecha` entre el 1 y el último día del mes) y el filtro de
+ * `tipoMovimiento === 'compra'` va **en JavaScript**: con las dos condiciones en Firestore haría falta un
+ * **índice compuesto** (igualdad + rango) y no vale la pena sólo para ahorrar lecturas de un mes.
+ *
+ * ⚠️ **Ojo con la fecha**: los movimientos guardan `fecha` en **ISO/UTC** (a diferencia de turnos y documentos,
+ * que van en local). Se usa el mes local para armar el rango, igual que el resto de los reportes.
+ */
+export async function obtenerComprasDelMes(anio: number, mes: number): Promise<CompraRegistro[]> {
+  const ini = new Date(anio, mes - 1, 1)
+  const fin = new Date(anio, mes, 0, 23, 59, 59, 999)
+
+  const snap = await getDocs(
+    query(
+      collection(db, COL.MOVIMIENTOS),
+      where('fecha', '>=', ini.toISOString()),
+      where('fecha', '<=', fin.toISOString()),
+    ),
+  )
+
+  const porCompra = new Map<string, CompraRegistro>()
+
+  snap.forEach((d) => {
+    const m = d.data() as Record<string, any>
+    if (m.tipoMovimiento !== 'compra') return
+    const md = (m.metadata || {}) as Record<string, any>
+    const compraId = String(md.compraId || '')
+    // Una compra cargada desde el formulario manual (sin `compraId`) no es un comprobante: se ignora, igual
+    // que hace el listado de Compras del app.
+    if (!compraId) return
+
+    const item: ItemCompraRegistro = {
+      // El importe de la línea **como lo dice el comprobante**: precio de la presentación × cantidad de
+      // presentaciones. ⚠️ `totalPagado` es el total de la compra; esto es su pedazo por producto.
+      importe: (Number(md.precioUnitario) || 0) * (Number(md.cantidadPresentacion) || 0),
+      traeIgv: Boolean(md.traeIgv),
+      // Respaldo para las compras viejas (antes de que se guardara el dato): cuenta el IGV que se separó.
+      ...(md.igvConCredito !== undefined
+        ? { igvConCredito: Boolean(md.igvConCredito) }
+        : md.igvSeparado !== undefined
+          ? { igvConCredito: true }
+          : {}),
+    }
+
+    const existente = porCompra.get(compraId)
+    if (existente) {
+      existente.items.push(item)
+      return
+    }
+    porCompra.set(compraId, {
+      compraId,
+      fecha: String(m.fecha || ''),
+      proveedor: String(md.proveedor || ''),
+      proveedorId: String(md.proveedorId || ''),
+      tipoComprobante: String(md.tipoComprobante || ''),
+      serie: String(md.serieComprobante || ''),
+      numero: String(md.numeroComprobante || ''),
+      fechaEmision: String(md.fechaEmisionComprobante || ''),
+      nota: String(md.nota || ''),
+      items: [item],
+      ...(md.igvConCredito !== undefined || md.igvSeparado !== undefined
+        ? { igvRecuperable: Boolean(md.igvConCredito ?? md.igvSeparado !== undefined) }
+        : {}),
+    })
+  })
+
+  return [...porCompra.values()]
 }

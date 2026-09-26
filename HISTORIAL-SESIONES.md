@@ -11,6 +11,36 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 47 — El Registro de Compras (SUNAT · RCE) y las dos pestañas del SIRE)
+
+**Objective**: pedido del usuario —*«dentro de registro sire coloca 2 tabs una para ventas y otras para las compras, procede a crear el registro de compras, revisa como sunat trabaja con las compras para armar compras sire»*—. O sea: **averiguar cómo SUNAT pide el registro de compras antes de escribirlo**, y que se vea al lado del de ventas.
+
+**La regla sale de SUNAT, no de la intuición** (fuente: **[Anexo de la RS 040-2022/SUNAT](https://www.sunat.gob.pe/legislacion/superin/2022/anexo-040-2022.pdf)**, descargado y leído — no citado de memoria):
+- **Anexo 8.4 = Registro de Compras** (el 8.1 es el de ventas: por eso los dos comparten pantalla).
+- **El CAR son 27 caracteres** (**Tabla 7**): `RUC 11 + tipo de comprobante 2 + serie 4 + número 10`, con ceros a la izquierda; si el número se pasa de largo se toman **los dígitos de la derecha**.
+- **Tipos de comprobante** (**Tabla 11**): `01` factura, `03` boleta, `04` liquidación de compra, `07`/`87` **nota de crédito**, `08`/`88` **nota de débito**, `12` ticket, `00` doc. de identidad del proveedor.
+- **Tipo de documento de identidad** (**Tabla 1**): `6` RUC, `1` DNI, `0` no domiciliado.
+- 🔑 **Las notas de crédito van NEGATIVAS** (le devolvieron plata al negocio: restan del registro) y las de débito en positivo.
+- 🔑 **DG vs DGNG son dos columnas distintas**, no un rótulo: **DG** = con **derecho a crédito fiscal**, **DGNG** = sin derecho. El mismo comprobante cae en una u otra según lo que el negocio declare de esa compra.
+
+**Decisiones (y por qué)**
+- 🔑 **Una fila por COMPROBANTE del proveedor**, no por producto: las líneas de una compra se suman en su factura — es el papel que se declara y con el que se cruza el CAR. Se ve en **`armarRegistroCompras`** (`lib/registro-compras.ts`, puro).
+- 🔑 **La base y el IGV salen del PAPEL, no del catálogo**: acá se compra en Lima **con** IGV y se vende exonerado, así que la afectación del producto no dice nada de la compra. El dato nuevo es **`traeIgv`** por ítem (chip *«la factura trae IGV»* en el modal, que además muestra la cuenta: `S/ 118.00 − IGV S/ 18.00 = S/ 100.00 el costo`), y su default es la config del negocio.
+- 🔑 **`igvConCredito` se guarda CON la compra** (`metadata` del movimiento): si mañana alguien cambia `config.igvRecuperable`, el registro de un mes ya cerrado **no se reescribe solo** — un registro es un documento fiscal, no una vista de la config de hoy.
+- ⚠️ **Lo que falta se AVISA, no se inventa**: una compra sin tipo/serie/número del comprobante sale con el bloque ámbar de avisos (`{ compraId, proveedor, falta[] }`) y su fila queda incompleta a la vista — el CAR no se rellena con ceros «para que compile».
+- ⚠️ **Sin índice compuesto**: `obtenerComprasDelMes` lee **un solo rango de fechas** de `tblMovimientos` y filtra `tipoMovimiento === 'compra'` en JavaScript (la igualdad + el rango juntos exigirían un índice nuevo y desplegarlo).
+- 🔑 **El modal de compra no tenía dónde poner el comprobante del proveedor** (solo una nota libre): se le agregaron **tipo (chips) / serie / número / fecha de emisión** — sin eso el registro no se puede armar, y era el único dato que SUNAT pide y la app no guardaba.
+- ⚠️ **La exportación es pipe-delimited con los nombres de campos del RCE, y NO es el archivo oficial**: SUNAT asigna el CAR y valida el archivo en su propuesta; esto sirve para revisar y cargar a mano (mismo criterio que el export de ventas que ya existía).
+
+**Work State**: Completed (sin desplegar). **513/513 tests** (18 nuevos en `lib/registro-compras.test.ts`), `npx tsc -b` ✓, lint **80/0** (baseline), `build` ✓.
+- 🔬 **Verificado con la app real (emulador + Chrome, `run-rce.mjs`): TODO OK, 16/16 comprobaciones**. **Fase Lima** (región NO + recupero el IGV): la compra guardó costo **100**, `metadata` `01 / F001-123`, `proveedorId 20512345678` y `traeIgv`/`igvConCredito` **true**; en **Registro SIRE → Compras** salió `Base gravada (DG) S/ 100.00`, `IGV (DG) S/ 18.00`, `Total compras S/ 118.00` y la fila **`Factura F001-123`** con CAR **`2051234567801F0010000000123`** (27 caracteres), RUC del proveedor, **sin avisos** y con el botón de exportar. **Fase región** (el negocio de hoy): la **misma** factura cae en las columnas **sin crédito (DGNG)**, el costo queda **118** (el IGV es costo, como siempre) y tampoco hay avisos ⇒ **el catálogo y los números del negocio de la región no se movieron**.
+- ⚠️ **Falta portarlo a la RN** (`AppAdm`): el registro de compras es de la web y la móvil **no** lo tiene (queda anotado en `AGENTS.md` y en el bloque ·46).
+- ⚠️ Dos trampas del arnés que valieron la medición: el ítem del menú **«Compras»** (almacén) no es la pestaña **«📥 Compras»** del SIRE, y el contenedor de toasts también es un `div.fixed` (leer el modal del `div.fixed` equivocado devuelve el texto del toast).
+
+**Next Move**: (1) **desplegar cuando el usuario diga «procede»** (commit → `npm run build` → verificar el `dist` → `firebase deploy --only hosting` → commit de `.firebase/hosting.*cache`); (2) para un cliente de Lima el registro sale completo solo si **cargó el comprobante del proveedor en el modal** (si no, la fila queda avisada) y si el interruptor de recupero está como corresponde; (3) sigue pendiente el port a la RN y, para las compras, lo que **no** está y conviene decidir con el contador: **detracciones**, **retenciones/percepciones** e **IVAP** (el registro las tiene como columnas propias en SUNAT).
+
+**Relevant Files**: `src/lib/registro-compras.ts` (nuevo), `src/lib/registro-compras.test.ts` (nuevo), `src/services/compras.ts`, `src/components/ModalCompra.tsx`, `src/pages/ReporteSire.tsx`, `src/lib/margen-base-neta.test.ts` (guarda actualizada al renombrar el flag a `traeIgv`), `package.json`.
+
 ### (2026-09 · 46 — La base de la plata: el IGV del costo y el «modo empresa gravada»)
 
 **Objective**: responder con números si **el app funcionaría bien para una empresa de Lima que compra y vende con IGV** —y arreglar lo que no— sin tocar nada de lo que hoy usa el negocio de la región.

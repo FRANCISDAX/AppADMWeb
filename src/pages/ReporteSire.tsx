@@ -8,6 +8,15 @@ import { Button } from '@/components/ui/button'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { cn } from '@/lib/utils'
+import {
+  CABECERA_EXPORT_COMPRAS,
+  armarRegistroCompras,
+  fechaRegistro,
+  filasExportCompras,
+  type CompraRegistro,
+} from '@/lib/registro-compras'
+import { obtenerComprasDelMes } from '@/services/compras'
+import { useConfiguracion } from '@/hooks/use-configuracion'
 
 const fmt = (n: number) => 'S/ ' + (n ?? 0).toFixed(2)
 
@@ -132,8 +141,9 @@ function toCsvRows(docs: DocCalculado[]) {
   })
 }
 
-function descargarCsv(rows: string[], nombre: string) {
-  const header = 'Periodo|TipoDocumento|SerieDocumento|NumeroDocumento|FechaEmision|TipoDocumentoIdentidad|NumeroDocumento|RazonSocialSocial|TipoMoneda|MontoTotalOperacionesGravadas|MontoTotalDescuentos|MontoTotalVentas|MontoTotalImpuestos|EstadoItem'
+const CABECERA_VENTAS = 'Periodo|TipoDocumento|SerieDocumento|NumeroDocumento|FechaEmision|TipoDocumentoIdentidad|NumeroDocumento|RazonSocialSocial|TipoMoneda|MontoTotalOperacionesGravadas|MontoTotalDescuentos|MontoTotalVentas|MontoTotalImpuestos|EstadoItem'
+
+function descargarCsv(rows: string[], nombre: string, header: string = CABECERA_VENTAS) {
   const content = header + '\n' + rows.join('\n')
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
@@ -155,15 +165,29 @@ export function ReporteSire() {
   const { tienePermiso } = usePermisos()
   const { user } = useAuth()
   const { toast } = useNotifications()
+  const { config } = useConfiguracion()
 
   const verTodo = tienePermiso('verTodo')
   const miUid = verTodo ? '' : (user?.uid || '')
 
+  const [tab, setTab] = React.useState<'ventas' | 'compras'>('ventas')
   const [mes, setMes] = React.useState(mesDeHoy)
   const [docs, setDocs] = React.useState<Doc[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [filtro, setFiltro] = React.useState<'todos' | 'BOLETA' | 'FACTURA' | 'NC' | 'ND'>('todos')
+
+  /**
+   * El **Registro de Compras**: las compras del mes agrupadas por comprobante del proveedor.
+   * 🔑 **Se guarda con el mes al que pertenecen** y el «cargando» se **deriva** (`mes pedido ≠ mes cargado`):
+   * así el efecto no llama a `setState` de forma síncrona (que encadena renders y sube el baseline de lint) y
+   * nunca se muestran las compras de un mes mientras se pide otro.
+   */
+  const [comprasMes, setComprasMes] = React.useState<{ mes: string; datos: CompraRegistro[]; error: string | null }>({
+    mes: '',
+    datos: [],
+    error: null,
+  })
 
   const [añoMesTarget] = React.useMemo(() => {
     const [y, m] = mes.split('-')
@@ -202,6 +226,32 @@ export function ReporteSire() {
   }, [añoMesTarget, miUid])
 
   const docsCalc = React.useMemo(() => docs.map(calcularDoc), [docs])
+
+  /**
+   * Las compras del mes elegido. ⚠️ **No se filtra por usuario**: un libro de compras es del negocio, no de
+   * quien lo cargó (a diferencia del registro de ventas, donde el alcance por usuario es una decisión).
+   */
+  React.useEffect(() => {
+    let activo = true
+    const [y, m] = mes.split('-').map(Number)
+    obtenerComprasDelMes(y, m)
+      .then((c) => { if (activo) setComprasMes({ mes, datos: c, error: null }) })
+      .catch((e) => { if (activo) setComprasMes({ mes, datos: [], error: 'Error cargando compras: ' + (e as Error).message }) })
+    return () => { activo = false }
+  }, [mes])
+
+  const loadingCompras = comprasMes.mes !== mes
+  const errorCompras = comprasMes.mes === mes ? comprasMes.error : null
+
+  // ⚠️ Se depende de `comprasMes` (que cambia sólo cuando llegan las compras) y **no** de un array derivado:
+  // un `compras` recalculado en cada render invalidaría el memo siempre (`exhaustive-deps`).
+  const registroCompras = React.useMemo(
+    () =>
+      armarRegistroCompras(comprasMes.mes === mes ? comprasMes.datos : [], {
+        igvRecuperable: Boolean(config.igvRecuperable),
+      }),
+    [comprasMes, mes, config.igvRecuperable],
+  )
 
   const docsFiltrados = React.useMemo(() => {
     if (filtro === 'todos') return docsCalc.filter((d) => d.estado !== 'anulada')
@@ -250,21 +300,65 @@ export function ReporteSire() {
     toast(`Exportado ${rows.length} documentos`, 'success')
   }
 
+  /**
+   * El export del registro de compras: **una fila por comprobante** con los campos del RCE (base e IGV
+   * separados por con/sin derecho a crédito, el CAR, el proveedor y su RUC). Mismo formato pipe-delimited que
+   * el de ventas, con la cabecera del registro de compras.
+   */
+  const handleExportarCompras = () => {
+    if (registroCompras.filas.length === 0) {
+      toast('No hay compras para exportar', 'warning')
+      return
+    }
+    const rows = filasExportCompras(registroCompras, { ruc: config.ruc, nombre: config.nombre })
+    const [y, m] = mes.split('-')
+    descargarCsv(rows, `RCE_compras_${y}${m}.txt`, CABECERA_EXPORT_COMPRAS)
+    toast(`Exportados ${rows.length} comprobantes de compra`, 'success')
+  }
+
   if (!tienePermiso('sire')) {
     return <div className="p-8 text-center text-muted-foreground">No tienes permiso para ver esta sección.</div>
   }
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
+      {/* 🔑 **Dos registros, una pantalla**: el de VENTAS (RVIE) y el de COMPRAS (RCE) son los dos libros que
+          SUNAT pide en el SIRE. Cada uno tiene su propia tabla, sus totales y su export. */}
+      <div className="flex gap-1.5 rounded-xl bg-muted p-1">
+        {([
+          { key: 'ventas', label: 'Ventas' },
+          { key: 'compras', label: 'Compras' },
+        ] as const).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={cn(
+              'flex-1 rounded-lg px-3 py-2 text-sm font-bold transition-colors cursor-pointer',
+              tab === t.key ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground',
+            )}
+          >
+            {t.key === 'ventas' ? '📤 Ventas' : '📥 Compras'}
+          </button>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">Registro de Ventas — SIRE</h1>
+        <h1 className="text-lg font-bold">{tab === 'ventas' ? 'Registro de Ventas — SIRE' : 'Registro de Compras — SIRE'}</h1>
         <div className="flex items-center gap-2">
           <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="h-9 rounded-lg border px-3 text-sm" />
-          <Button variant="outline" size="sm" onClick={handleExportar} disabled={loading || docsFiltrados.length === 0}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={tab === 'ventas' ? handleExportar : handleExportarCompras}
+            disabled={tab === 'ventas' ? loading || docsFiltrados.length === 0 : loadingCompras || registroCompras.filas.length === 0}
+          >
             <Download className="mr-1.5 h-3.5 w-3.5" /> Exportar CSV
           </Button>
         </div>
       </div>
+
+      {tab === 'ventas' ? (
+      <>
 
       {/* Resumen general */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -415,6 +509,164 @@ export function ReporteSire() {
           <li>Las Notas de Crédito se restan de los totales (signo negativo)</li>
         </ul>
       </div>
+      </>
+      ) : (
+      <>
+        {/* ─── REGISTRO DE COMPRAS (SUNAT · RCE) ───────────────────────────────────────────────────────
+            La estructura y las reglas salen del Anexo 8.4 de la RS 040-2022/SUNAT (`lib/registro-compras.ts`):
+            una fila por **comprobante del proveedor**, con el CAR de 27 dígitos, la base imponible y el IGV
+            separados por **con o sin derecho a crédito fiscal**, y las adquisiciones no gravadas. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="rounded-xl border bg-card p-4 shadow-card">
+            <div className="text-xs text-muted-foreground">Comprobantes</div>
+            <div className="mt-1 text-2xl font-bold num">{registroCompras.totales.comprobantes}</div>
+          </div>
+          <div className="rounded-xl border bg-card p-4 shadow-card">
+            <div className="text-xs text-muted-foreground">Base gravada (DG)</div>
+            <div className="mt-1 text-2xl font-bold num">{fmt(registroCompras.totales.baseConCredito)}</div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">con derecho a crédito</div>
+          </div>
+          <div className="rounded-xl border bg-card p-4 shadow-card">
+            <div className="text-xs text-muted-foreground">IGV (DG)</div>
+            <div className="mt-1 text-2xl font-bold num text-emerald-600">{fmt(registroCompras.totales.igvConCredito)}</div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">crédito fiscal del mes</div>
+          </div>
+          <div className="rounded-xl border bg-card p-4 shadow-card">
+            <div className="text-xs text-muted-foreground">No gravadas</div>
+            <div className="mt-1 text-2xl font-bold num">{fmt(registroCompras.totales.noGravadas)}</div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">sin IGV en la factura</div>
+          </div>
+          <div className="rounded-xl border bg-card p-4 shadow-card">
+            <div className="text-xs text-muted-foreground">Total compras</div>
+            <div className="mt-1 text-2xl font-bold num text-primary">{fmt(registroCompras.totales.total)}</div>
+          </div>
+        </div>
+
+        {/* Lo que le falta a alguna compra para poder anotarla en el registro */}
+        {registroCompras.avisos.length > 0 && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs dark:bg-amber-500/10">
+            <p className="font-bold text-amber-800 dark:text-amber-300">
+              {registroCompras.avisos.length} comprobante(s) sin todos los datos del registro
+            </p>
+            <ul className="mt-1 space-y-0.5 text-amber-800/90 dark:text-amber-300/90">
+              {registroCompras.avisos.slice(0, 5).map((a) => (
+                <li key={a.compraId}>· {a.proveedor || a.compraId}: falta {a.falta.join(', ')}</li>
+              ))}
+            </ul>
+            <p className="mt-1 text-[11px] text-amber-800/80 dark:text-amber-300/80">
+              Se pueden completar cargando la próxima compra de ese proveedor con el tipo y el serie/número del
+              comprobante (el dato viejo queda como está: no se inventa).
+            </p>
+          </div>
+        )}
+
+        <div className="overflow-hidden rounded-xl border bg-card shadow-card">
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <span className="text-sm font-bold">Comprobantes de compra del mes</span>
+            <span className="num text-sm text-muted-foreground">
+              {registroCompras.filas.length} comprobantes · {fmt(registroCompras.totales.total)}
+            </span>
+          </div>
+
+          {loadingCompras ? (
+            <div className="flex h-40 items-center justify-center text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin" /> <span className="ml-2 text-sm">Cargando compras…</span>
+            </div>
+          ) : errorCompras ? (
+            <div className="p-5 text-sm text-destructive">{errorCompras}</div>
+          ) : registroCompras.filas.length === 0 ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              <Search className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+              <p>Sin compras registradas este mes</p>
+              <p className="mt-1 text-xs">Se cargan en Inventario → «Ingreso / Compra».</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
+                    <th className="px-4 py-2">Fecha</th>
+                    <th className="px-4 py-2">Comprobante</th>
+                    <th className="px-4 py-2">Proveedor</th>
+                    <th className="px-4 py-2 text-right">Base grav.</th>
+                    <th className="px-4 py-2 text-right">IGV</th>
+                    <th className="px-4 py-2 text-right">No gravado</th>
+                    <th className="px-4 py-2 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {registroCompras.filas.map((f) => (
+                    <tr key={f.compraId} className="hover:bg-muted/30">
+                      <td className="px-4 py-2 text-xs">{fechaRegistro(f.fecha)}</td>
+                      <td className="px-4 py-2">
+                        <div className="text-xs font-bold">{f.tipoComprobanteLabel}</div>
+                        <div className="font-mono text-[11px] text-muted-foreground">
+                          {f.serie && f.numero ? `${f.serie}-${f.numero}` : 'sin serie/número'}
+                        </div>
+                        <div className="font-mono text-[10px] text-muted-foreground/70">CAR {f.car || '—'}</div>
+                      </td>
+                      <td className="px-4 py-2 text-xs">
+                        <div>{f.proveedor || '—'}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {f.proveedorDocumento ? `${f.tipoDocIdentidad === '6' ? 'RUC' : f.tipoDocIdentidad === '1' ? 'DNI' : 'Doc'} ${f.proveedorDocumento}` : 'sin documento'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-right num text-xs">
+                        {fmt(f.baseConCredito)}
+                        {f.baseSinCredito !== 0 && (
+                          <div className="text-[10px] text-muted-foreground">+ {fmt(f.baseSinCredito)} sin crédito</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right num text-xs">
+                        {fmt(f.igvConCredito)}
+                        {f.igvSinCredito !== 0 && (
+                          <div className="text-[10px] text-muted-foreground">+ {fmt(f.igvSinCredito)} sin crédito</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right num text-xs">{f.noGravadas !== 0 ? fmt(f.noGravadas) : '—'}</td>
+                      <td className={cn('px-4 py-2 text-right num text-xs font-bold', f.signo < 0 && 'text-destructive')}>
+                        {f.signo < 0 ? '-' : ''}{fmt(Math.abs(f.total))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t bg-muted/50 font-bold">
+                    <td className="px-4 py-2 text-xs" colSpan={3}>TOTALES ({registroCompras.totales.comprobantes} comprobantes)</td>
+                    <td className="px-4 py-2 text-right num text-xs">
+                      {fmt(registroCompras.totales.baseConCredito)}
+                      {registroCompras.totales.baseSinCredito !== 0 && (
+                        <div className="text-[10px] font-normal text-muted-foreground">+ {fmt(registroCompras.totales.baseSinCredito)} sin crédito</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right num text-xs">
+                      {fmt(registroCompras.totales.igvConCredito)}
+                      {registroCompras.totales.igvSinCredito !== 0 && (
+                        <div className="text-[10px] font-normal text-muted-foreground">+ {fmt(registroCompras.totales.igvSinCredito)} sin crédito</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right num text-xs">{fmt(registroCompras.totales.noGravadas)}</td>
+                    <td className="px-4 py-2 text-right num text-xs">{fmt(registroCompras.totales.total)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border bg-card p-4 text-xs text-muted-foreground shadow-card">
+          <p className="font-bold mb-1">Cómo se arma este registro (SUNAT · RCE):</p>
+          <ul className="list-disc list-inside space-y-0.5">
+            <li><strong>Una fila por comprobante del proveedor</strong>: las líneas de una misma compra se suman en su comprobante.</li>
+            <li><strong>Es el comprobante el que manda</strong>, no el catálogo: si la factura trae IGV, la base se despeja (÷ 1,18) y el resto es IGV; si no lo trae, todo va a <strong>no gravadas</strong> (una compra en Lima con IGV y un producto que acá se vende exonerado se declara con su IGV).</li>
+            <li><strong>Con o sin derecho a crédito fiscal</strong> son columnas distintas (DG / DGNG) y lo decide <em>Configuración → Empresa → «Recupero el IGV de mis compras»</em> <b>al momento de cargar la compra</b> (queda guardado con ella).</li>
+            <li><strong>El CAR</strong> son 27 caracteres: RUC del proveedor (11) + tipo (2) + serie (4) + número (10), con ceros a la izquierda (Tabla 7 del anexo).</li>
+            <li>Las <strong>notas de crédito</strong> del proveedor van en negativo y restan del registro.</li>
+            <li>⚠️ El export es para <b>revisar y cargar</b> en el SIRE (SUNAT asigna el CAR en su propuesta y valida el archivo); no reemplaza el envío en el portal.</li>
+          </ul>
+        </div>
+      </>
+      )}
     </div>
   )
 }
