@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.18 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.19 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -844,6 +844,7 @@
   <ul>
     <li><strong>DG</strong> son las compras <strong>con derecho a crédito fiscal</strong>; <strong>DGNG</strong>, las que <strong>no</strong> lo tienen (por ejemplo cuando el IGV es costo, ver <em>5.7</em>). Van en columnas separadas porque así lo pide SUNAT.</li>
     <li>Una <strong>nota de crédito del proveedor</strong> (una devolución) <strong>resta</strong> del registro: aparece en negativo.</li>
+    <li>Las compras más antiguas <strong>no tenían campos para el comprobante</strong>: ese dato se escribía a mano en la <strong>nota</strong> (por ejemplo <code>FF02-553</code>). El sistema lo <strong>lee de ahí</strong> para no pedirte que lo cargues de nuevo, esa fila sale marcada <span class="badge badge-yellow">de la nota</span> — el <strong>tipo</strong> (factura o boleta) se deduce de la <strong>letra de la serie</strong> (<em>F</em> = factura, <em>B</em> = boleta), así que conviene que el contador las revise. Las compras cargadas <strong>desde ahora</strong> ya traen tipo, serie y número en sus propios campos y no dependen de la nota.</li>
     <li>Si a una compra le falta el <strong>tipo, la serie o el número</strong> del comprobante del proveedor, arriba de la tabla sale un <strong>aviso ámbar</strong> diciendo qué le falta y a qué compra. El sistema <strong>no inventa</strong> ese dato: se completa cargando el comprobante (ver <em>5.7</em>).</li>
     <li>⚠️ La exportación es una <strong>planilla con los campos del RCE</strong> para revisar y cargar; <strong>no</strong> es el archivo oficial que SUNAT valida en su propuesta (el CAR definitivo lo asigna SUNAT).</li>
   </ul>
@@ -1534,7 +1535,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.18</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.19</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

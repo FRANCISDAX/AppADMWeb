@@ -20,6 +20,7 @@ import {
   CABECERA_EXPORT_COMPRAS,
   armarRegistroCompras,
   carSunat,
+  comprobanteDeNota,
   esNotaCredito,
   esNotaDebito,
   fechaRegistro,
@@ -205,6 +206,102 @@ describe('armarRegistroCompras — una fila por comprobante del proveedor', () =
     assert.equal(r.filas.length, 0)
     assert.equal(r.totales.total, 0)
     assert.equal(r.totales.igvCreditoFiscal, 0)
+  })
+})
+
+/**
+ * 🔑 **El comprobante de las compras VIEJAS vive en la nota.** Hasta el 26/09/2026 el modal de compra no tenía
+ * campos para el comprobante del proveedor, así que ese dato se escribía a mano en la nota (`FF02-553`). Estas
+ * pruebas fijan las dos mitades de la decisión: **se lee la nota cuando faltan los campos nuevos** (y se marca
+ * la fila), y **una compra de ahora no depende de la nota para nada**.
+ */
+describe('comprobante leído de la nota (solo compras anteriores a los campos nuevos)', () => {
+  it('lee `SERIE-NÚMERO` de la nota: FF02-553 es una factura', () => {
+    assert.deepEqual(comprobanteDeNota('FF02-553'), {
+      tipoComprobante: '01',
+      serie: 'FF02',
+      numero: '553',
+      tipoPorSerie: true,
+    })
+    assert.deepEqual(comprobanteDeNota('F001-123'), {
+      tipoComprobante: '01',
+      serie: 'F001',
+      numero: '123',
+      tipoPorSerie: true,
+    })
+  })
+
+  it('una serie que empieza con B es una boleta, y los ceros de la izquierda no ensucian el número', () => {
+    assert.deepEqual(comprobanteDeNota('B001-00000045'), {
+      tipoComprobante: '03',
+      serie: 'B001',
+      numero: '45',
+      tipoPorSerie: true,
+    })
+  })
+
+  it('si la nota dice el tipo con todas las letras, esa palabra manda (y no se marca como leído de la serie)', () => {
+    const f = comprobanteDeNota('FACTURA F001-123')
+    assert.equal(f?.tipoComprobante, '01')
+    assert.equal(f?.tipoPorSerie, false)
+    // Con tildes también: la nota es texto libre y se normaliza antes de leerla.
+    assert.equal(comprobanteDeNota('Nota de Crédito F001-12')?.tipoComprobante, '07')
+    assert.equal(comprobanteDeNota('boleta b001 7')?.tipoComprobante, '03')
+  })
+
+  it('⚠️ no adivina: una nota sin comprobante o con una serie que SUNAT no usa devuelve `null`', () => {
+    assert.equal(comprobanteDeNota('carga de la semana'), null)
+    assert.equal(comprobanteDeNota(''), null)
+    assert.equal(comprobanteDeNota(undefined), null)
+    assert.equal(comprobanteDeNota('XX99-123'), null, 'una serie que no es F…/B… no se interpreta')
+    assert.equal(comprobanteDeNota('553'), null, 'un número suelto no alcanza para el CAR')
+  })
+
+  it('la fila de una compra vieja sale completa y MARCADA como leída de la nota', () => {
+    const r = armarRegistroCompras(
+      [compra({ tipoComprobante: '', serie: '', numero: '', nota: 'FF02-553' })],
+      { igvRecuperable: true },
+    )
+    const f = r.filas[0]
+    assert.equal(f.serie, 'FF02')
+    assert.equal(f.numero, '553')
+    assert.equal(f.tipoComprobante, '01')
+    assert.equal(f.car, '2051234567801FF020000000553', 'el CAR se arma igual: es el mismo dato, de otro lado')
+    assert.equal(f.leidoDeNota, true)
+    assert.equal(f.tipoPorSerie, true)
+    assert.deepEqual(r.avisos, [], 'no falta nada: el dato estaba en la nota')
+    assert.equal(r.totales.comprobantesDeNota, 1)
+  })
+
+  it('🔑 una compra NUEVA no depende de la nota: sus campos propios mandan y la nota no se interpreta', () => {
+    const r = armarRegistroCompras([
+      compra({ tipoComprobante: '01', serie: 'F001', numero: '123', nota: 'B001-999 (no es esta)' }),
+    ])
+    const f = r.filas[0]
+    assert.equal(f.serie, 'F001')
+    assert.equal(f.numero, '123')
+    assert.equal(f.leidoDeNota, false, 'la fila no se marca: el dato es declarado')
+    assert.equal(f.tipoPorSerie, false)
+    assert.equal(r.totales.comprobantesDeNota, 0)
+  })
+
+  it('una nota que no se puede leer deja la compra avisada, como antes', () => {
+    const r = armarRegistroCompras([
+      compra({ compraId: 'vieja', tipoComprobante: '', serie: '', numero: '', nota: 'mercadería surtida' }),
+    ])
+    assert.equal(r.filas[0].leidoDeNota, false)
+    assert.deepEqual(r.avisos[0].falta, ['tipo de comprobante', 'serie y número'])
+  })
+
+  it('leer la nota NO cambia los importes: solo completa el comprobante', () => {
+    const conCampos = armarRegistroCompras([compra()], { igvRecuperable: true })
+    const desdeNota = armarRegistroCompras(
+      [compra({ tipoComprobante: '', serie: '', numero: '', nota: 'F001-123' })],
+      { igvRecuperable: true },
+    )
+    assert.equal(desdeNota.filas[0].car, conCampos.filas[0].car)
+    assert.equal(desdeNota.totales.total, conCampos.totales.total)
+    assert.equal(desdeNota.totales.igvConCredito, conCampos.totales.igvConCredito)
   })
 })
 

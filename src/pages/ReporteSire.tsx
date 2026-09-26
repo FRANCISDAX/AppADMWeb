@@ -602,6 +602,16 @@ export function ReporteSire() {
                         <div className="text-xs font-bold">{f.tipoComprobanteLabel}</div>
                         <div className="font-mono text-[11px] text-muted-foreground">
                           {f.serie && f.numero ? `${f.serie}-${f.numero}` : 'sin serie/número'}
+                          {f.leidoDeNota && (
+                            <span
+                              className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                              title={f.tipoPorSerie
+                                ? 'Compra anterior a los campos de comprobante: la serie y el número se leyeron de la nota, y el tipo, de la letra de la serie. Conviene que el contador lo revise.'
+                                : 'Compra anterior a los campos de comprobante: la serie y el número se leyeron de la nota.'}
+                            >
+                              de la nota
+                            </span>
+                          )}
                         </div>
                         <div className="font-mono text-[10px] text-muted-foreground/70">CAR {f.car || '—'}</div>
                       </td>
@@ -662,6 +672,12 @@ export function ReporteSire() {
             <li><strong>Con o sin derecho a crédito fiscal</strong> son columnas distintas (DG / DGNG) y lo decide <em>Configuración → Empresa → «Recupero el IGV de mis compras»</em> <b>al momento de cargar la compra</b> (queda guardado con ella).</li>
             <li><strong>El CAR</strong> son 27 caracteres: RUC del proveedor (11) + tipo (2) + serie (4) + número (10), con ceros a la izquierda (Tabla 7 del anexo).</li>
             <li>Las <strong>notas de crédito</strong> del proveedor van en negativo y restan del registro.</li>
+            {registroCompras.totales.comprobantesDeNota > 0 && (
+              <li>
+                <span className="rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400">de la nota</span>{' '}
+                <strong>{registroCompras.totales.comprobantesDeNota} comprobante(s)</strong> son <strong>compras anteriores</strong> a los campos nuevos: la serie y el número se leyeron de la <em>nota</em> de la compra (donde se escribían a mano) y el tipo, de la <strong>letra de la serie</strong> (<em>F</em> = factura, <em>B</em> = boleta). Las compras cargadas desde ahora ya traen esos datos en sus propios campos y no dependen de la nota.
+              </li>
+            )}
             <li>⚠️ El export es para <b>revisar y cargar</b> en el SIRE (SUNAT asigna el CAR en su propuesta y valida el archivo); no reemplaza el envío en el portal.</li>
           </ul>
         </div>

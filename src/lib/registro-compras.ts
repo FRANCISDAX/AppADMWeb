@@ -74,6 +74,65 @@ export function signoDeComprobante(codigo?: string): 1 | -1 {
   return esNotaCredito(codigo) ? -1 : 1
 }
 
+/** El comprobante del proveedor **leído de la nota** de una compra vieja (texto libre). */
+export type ComprobanteDeNota = {
+  tipoComprobante: string
+  serie: string
+  numero: string
+  /** El tipo salió de la **letra de la serie** (`F`/`B`) y no de una palabra escrita en la nota. */
+  tipoPorSerie: boolean
+}
+
+/** Cómo se puede nombrar el tipo en la nota (gana la primera que aparezca: es lo que se escribió a mano). */
+const TIPO_POR_PALABRA: { re: RegExp; codigo: string }[] = [
+  { re: /\bNOTA\s+DE\s+CREDITO\b/, codigo: '07' },
+  { re: /\bNOTA\s+DE\s+DEBITO\b/, codigo: '08' },
+  { re: /\bLIQUIDACION\b/, codigo: '04' },
+  { re: /\bFACTURA\b/, codigo: '01' },
+  { re: /\bBOLETA\b/, codigo: '03' },
+  { re: /\bTICKET\b/, codigo: '12' },
+]
+
+/**
+ * **La letra con la que empieza la serie dice el tipo** (SUNAT: las facturas usan series que empiezan con `F`
+ * y las boletas con `B`). Se usa **solo** para leer lo que ya estaba escrito en la nota: no decide nada de una
+ * compra que trae su tipo declarado.
+ */
+const TIPO_POR_LETRA: Record<string, string> = { F: '01', B: '03' }
+
+/**
+ * **Lee el comprobante del proveedor de la nota de una compra vieja.**
+ *
+ * 🔑 **Por qué existe**: hasta el 26/09/2026 el ingreso de mercadería **no tenía campos** para el comprobante
+ * del proveedor, así que ese dato se escribía a mano en la **nota** (el campo libre) y quedó guardado ahí —
+ * casos reales: `FF02-553`, `F001-123`. El RCE necesita el tipo, la serie y el número (de ahí sale el CAR de
+ * 27 dígitos), así que esta función **lee lo que la persona ya escribió** en vez de pedirle que lo vuelva a
+ * tipear… y **no adivina**: si la nota no trae un `SERIE-NÚMERO` con una serie que SUNAT use (`F…` o `B…`) o
+ * una palabra que diga el tipo, devuelve `null` y la compra sigue avisada como incompleta.
+ *
+ * ⚠️ Cuando el tipo sale de la **letra** de la serie, la fila se marca (`tipoPorSerie`) y la pantalla lo dice:
+ * es una lectura de un texto libre, no un dato declarado — conviene que el contador la revise.
+ */
+export function comprobanteDeNota(nota?: string): ComprobanteDeNota | null {
+  const texto = String(nota ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+
+  // `FF02-553`, `F001 123`, `B001-00000123`, `B001/45`…
+  const m = texto.match(/\b([A-Z]{1,2}\d{2,4})\s*[-–—/ ]\s*(\d{1,12})\b/)
+  if (!m) return null
+
+  const serie = m[1]
+  // Sin ceros a la izquierda: el CAR los vuelve a poner (y `ajustar` corta por la derecha si sobra).
+  const numero = String(Number(m[2]))
+  const palabra = TIPO_POR_PALABRA.find((t) => t.re.test(texto))
+  const codigo = palabra?.codigo ?? TIPO_POR_LETRA[serie[0]]
+  if (!codigo) return null
+
+  return { tipoComprobante: codigo, serie, numero, tipoPorSerie: !palabra }
+}
+
 /**
  * **Tipo de documento de identidad** del proveedor (Tabla 1 del RVIE/RCE): `6` = RUC (11 dígitos),
  * `1` = DNI (8), `0` = doc. tributario no domiciliado sin RUC (cualquier otro caso).
@@ -171,6 +230,10 @@ export type FilaRegistroCompras = {
   total: number
   /** `-1` en las notas de crédito: los importes ya vienen con ese signo aplicado. */
   signo: 1 | -1
+  /** El comprobante salió de la **nota** de la compra (texto libre): es una compra anterior a los campos nuevos. */
+  leidoDeNota: boolean
+  /** El tipo salió de la **letra de la serie** de la nota (`F`/`B`), no de un dato declarado. */
+  tipoPorSerie: boolean
   items: number
 }
 
@@ -194,6 +257,8 @@ export type RegistroCompras = {
     total: number
     /** Lo que hay que pagar a SUNAT por estas compras si el IGV es crédito: informativo. */
     igvCreditoFiscal: number
+    /** Cuántas filas sacaron el comprobante de la **nota** (compras anteriores a los campos nuevos). */
+    comprobantesDeNota: number
   }
   avisos: AvisoRegistroCompras[]
 }
@@ -219,7 +284,17 @@ export function armarRegistroCompras(
   const avisos: AvisoRegistroCompras[] = []
 
   for (const c of compras ?? []) {
-    const tipo = String(c.tipoComprobante ?? '').trim()
+    const tipoDeclarado = String(c.tipoComprobante ?? '').trim()
+    const serieDeclarada = String(c.serie ?? '').trim()
+    const numeroDeclarado = String(c.numero ?? '').trim()
+    // 🔑 **El comprobante se lee de la nota SOLO si faltan los campos nuevos**: hasta el 26/09/2026 el modal de
+    // compra no los tenía y ese dato se escribía a mano en la nota (`FF02-553`). Una compra de ahora ya trae
+    // tipo/serie/número propios, así que su nota no se interpreta nunca.
+    const deNota = !tipoDeclarado || !serieDeclarada || !numeroDeclarado ? comprobanteDeNota(c.nota) : null
+    const tipo = tipoDeclarado || deNota?.tipoComprobante || ''
+    const serie = serieDeclarada || deNota?.serie || ''
+    const numero = numeroDeclarado || deNota?.numero || ''
+    const leidoDeNota = Boolean(deNota) && (!tipoDeclarado || !serieDeclarada || !numeroDeclarado)
     const signo = signoDeComprobante(tipo)
     const documento = String(c.proveedorId ?? '').replace(/\D/g, '')
     // El respaldo para las compras anteriores a este cambio: la config de hoy.
@@ -255,7 +330,7 @@ export function armarRegistroCompras(
 
     const falta: string[] = []
     if (!tipo) falta.push('tipo de comprobante')
-    if (!String(c.serie ?? '').trim() || !String(c.numero ?? '').trim()) falta.push('serie y número')
+    if (!serie || !numero) falta.push('serie y número')
     if (!documento) falta.push('RUC/DNI del proveedor')
     if (!(c.items ?? []).some((i) => i.importe > 0)) falta.push('importes')
     if (falta.length > 0) avisos.push({ compraId: c.compraId, proveedor: c.proveedor ?? '', falta })
@@ -265,10 +340,10 @@ export function armarRegistroCompras(
       fecha: c.fechaEmision || c.fecha,
       tipoComprobante: tipo,
       tipoComprobanteLabel: labelTipoComprobante(tipo),
-      serie: String(c.serie ?? '').trim(),
-      numero: String(c.numero ?? '').trim(),
-      car: tipo && documento && String(c.serie ?? '').trim() && String(c.numero ?? '').trim()
-        ? carSunat({ documento, tipoComprobante: tipo, serie: c.serie, numero: c.numero })
+      serie,
+      numero,
+      car: tipo && documento && serie && numero
+        ? carSunat({ documento, tipoComprobante: tipo, serie, numero })
         : '',
       proveedor: String(c.proveedor ?? '').trim(),
       proveedorDocumento: documento,
@@ -280,6 +355,8 @@ export function armarRegistroCompras(
       noGravadas: aplicar(noGravadas),
       total: aplicar(total),
       signo,
+      leidoDeNota,
+      tipoPorSerie: Boolean(deNota?.tipoPorSerie) && leidoDeNota,
       items: (c.items ?? []).length,
     })
   }
@@ -302,6 +379,7 @@ export function armarRegistroCompras(
       noGravadas: sumar((x) => x.noGravadas),
       total: sumar((x) => x.total),
       igvCreditoFiscal: igvConCreditoTotal,
+      comprobantesDeNota: filas.filter((f) => f.leidoDeNota).length,
     },
     avisos,
   }
