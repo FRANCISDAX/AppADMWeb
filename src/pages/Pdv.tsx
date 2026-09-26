@@ -975,7 +975,8 @@ export function Pdv() {
       const presId = presentacionesSel[id]
       const pres = presId ? p.presentaciones?.find((pr) => pr.id === presId) : null
       const factor = pres?.factor ?? 1
-      const precioItem = precioFinal(p) * factor
+      const precioBase = precioFinal(p)
+      const precioItem = precioBase * factor
       if (qty <= 0 || precioItem <= 0) continue
 
       // ¿Producto por vencer o vencido? (≤7 días)
@@ -985,11 +986,13 @@ export function Pdv() {
       // ¿Debajo del costo? Se compara contra el **costo vigente del producto**
       // (`costoDeProducto`: promedio ponderado con respaldo en el último costo), la misma regla con
       // la que se valoriza el inventario: si no, el aviso compara contra un costo que puede estar viejo.
-      // 🔑 **Y con el precio SIN IGV**: el IGV que se cobra no es plata del negocio, así que un producto
-      // gravado que deja 1 sol no está «sobre el costo» solo porque la etiqueta diga más
-      // (`lib/precio-venta.ts` → `precioSinIgv`). Un producto exonerado (`'20'`) compara igual que antes.
+      // 🔑 **Las dos puntas van en la misma unidad y en la misma base**: el costo es por **unidad base**, así
+      // que se compara con el precio de **una unidad base** (no el de la presentación: una caja a S/ 38 contra
+      // un costo de S/ 3.17 daba «está sobre el costo» siempre) y **sin IGV**, porque el IGV que se cobra no es
+      // plata del negocio (`lib/precio-venta.ts` → `precioSinIgv`). Con un producto exonerado (`'20'`) no
+      // cambia nada.
       const costo = costoDeProducto(p)
-      if (costo > 0 && precioSinIgv(precioItem, p.tipoAfectacion) < costo) {
+      if (costo > 0 && precioSinIgv(precioBase, p.tipoAfectacion) < costo) {
         productosDebajoCosto.push(p.nombre ?? id)
       }
 
@@ -1834,15 +1837,15 @@ export function Pdv() {
                   const presActual = presSel ? presVenta.find((pr) => pr.id === presSel) : null
                   const factorActual = presActual?.factor ?? 1
                   // El badge BAJO COSTO usa el **costo vigente** (promedio ponderado), igual que el
-                  // aviso del cobro y que la valorización del inventario, y compara contra el precio
-                  // **sin IGV** (el IGV cobrado no es del negocio: ver `precioSinIgv`).
+                  // aviso del cobro y que la valorización del inventario, y compara **unidad base contra
+                  // unidad base** y contra el precio **sin IGV** (el IGV cobrado no es del negocio).
                   const costoActual = costoDeProducto(p)
                   return (
                   <div key={p.id} className="flex items-center gap-2 py-2.5">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="truncate text-[13px] font-semibold">{p.nombre}</span>
-                        {costoActual > 0 && precioSinIgv(precioFinal(p) * factorActual, p.tipoAfectacion) < costoActual && (
+                        {costoActual > 0 && precioSinIgv(precioFinal(p), p.tipoAfectacion) < costoActual && (
                           <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-600">BAJO COSTO</span>
                         )}
                         {p.fechaVencimiento && (() => {

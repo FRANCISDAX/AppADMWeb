@@ -45,12 +45,15 @@ describe('el margen de los reportes se mide sobre la base neta', () => {
   })
 })
 
-describe('el aviso BAJO COSTO compara contra el precio sin IGV', () => {
-  it('el badge del carrito y el aviso del cobro usan `precioSinIgv`', () => {
+describe('el aviso BAJO COSTO compara contra el precio sin IGV y en la misma unidad', () => {
+  it('el badge del carrito y el aviso del cobro usan `precioSinIgv` sobre la UNIDAD BASE', () => {
     const src = leer('pages/Pdv.tsx')
-    assert.match(src, /precioSinIgv\(precioFinal\(p\) \* factorActual/, 'el badge del carrito')
-    assert.match(src, /precioSinIgv\(precioItem, p\.tipoAfectacion\)/, 'el aviso antes de cobrar')
+    // ⚠️ Unidad base contra unidad base: el costo es por unidad base, así que compararlo con el precio de la
+    // **presentación** (una caja a S/ 38 contra un costo de S/ 3.17) daba «está sobre el costo» siempre.
+    assert.match(src, /precioSinIgv\(precioFinal\(p\), p\.tipoAfectacion\) < costoActual/, 'el badge del carrito')
+    assert.match(src, /precioSinIgv\(precioBase, p\.tipoAfectacion\) < costo/, 'el aviso antes de cobrar')
     assert.doesNotMatch(soloCodigo(src), /precioFinal\(p\) \* factorActual < costoActual/, 'la comparación vieja ya no vuelve')
+    assert.doesNotMatch(soloCodigo(src), /precioSinIgv\(precioItem, p\.tipoAfectacion\)/, 'ni la de presentación contra unidad base')
   })
 })
 
