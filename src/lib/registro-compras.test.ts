@@ -15,12 +15,16 @@
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 
 import {
   CABECERA_EXPORT_COMPRAS,
   armarRegistroCompras,
   carSunat,
   comprobanteDeNota,
+  documentoDeProveedor,
   esNotaCredito,
   esNotaDebito,
   fechaRegistro,
@@ -31,6 +35,12 @@ import {
   tipoDocIdentidad,
   type CompraRegistro,
 } from './registro-compras.ts'
+
+/** Para las guardas que leen el código real (mismo patrón que `lib/margen-base-neta.test.ts`). */
+const raiz = join(dirname(fileURLToPath(import.meta.url)), '..')
+const leer = (rel: string) => readFileSync(join(raiz, rel), 'utf8')
+/** Saca los comentarios: no confundir lo que dice el código con lo que explica. */
+const soloCodigo = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
 /** Una compra de una tienda: factura del proveedor por S/ 118 (100 + 18 de IGV). */
 function compra(extra: Partial<CompraRegistro> = {}): CompraRegistro {
@@ -302,6 +312,68 @@ describe('comprobante leído de la nota (solo compras anteriores a los campos nu
     assert.equal(desdeNota.filas[0].car, conCampos.filas[0].car)
     assert.equal(desdeNota.totales.total, conCampos.totales.total)
     assert.equal(desdeNota.totales.igvConCredito, conCampos.totales.igvConCredito)
+  })
+})
+
+/**
+ * 🔑 **De dónde sale el documento (RUC/DNI) del proveedor** — auditoría del 26/09/2026, con la producción
+ * mirada en **solo lectura**:
+ *
+ * - La colección `tblProveedores` estaba **bien**: 3 de 3 con RUC válido y sin repetidos (el proveedor se
+ *   graba con `id = RUC` y `merge`, exista o no).
+ * - Pero **13 compras (44 movimientos) hechas desde el celular tenían el RUC en `metadata.proveedorDoc`** y el
+ *   registro leía `metadata.proveedorId` ⇒ esas filas salían **sin documento** aunque el RUC estaba guardado.
+ * - Y el `proveedorId` podía ser el **slug del nombre**: con un nombre que tiene dígitos
+ *   (`distribuidora_2_hermanos`) el registro anotaba un **CAR inventado** (`00000000002…`) **sin avisar**.
+ *
+ * Estos tests fijan las dos mitades: el lector tolerante y que un slug **nunca** sea un documento.
+ */
+describe('el documento del proveedor: RUC real o aviso (nunca un CAR inventado)', () => {
+  it('solo son documentos el RUC (11), el DNI (8) y un doc del exterior de 6+ dígitos', () => {
+    assert.equal(documentoDeProveedor('20512345678'), '20512345678')
+    assert.equal(documentoDeProveedor('12345678'), '12345678')
+    assert.equal(documentoDeProveedor('20-512345678'), '20512345678', 'con guiones se limpia')
+    assert.equal(documentoDeProveedor('123456'), '123456', 'no domiciliado (Tabla 1, tipo 0)')
+  })
+
+  it('⚠️ un slug del nombre NO es un documento, ni siquiera si tiene dígitos', () => {
+    assert.equal(documentoDeProveedor('golosinas_iris_eirl'), '', 'letras: no es un documento')
+    assert.equal(documentoDeProveedor('distribuidora_2_hermanos'), '', 'lo peligroso: quedaba el `2`')
+    assert.equal(documentoDeProveedor('2'), '', 'un solo dígito no es un documento')
+    assert.equal(documentoDeProveedor(''), '')
+    assert.equal(documentoDeProveedor(undefined), '')
+  })
+
+  it('📌 el slug con dígitos ya no arma un CAR falso: la fila queda AVISADA', () => {
+    const r = armarRegistroCompras([
+      compra({ compraId: 'slug', proveedorId: 'distribuidora_2_hermanos' }),
+    ])
+    assert.equal(r.filas[0].car, '', 'antes daba `0000000000201F0010000000123` sin ningún aviso')
+    assert.equal(r.filas[0].proveedorDocumento, '')
+    assert.deepEqual(r.avisos[0].falta, ['RUC/DNI del proveedor'])
+    // El nombre del proveedor se sigue viendo: lo que falta es el documento, no la fila.
+    assert.equal(r.filas[0].proveedor, 'DISTRIBUIDORA LIMA SAC')
+  })
+
+  it('🛡️ el servicio lee el documento en los DOS nombres que existen (`proveedorId` y `proveedorDoc`)', () => {
+    const svc = leer('services/compras.ts')
+    assert.match(
+      soloCodigo(svc),
+      /proveedorId:\s*String\(md\.proveedorId\s*\|\|\s*md\.proveedorDoc/,
+      'la app móvil guarda el RUC en `metadata.proveedorDoc`: sin el respaldo, esas compras quedan sin documento',
+    )
+  })
+
+  it('🛡️ el modal de compra no vuelve a mandar el nombre como documento', () => {
+    const modal = leer('components/ModalCompra.tsx')
+    const codigo = soloCodigo(modal)
+    assert.match(codigo, /documentoDeProveedor\(docProv\.documento\)/, 'el documento se normaliza con la regla única')
+    assert.doesNotMatch(
+      codigo,
+      /proveedorId:\s*docProv\.documento\?\.trim\(\)\s*\|\|\s*docProv\.nombre/,
+      'el slug del nombre no es un documento: de ahí salía un CAR inventado',
+    )
+    assert.match(codigo, /documentoDeProveedor\(/, 'y se usa para guardar el proveedor con su RUC')
   })
 })
 

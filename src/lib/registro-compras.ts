@@ -144,6 +144,24 @@ export function tipoDocIdentidad(documento?: string): string {
   return '0'
 }
 
+/**
+ * **El documento del proveedor, si de verdad lo es** (si no, cadena vacía).
+ *
+ * 🔑 **Por qué no alcanza con sacarle las letras**: el id del proveedor en una compra puede ser el **slug del
+ * nombre** cuando se cargó sin documento (`distribuidora_2_hermanos`). Sacándole lo no numérico quedaría `'2'`,
+ * que **no está vacío** ⇒ el registro armaba un **CAR inventado** (`00000000002…`) en vez de avisar. Por eso un
+ * valor con **letras no es un documento**, y se exige una longitud creíble: **11 (RUC), 8 (DNI)** o, para un
+ * proveedor del exterior, un número de **al menos 6 dígitos** (Tabla 1: tipo `0`, no domiciliado sin RUC).
+ */
+export function documentoDeProveedor(valor?: string): string {
+  const v = String(valor ?? '').trim()
+  if (!v) return ''
+  if (/[A-Za-z]/.test(v)) return ''
+  const digitos = v.replace(/\D/g, '')
+  if (digitos.length === 11 || digitos.length === 8) return digitos
+  return digitos.length >= 6 ? digitos : ''
+}
+
 /** Rellena con ceros a la izquierda, o se queda con los dígitos de la derecha si es más largo (Tabla 7). */
 function ajustar(valor: unknown, largo: number): string {
   const limpio = String(valor ?? '').replace(/[^0-9A-Za-z]/g, '')
@@ -296,7 +314,10 @@ export function armarRegistroCompras(
     const numero = numeroDeclarado || deNota?.numero || ''
     const leidoDeNota = Boolean(deNota) && (!tipoDeclarado || !serieDeclarada || !numeroDeclarado)
     const signo = signoDeComprobante(tipo)
-    const documento = String(c.proveedorId ?? '').replace(/\D/g, '')
+    // 🔑 **Un slug del nombre NO es un RUC**: `documentoDeProveedor` descarta lo que no sea un documento real
+    // (ver su comentario). Así una compra cargada sin documento queda **avisada**, en vez de anotar un CAR
+    // armado con los dígitos sueltos del nombre.
+    const documento = documentoDeProveedor(c.proveedorId)
     // El respaldo para las compras anteriores a este cambio: la config de hoy.
     const creditoPorDefecto = c.igvRecuperable ?? opts?.igvRecuperable ?? false
 

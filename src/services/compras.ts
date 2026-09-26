@@ -300,7 +300,11 @@ export async function obtenerComprasDelMes(anio: number, mes: number): Promise<C
       compraId,
       fecha: String(m.fecha || ''),
       proveedor: String(md.proveedor || ''),
-      proveedorId: String(md.proveedorId || ''),
+      // 🔑 **El documento del proveedor se busca en los DOS nombres que existen**: el web escribe
+      // `proveedorId` y la **app móvil escribe `proveedorDoc`** (mismo dato, otro campo — verificado en
+      // producción: 13 compras hechas desde el celular tenían su RUC en `proveedorDoc` y el registro las
+      // mostraba sin documento). Sin este respaldo, esas compras no se pueden anotar aunque el RUC esté ahí.
+      proveedorId: String(md.proveedorId || md.proveedorDoc || ''),
       tipoComprobante: String(md.tipoComprobante || ''),
       serie: String(md.serieComprobante || ''),
       numero: String(md.numeroComprobante || ''),

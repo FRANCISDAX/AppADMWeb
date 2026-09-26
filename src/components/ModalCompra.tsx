@@ -12,7 +12,7 @@ import { costoPorUnidadBase } from '@/lib/valorizacion'
 import { costoDeCompra } from '@/lib/precio-venta'
 import { esGravado } from '@/lib/sunat-importes'
 import { useConfiguracion } from '@/hooks/use-configuracion'
-import { TIPOS_COMPROBANTE_COMPRA } from '@/lib/registro-compras'
+import { TIPOS_COMPROBANTE_COMPRA, documentoDeProveedor } from '@/lib/registro-compras'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
@@ -141,7 +141,19 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
 
   function confirmarManual() {
     if (!docProv.nombre.trim()) { setAvisoProv('Completa el nombre del proveedor.'); return }
-    setDocProv({ ...docProv, confirmado: true })
+    const doc = documentoDeProveedor(docProv.documento)
+    if (!doc) {
+      setAvisoProv('El RUC tiene 11 dígitos y el DNI 8. Si el proveedor no te dio documento, usá «Sin documento» (el Registro de Compras va a avisarlo).')
+      return
+    }
+    setDocProv({ ...docProv, documento: doc, tipoDocumento: doc.length === 8 ? 'DNI' : 'RUC', confirmado: true })
+    setAvisoProv('')
+  }
+
+  /** El caso legítimo de un proveedor sin documento (boleta interna, venta de una persona). */
+  function confirmarSinDocumento() {
+    if (!docProv.nombre.trim()) { setAvisoProv('Completa el nombre del proveedor.'); return }
+    setDocProv({ ...docProv, documento: '', confirmado: true })
     setAvisoProv('')
   }
 
@@ -159,12 +171,19 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
     const ok = await confirm({ title: 'Confirmar compra', message: `Proveedor: ${docProv.nombre}\nTotal a pagar: ${fmt(total)}\n\n¿Registrar esta compra?`, okText: 'Registrar' })
     if (!ok) return
     setProcesando(true)
-    // Crea/actualiza el proveedor (si no existe lo guarda en la colección Proveedor).
-    await guardarProveedor({ id: docProv.documento?.trim() || undefined, nombre: docProv.nombre, documento: docProv.documento, tipoDocumento: docProv.tipoDocumento, direccion: docProv.direccion, telefono: docProv.telefono, correo: docProv.correo })
+    /**
+     * 🔑 **El documento del proveedor es SOLO el RUC/DNI** (nunca el nombre): de acá sale el **CAR** del
+     * Registro de Compras, y un nombre convertido en «documento» (el slug `golosinas_iris_…`) hacía que el
+     * registro anotara un **CAR inventado** en vez de avisar que faltaba. Si no hay documento, va vacío.
+     */
+    const docProvDigitos = documentoDeProveedor(docProv.documento)
+    const tipoDocProv: 'RUC' | 'DNI' = docProvDigitos.length === 8 ? 'DNI' : 'RUC'
+    // Crea/actualiza el proveedor (si no existe lo guarda en la colección Proveedor) **con su RUC**.
+    await guardarProveedor({ id: docProvDigitos || undefined, nombre: docProv.nombre, documento: docProvDigitos, tipoDocumento: tipoDocProv, direccion: docProv.direccion, telefono: docProv.telefono, correo: docProv.correo })
     const r = await registrarCompra({
       items: carrito.map((i) => ({ productoId: i.id.split('__')[0], productoNombre: i.nombre, cantidad: i.cantidad, costoUnitario: parseDecimal(i.costoTexto), factor: i.factor, presentacionId: i.presentacionId, presentacionNombre: i.presentacionNombre, traeIgv: i.traeIgv ?? Boolean(config.igvRecuperable) })),
       proveedor: docProv.nombre,
-      proveedorId: docProv.documento?.trim() || docProv.nombre.trim().toLowerCase().replace(/\s+/g, '_'),
+      proveedorId: docProvDigitos,
       proveedorDireccion: docProv.direccion,
       nota,
       tipoPago,
@@ -319,7 +338,7 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold">{docProv.nombre}</div>
                   <div className="text-xs text-muted-foreground">
-                    {docProv.tipoDocumento} {docProv.documento}
+                    {docProv.documento ? `${docProv.tipoDocumento} ${docProv.documento}` : 'sin documento (el Registro de Compras lo va a avisar)'}
                     {docProv.direccion ? ` · ${docProv.direccion}` : ''}
                   </div>
                 </div>
@@ -345,8 +364,15 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
                 {modoProv === 'manual' && (
                   <div className="grid gap-2">
                     <Input value={docProv.nombre} onChange={(e) => setDocProv((d) => ({ ...d, nombre: e.target.value }))} placeholder="Nombre del proveedor" />
+                    <Input value={docProv.documento} onChange={(e) => setDocProv((d) => ({ ...d, documento: e.target.value }))} placeholder="RUC (11 dígitos) o DNI (8)" inputMode="numeric" />
                     <Input value={docProv.direccion} onChange={(e) => setDocProv((d) => ({ ...d, direccion: e.target.value }))} placeholder="Dirección (opcional)" />
-                    <Button onClick={confirmarManual} type="button" variant="outline">Usar este proveedor</Button>
+                    <p className="text-[11px] text-muted-foreground">
+                      El <b>RUC/DNI</b> es lo que identifica al proveedor en el <b>Registro de Compras</b> (de ahí sale el CAR).
+                    </p>
+                    <div className="flex gap-2">
+                      <Button onClick={confirmarManual} type="button" variant="outline" className="flex-1">Usar este proveedor</Button>
+                      <Button onClick={confirmarSinDocumento} type="button" variant="ghost" className="text-xs" title="Para un proveedor que no te dio documento: la compra se registra igual y el Registro de Compras lo avisa">Sin documento</Button>
+                    </div>
                   </div>
                 )}
 
@@ -357,7 +383,9 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
                     ) : proveedoresGuardados.map((p) => (
                       <button key={p.id} onClick={() => seleccionarGuardado(p)} className="flex w-full items-center justify-between border-b px-3 py-2 text-left text-sm last:border-0 hover:bg-muted/40 cursor-pointer">
                         <span className="min-w-0 truncate">{p.nombre}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">{p.tipoDocumento} {p.documento}</span>
+                        <span className={cn('shrink-0 text-xs', p.documento ? 'text-muted-foreground' : 'text-amber-600')}>
+                          {p.documento ? `${p.tipoDocumento} ${p.documento}` : 'sin documento'}
+                        </span>
                       </button>
                     ))}
                   </div>

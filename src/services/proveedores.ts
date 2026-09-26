@@ -56,6 +56,14 @@ export async function guardarProveedor(p: Proveedor): Promise<{ success: boolean
   try {
     if (!p || !p.nombre?.trim()) return { success: false }
     const id = p.id || p.documento?.trim() || p.nombre.trim().toLowerCase().replace(/\s+/g, '_')
+    // ⚠️ **`fechaRegistro` es la fecha de ALTA: no se pisa.** El modal de compra llama a esta función en
+    // cada compra sin mandarla, así que ponerla siempre con `new Date()` convertía «desde cuándo es
+    // proveedor» en «cuándo fue la última compra». `merge: true` no alcanza: el campo se escribe explícito.
+    const yaExiste = p.fechaRegistro ? null : await getDoc(doc(db, COL.PROVEEDOR, id))
+    const fechaRegistro =
+      p.fechaRegistro ||
+      ((yaExiste?.exists() ? (yaExiste.data() as Record<string, unknown>).fechaRegistro : undefined) as string | undefined) ||
+      new Date().toISOString()
     const data: Record<string, unknown> = {
       nombre: p.nombre.trim(),
       documento: p.documento?.trim() || '',
@@ -66,7 +74,7 @@ export async function guardarProveedor(p: Proveedor): Promise<{ success: boolean
       contactos: p.contactos || [],
       notas: p.notas || '',
       activo: p.activo !== false,
-      fechaRegistro: p.fechaRegistro || new Date().toISOString(),
+      fechaRegistro,
       updatedAt: new Date().toISOString(),
     }
     await setDoc(doc(db, COL.PROVEEDOR, id), data, { merge: true })
