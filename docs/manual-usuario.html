@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.15 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.16 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -605,6 +605,18 @@
   <div class="tip">
     <div class="tip-label">💡 Para que el margen sea el real</div>
     <p>Si el flete o el empaque se pagan aparte, hoy se cargan como <strong>gasto</strong> (<em>Egresos</em>) y <strong>no</strong> entran al costo del producto: el margen que ves es el de la mercadería sola. Si quieres que entren al costo, hay que repartirlos <strong>dentro del precio de la compra</strong> de cada ítem.</p>
+  </div>
+
+  <div class="warning">
+    <div class="warning-label">⚠️ El costo es lo que PAGASTE (y el IGV de afuera es costo)</div>
+    <p>Cuando compras <strong>fuera de la región</strong>, la factura viene <strong>con IGV</strong>: carga el <strong>total de la factura</strong>. Ese IGV <strong>no se recupera</strong> —las ventas son exoneradas, así que no hay crédito fiscal que usar— y por eso <strong>es parte del costo</strong>. Cuando compras <strong>en la región</strong>, la factura no lleva IGV y se carga tal cual.</p>
+    <p style="margin-top:6px;">⚠️ Si en una compra de afuera cargaras el <strong>valor sin IGV</strong>, el margen del producto se vería <strong>unos 9 puntos más alto</strong> de lo real, y la valorización del inventario quedaría por debajo de lo que pagaste.</p>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">💡 Si alguna vez vendes fuera de la región</div>
+    <p>Esa venta <strong>sí lleva IGV</strong>. <strong>No cambies la afectación del producto</strong> para una venta suelta: si te olvidas de volverla a <em>20 · Exonerado</em>, todas las ventas siguientes de ese producto le cobrarían el 18% al cliente. Para esos casos, crea un <strong>producto aparte</strong> con afectación <em>10 · Gravado</em>.</p>
+    <p style="margin-top:6px;">En la <strong>calculadora de precio</strong> (ver <em>4.3</em>), el margen de un producto gravado se mide <strong>sobre el precio sin IGV</strong> —el IGV no es plata del negocio—, así que el número sigue siendo comparable con el de los productos exonerados.</p>
   </div>
 </div>
 
@@ -1497,7 +1509,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.15</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.16</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

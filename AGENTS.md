@@ -191,7 +191,7 @@ El detalle de cada sesión —objective, decisiones con su porqué, evidencias, 
 
 ⚠️ **Actualizarlos NO requiere deploy** (`docs/` no está en `public/` y la app no los linkea): alcanza con el commit. Si el manual cambia de fondo, subir la versión en la portada y en el footer. **Los PDF están versionados en el repo a pedido del usuario** (17/09).
 
-- 🔑 **La configuración recomendada vive en los dos documentos**: en el **manual**, la **sección 17 «Configuración Recomendada»** (límites 🟢🟡🔴 con sus pruebas) y el **Anexo A** (equipo, periféricos, red y **A.7 sin internet**); en el **resumen**, la homónima. ⚠️ **Las dos salen del bloque de pruebas de carga de arriba**: si una medición cambia hay que actualizar los dos HTML **y regenerar los PDF**. Versiones: manual **2.15**, resumen **1.9**. ⚠️ **El app es `AppADM`** (**JorFel** = la empresa que lo usa, no el producto).
+- 🔑 **La configuración recomendada vive en los dos documentos**: en el **manual**, la **sección 17 «Configuración Recomendada»** (límites 🟢🟡🔴 con sus pruebas) y el **Anexo A** (equipo, periféricos, red y **A.7 sin internet**); en el **resumen**, la homónima. ⚠️ **Las dos salen del bloque de pruebas de carga de arriba**: si una medición cambia hay que actualizar los dos HTML **y regenerar los PDF**. Versiones: manual **2.16**, resumen **1.9**. ⚠️ **El app es `AppADM`** (**JorFel** = la empresa que lo usa, no el producto).
 - ⚠️ **El PDF del resumen también necesita `@page { size: A4 }`**: sin eso Chrome usa **Letter** (216×279 mm) y sale distinto al manual. Verificado: los dos PDF dan `MediaBox [0 0 594.96 841.92]` = 210×297 mm.
 
 No test framework is configured. No CI workflows exist.
