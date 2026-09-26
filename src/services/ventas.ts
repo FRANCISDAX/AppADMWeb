@@ -1,4 +1,5 @@
-import { collection, doc, increment, getDoc, getDocs, onSnapshot, query, runTransaction, updateDoc, where, limit, writeBatch } from 'firebase/firestore'
+import { collection, doc, increment, getDoc, getDocs, onSnapshot, query, updateDoc, where, limit, writeBatch } from 'firebase/firestore'
+import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
@@ -106,7 +107,7 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
   }
 
   try {
-    const res = await runTransaction(db, async (tx) => {
+    const res = await ejecutarTransaccion(db, async (tx) => {
       const contSnap = await tx.get(contRef)
       let nuevo: number
       if (contSnap.exists()) {
@@ -410,7 +411,7 @@ export async function anularNotaVenta({ documentoId, motivo, usuario = 'sistema'
     const items = (venta.items || []).filter((it: any) => it && it.id && !it.id.startsWith('manual-'))
     if (items.length === 0) return { success: false, error: 'La nota no tiene items para revertir stock.' }
 
-    const res = await runTransaction(db, async (tx) => {
+    const res = await ejecutarTransaccion(db, async (tx) => {
       // FASE 1: Todas las lecturas ANTES de cualquier escritura.
       const docActual = await tx.get(docRef)
       if (!docActual.exists()) throw new Error('Documento no encontrado')
@@ -642,7 +643,7 @@ export async function crearVentaPendiente({
 
     // Contador del pedido + documento, en una transacción (nada queda a medias). El stock **no**
     // se toca: se descuenta al cobrar.
-    const guardada = await runTransaction(db, async (tx) => {
+    const guardada = await ejecutarTransaccion(db, async (tx) => {
       const pedidoSnap = await tx.get(pedidoRef)
       const numeroPedido = Number(pedidoSnap.data()?.[CAMPO_CONTADOR] ?? 0) + 1
       const codigo = codigoPedido(numeroPedido)
@@ -961,7 +962,7 @@ export async function cobrarVentaPendiente({
       console.warn('⚠️ Lectura del contador destino:', e)
     }
 
-    const res = await runTransaction(db, async (tx) => {
+    const res = await ejecutarTransaccion(db, async (tx) => {
       const docRef = doc(db, COL.DOCUMENTOS, documentoId)
       const docSnap = await tx.get(docRef)
       if (!docSnap.exists()) return { success: false, error: 'Documento no encontrado' }
@@ -1191,7 +1192,7 @@ export async function cancelarVentaPendiente({
   try {
     if (!motivo.trim()) return { success: false, error: 'El motivo es obligatorio' }
 
-    const res = await runTransaction(db, async (tx) => {
+    const res = await ejecutarTransaccion(db, async (tx) => {
       const docRef = doc(db, COL.DOCUMENTOS, documentoId)
       const docSnap = await tx.get(docRef)
       if (!docSnap.exists()) return { success: false, error: 'Documento no encontrado' }

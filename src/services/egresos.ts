@@ -1,4 +1,5 @@
-import { addDoc, collection, deleteDoc, doc, getDocs, query, runTransaction, updateDoc, where } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDocs, query, updateDoc, where } from 'firebase/firestore'
+import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
@@ -55,7 +56,7 @@ export async function registrarEgresoEnTurno(egreso: Omit<Egreso, 'id' | 'create
     if (!egreso.monto || egreso.monto <= 0) return { success: false, error: 'El monto debe ser mayor a 0.' }
     if (!egreso.descripcion?.trim()) return { success: false, error: 'La descripción es obligatoria.' }
 
-    const res = await runTransaction(db, async (tx) => {
+    const res = await ejecutarTransaccion(db, async (tx) => {
       const turnoRef = doc(db, COL.TURNOS, turnoId)
       const turnoSnap = await tx.get(turnoRef)
       if (!turnoSnap.exists()) return { success: false, error: 'No se encontró el turno.' }

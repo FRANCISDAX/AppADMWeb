@@ -1,4 +1,5 @@
-import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, updateDoc, where, type QueryConstraint } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, orderBy, query, updateDoc, where, type QueryConstraint } from 'firebase/firestore'
+import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { desglosarTurno, efectivoEsperadoDe, sumarDesgloses, type DesgloseTurno } from '@/lib/arqueo'
@@ -399,7 +400,7 @@ export async function anularMovimientoCompra({ movimientoId, productoId, cantida
 
   for (let intento = 1; intento <= MAX_REINTENTOS; intento++) {
     try {
-      const resultado = await runTransaction(db, async (transaction) => {
+      const resultado = await ejecutarTransaccion(db, async (transaction) => {
         const productoDoc = await transaction.get(productoRef)
         if (!productoDoc.exists()) throw new Error('El producto no existe')
         const data: any = productoDoc.data()
@@ -441,7 +442,7 @@ export async function anularCompraCompleta(compraId: string): Promise<{ success:
 
   for (let intento = 1; intento <= MAX_REINTENTOS; intento++) {
     try {
-      await runTransaction(db, async (transaction) => {
+      await ejecutarTransaccion(db, async (transaction) => {
         const validaciones: { mov: any; productoRef: any }[] = []
         for (const mov of movimientos) {
           const movimientoRef = doc(db, COL.MOVIMIENTOS, mov.id)

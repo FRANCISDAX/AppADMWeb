@@ -1,4 +1,5 @@
-import { collection, doc, getDocs, query, runTransaction, where } from 'firebase/firestore'
+import { collection, doc, getDocs, query, where } from 'firebase/firestore'
+import { ejecutarTransaccion } from '@/services/transacciones'
 import { db } from '@/lib/firebase'
 import { COL } from '@/constants/colecciones'
 
@@ -85,7 +86,7 @@ export async function actualizarEstadoEnvio({
   nuevoEstado: EnvioEstado
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    await runTransaction(db, async (tx) => {
+    await ejecutarTransaccion(db, async (tx) => {
       // Actualizar en tblDocumentos
       const docRef = doc(db, COL.DOCUMENTOS, docId)
       const docSnap = await tx.get(docRef)

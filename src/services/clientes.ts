@@ -1,4 +1,5 @@
-import { collection, doc, getDoc, getDocs, query, runTransaction, setDoc, updateDoc, where, writeBatch, limit, startAfter, type QueryDocumentSnapshot, type DocumentData, type QueryConstraint } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where, writeBatch, limit, startAfter, type QueryDocumentSnapshot, type DocumentData, type QueryConstraint } from 'firebase/firestore'
+import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { type EstadoCredito } from '@/lib/credito'
 import { bolsilloDe } from '@/lib/pagos'
@@ -290,7 +291,7 @@ export async function actualizarSaldoCredito(clienteId: string): Promise<{ succe
   const ref = doc(db, COL.CLIENTES, clienteId)
   try {
     const saldo = await calcularSaldoCredito(clienteId)
-    await runTransaction(db, async (tx) => {
+    await ejecutarTransaccion(db, async (tx) => {
       const snap = await tx.get(ref)
       if (!snap.exists()) throw new Error('Cliente no encontrado')
       tx.update(ref, { saldoPendiente: saldo, updatedAt: new Date().toISOString() })
@@ -305,7 +306,7 @@ export async function actualizarSaldoCredito(clienteId: string): Promise<{ succe
 export async function registrarCobro(documentoId: string, monto: number, tipoPago: string = 'efectivo', turnoId?: string, operacion?: string): Promise<{ success: boolean; error?: string }> {
   const ref = doc(db, COL.DOCUMENTOS, documentoId)
   try {
-    await runTransaction(db, async (tx) => {
+    await ejecutarTransaccion(db, async (tx) => {
       const snap = await tx.get(ref)
       if (!snap.exists()) throw new Error('Documento no encontrado')
 

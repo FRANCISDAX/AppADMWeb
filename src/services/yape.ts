@@ -37,19 +37,8 @@
  * lenta) y el **historial** (`Reportes → Yape`) lee un **rango** de fechas a pedido.
  */
 
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  limit as fsLimit,
-  onSnapshot,
-  orderBy,
-  query,
-  runTransaction,
-  where,
-} from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDocs, limit as fsLimit, onSnapshot, orderBy, query, where } from 'firebase/firestore'
+import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
@@ -337,7 +326,7 @@ export async function reservarPagoYape({
 }: OpcionesAviso & { pagoId: string }): Promise<{ success: boolean; error?: string }> {
   const ref = doc(db, COL.PAGOS_YAPE, pagoId)
   try {
-    await runTransaction(db, async (tx) => {
+    await ejecutarTransaccion(db, async (tx) => {
       const snap = await tx.get(ref)
       if (!snap.exists()) throw new Error('Ese aviso de Yape ya no existe.')
       const pago = aPagoYape(pagoId, snap.data() as Record<string, unknown>)
@@ -369,7 +358,7 @@ export async function confirmarPagoYapeEnVenta({
 }: OpcionesAviso & { pagoId: string; ventaId?: string; documento?: string }): Promise<{ success: boolean; error?: string }> {
   const ref = doc(db, COL.PAGOS_YAPE, pagoId)
   try {
-    await runTransaction(db, async (tx) => {
+    await ejecutarTransaccion(db, async (tx) => {
       const snap = await tx.get(ref)
       if (!snap.exists()) throw new Error('Ese aviso de Yape ya no existe.')
       const pago = aPagoYape(pagoId, snap.data() as Record<string, unknown>)
@@ -418,7 +407,7 @@ export async function confirmarPagoYapeEnVenta({
 export async function soltarPagoYape({ pagoId }: { pagoId: string }): Promise<void> {
   const ref = doc(db, COL.PAGOS_YAPE, pagoId)
   try {
-    await runTransaction(db, async (tx) => {
+    await ejecutarTransaccion(db, async (tx) => {
       const snap = await tx.get(ref)
       if (!snap.exists()) return
       const pago = aPagoYape(pagoId, snap.data() as Record<string, unknown>)
@@ -446,7 +435,7 @@ export async function ignorarPagoYape({
 }: OpcionesAviso & { pagoId: string; motivo?: string }): Promise<{ success: boolean; error?: string }> {
   const ref = doc(db, COL.PAGOS_YAPE, pagoId)
   try {
-    await runTransaction(db, async (tx) => {
+    await ejecutarTransaccion(db, async (tx) => {
       const snap = await tx.get(ref)
       if (!snap.exists()) throw new Error('Ese aviso de Yape ya no existe.')
       const pago = aPagoYape(pagoId, snap.data() as Record<string, unknown>)
@@ -532,7 +521,7 @@ export async function anularPagoYapeDeVenta({
       const pago = aPagoYape(d.id, d.data() as Record<string, unknown>)
       if (String(pago.estado).trim().toLowerCase() !== 'usado') continue
       const ref = doc(db, COL.PAGOS_YAPE, d.id)
-      await runTransaction(db, async (tx) => {
+      await ejecutarTransaccion(db, async (tx) => {
         const actual = await tx.get(ref)
         if (!actual.exists()) return
         if (String(actual.data().estado ?? '').trim().toLowerCase() !== 'usado') return

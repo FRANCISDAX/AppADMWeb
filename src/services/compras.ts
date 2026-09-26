@@ -1,4 +1,5 @@
-import { collection, doc, runTransaction, type DocumentSnapshot } from 'firebase/firestore'
+import { collection, doc, type DocumentSnapshot } from 'firebase/firestore'
+import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { efectivoEsperadoDe } from '@/lib/arqueo'
@@ -48,7 +49,7 @@ export async function registrarCompra({
   if (totalPagado <= 0) return { success: false, error: 'El total de la compra debe ser mayor a 0.' }
 
   try {
-    const resultados = await runTransaction(db, async (tx) => {
+    const resultados = await ejecutarTransaccion(db, async (tx) => {
       // FASE 1: Todas las lecturas ANTES de cualquier escritura.
       const lecturas: { item: ItemCompra; prodRef: ReturnType<typeof doc>; snap: DocumentSnapshot }[] = []
 

@@ -24,7 +24,8 @@
  * ⚠️ **Un documento que SUNAT rechaza queda `rechazado` y NO se reintenta** (el mismo XML daría el
  * mismo rechazo): lo levanta la alerta `sunat-rechazado` para que una persona lo corrija.
  */
-import { collection, doc as fsDoc, getDoc, getDocFromServer, getDocs, query, runTransaction, where } from 'firebase/firestore'
+import { collection, doc as fsDoc, getDoc, getDocFromServer, getDocs, query, where } from 'firebase/firestore'
+import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { limpiarUndefined } from '@/lib/limpio'
@@ -165,7 +166,7 @@ export async function reclamarDocumentoSunat(
   opciones: { dispositivo?: string; ahora?: number; dias?: number } = {},
 ): Promise<ReclamoSunat> {
   const docRef = fsDoc(db, COL.DOCUMENTOS, documentoId)
-  return runTransaction(db, async (tx) => {
+  return ejecutarTransaccion(db, async (tx) => {
     const snap = await tx.get(docRef)
     if (!snap.exists()) return { ok: false, motivo: 'no-existe' }
     const datos = snap.data() as Record<string, unknown>

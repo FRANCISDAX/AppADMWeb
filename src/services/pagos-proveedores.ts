@@ -1,4 +1,5 @@
-import { collection, doc, getDocs, runTransaction, query, where, type DocumentSnapshot } from 'firebase/firestore'
+import { collection, doc, getDocs, query, where, type DocumentSnapshot } from 'firebase/firestore'
+import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 
@@ -19,7 +20,7 @@ export async function registrarPagoProveedor(
   if (!proveedorId.trim()) return { success: false, error: 'Proveedor inválido.' }
 
   try {
-    await runTransaction(db, async (tx) => {
+    await ejecutarTransaccion(db, async (tx) => {
       const provRef = doc(db, COL.PROVEEDOR, proveedorId)
       const provSnap: DocumentSnapshot = await tx.get(provRef)
       if (!provSnap.exists()) throw new Error('Proveedor no encontrado.')

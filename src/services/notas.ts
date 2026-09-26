@@ -1,4 +1,5 @@
-import { collection, doc, getDoc, getDocs, query, runTransaction, where } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
+import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { numeroALetras } from '@/lib/numero-a-letras'
 import { puntoEmisionDe } from '@/lib/sunat'
@@ -40,7 +41,7 @@ export async function obtenerProximoCorrelativoSunat(serie: string): Promise<num
   }
 
   try {
-    return await runTransaction(db, async (tx) => {
+    return await ejecutarTransaccion(db, async (tx) => {
       const snap = await tx.get(contRef)
       const ultimo = snap.exists() ? snap.data().ultimoCorrelativo ?? 0 : maxExistente
       const nuevo = ultimo + 1
@@ -157,7 +158,7 @@ export async function crearNotaCreditoDebito({
   const ajustarStock = Boolean(afectaStock) && esCredito && items.length > 0
 
   try {
-    await runTransaction(db, async (tx) => {
+    await ejecutarTransaccion(db, async (tx) => {
       // FASE 1: Todas las lecturas ANTES de cualquier escritura.
       const prodSnaps: { item: any; snap: any; prodRef: any }[] = []
       if (ajustarStock) {

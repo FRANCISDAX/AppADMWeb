@@ -1,4 +1,5 @@
-import { addDoc, collection, doc, getDoc, getDocs, query, runTransaction, where } from 'firebase/firestore'
+import { addDoc, collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
+import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
@@ -87,7 +88,7 @@ export async function cerrarTurno({ turnoId, montoFinalEfectivo, observaciones, 
     const turnoDocRef = doc(db, COL.TURNOS, turnoId)
     const cierreRef = doc(collection(db, COL.CIERRES))
 
-    const cierre = await runTransaction(db, async (transaction) => {
+    const cierre = await ejecutarTransaccion(db, async (transaction) => {
       const snap = await transaction.get(turnoDocRef)
       if (!snap.exists()) throw new Error('El turno activo ya no existe.')
       const t = snap.data()
@@ -182,7 +183,7 @@ export async function editarMontoInicial({ turnoId, montoInicial, usuarioId }: {
   exigirRateLimit('editar_monto_inicial')
   try {
     const turnoRef = doc(db, COL.TURNOS, turnoId)
-    await runTransaction(db, async (transaction) => {
+    await ejecutarTransaccion(db, async (transaction) => {
       const snap = await transaction.get(turnoRef)
       if (!snap.exists()) throw new Error('El turno no existe.')
       const t = snap.data()
@@ -200,7 +201,7 @@ export async function rectificarTurno({ turnoId, montoInicialReal, motivo, usuar
   exigirRateLimit('rectificar_turno')
   try {
     const turnoRef = doc(db, COL.TURNOS, turnoId)
-    await runTransaction(db, async (transaction) => {
+    await ejecutarTransaccion(db, async (transaction) => {
       const snap = await transaction.get(turnoRef)
       if (!snap.exists()) throw new Error('El turno no existe.')
       const t = snap.data()
