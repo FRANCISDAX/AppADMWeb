@@ -15,6 +15,7 @@ import { useAuth } from '@/context/auth'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos, type Producto } from '@/hooks/use-productos'
 import { AFECTACION_POR_DEFECTO, TIPO_AFECTACION } from '@/constants/tributario'
+import { CalculadoraPrecio } from '@/components/CalculadoraPrecio'
 import { AFECTACION_EXONERADO } from '@/lib/sunat-importes'
 import { db } from '@/lib/firebase'
 import { useCategorias } from '@/hooks/use-categorias'
@@ -22,7 +23,7 @@ import { categoriasParaFiltros } from '@/services/categorias'
 import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento, esc } from '@/lib/ui-utils'
 import { exportarExcel } from '@/lib/excel'
-import { resumenValorizacion } from '@/lib/valorizacion'
+import { costoDeProducto, resumenValorizacion } from '@/lib/valorizacion'
 import { valorizacionDeMovimiento } from '@/services/kardex'
 import { logActividad } from '@/lib/audit'
 import { registrarCambioPrecio, obtenerHistorialPrecios } from '@/services/historial-precios'
@@ -307,6 +308,18 @@ export function Inventario() {
       {sort.key === k ? (sort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}
     </button>
   )
+
+  /**
+   * Costo con el que calcula la **calculadora de precio**: lo que se está escribiendo en *Precio Compra*
+   * (la compra que se acaba de hacer: «me costó 38 la caja de 12») y, si está vacío, el costo del
+   * sistema por la **regla única** (`costoDeProducto()`: promedio ponderado y, si no hay, último costo).
+   * ⚠️ No se usa `precioCompra` a mano: es el bug del 19/09 (dos costos distintos en dos pantallas).
+   */
+  const costoCalculadora = React.useMemo(() => {
+    const escrito = parseFloat(form.precioCompra) || 0
+    if (escrito > 0) return escrito
+    return editando ? costoDeProducto(editando) : 0
+  }, [form.precioCompra, editando])
 
   function abrirNuevo() {
     if (!puedeCrear) return setToast('🚫 No tienes permiso para crear productos')
@@ -1043,6 +1056,19 @@ export function Inventario() {
                   📊 Ver historial de precios
                 </button>
               )}
+
+              {/* 🔑 **Calculadora de precio de venta**: el precio no se adivina — se calcula desde el
+                  costo y el margen que el negocio quiere ganar. La aritmética vive en
+                  `lib/precio-venta.ts` (pura y testeada); acá solo se dibuja y se aplica **si el usuario
+                  lo aprueba** (nunca cambia el precio por su cuenta).
+                  ⚠️ El precio del producto es **final al público**: si el producto es gravado, el margen
+                  se mide sin IGV y el precio sugerido ya lo incluye. */}
+              <CalculadoraPrecio
+                costo={costoCalculadora}
+                afectacion={form.tipoAfectacion}
+                precioActual={parseFloat(form.precioVenta) || 0}
+                onUsar={(p) => setForm((f) => ({ ...f, precioVenta: String(p) }))}
+              />
               <div>
                 <div className="flex items-center gap-2">
                   <Label>Precio Especial (promo)</Label>

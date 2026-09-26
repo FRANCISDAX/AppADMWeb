@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node --test src/lib/credito.test.ts src/lib/errores.test.ts src/lib/pagos.test.ts src/lib/descuentos.test.ts src/lib/sunat-importes.test.ts src/lib/arqueo.test.ts src/lib/contadores.test.ts src/lib/personal.test.ts src/lib/limpio.test.ts src/lib/pedidos.test.ts src/lib/consolidado.test.ts src/lib/sunat.test.ts src/lib/valorizacion.test.ts src/lib/inventario-reportes.test.ts src/lib/comprobante-comun.test.ts src/lib/comprobante-a4.test.ts src/lib/sesion-offline.test.ts src/lib/configuracion-guardado.test.ts src/lib/yape.test.ts src/lib/yape-creacion.test.ts src/lib/configuracion-en-vivo.test.ts src/lib/yape-historial.test.ts src/lib/puente.test.ts src/lib/alcance-reportes.test.ts src/lib/referencia-pago.test.ts src/lib/alertas.test.ts src/lib/sunat-auto.test.ts",
+    "test": "node --test src/lib/credito.test.ts src/lib/errores.test.ts src/lib/pagos.test.ts src/lib/descuentos.test.ts src/lib/sunat-importes.test.ts src/lib/arqueo.test.ts src/lib/contadores.test.ts src/lib/personal.test.ts src/lib/limpio.test.ts src/lib/pedidos.test.ts src/lib/consolidado.test.ts src/lib/sunat.test.ts src/lib/valorizacion.test.ts src/lib/inventario-reportes.test.ts src/lib/comprobante-comun.test.ts src/lib/comprobante-a4.test.ts src/lib/sesion-offline.test.ts src/lib/configuracion-guardado.test.ts src/lib/yape.test.ts src/lib/yape-creacion.test.ts src/lib/configuracion-en-vivo.test.ts src/lib/yape-historial.test.ts src/lib/puente.test.ts src/lib/alcance-reportes.test.ts src/lib/referencia-pago.test.ts src/lib/alertas.test.ts src/lib/sunat-auto.test.ts src/lib/precio-venta.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
