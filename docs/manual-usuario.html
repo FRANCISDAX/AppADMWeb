@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.14 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.15 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -475,12 +475,12 @@
   <table>
     <thead><tr><th>Campo</th><th>Para qué sirve</th></tr></thead>
     <tbody>
-      <tr><td><strong>Precio Compra (costo)</strong></td><td>Lo que te cuesta una unidad. <strong>Se actualiza solo con cada compra</strong> que registres (es el costo de la última compra, por unidad); si lo escribes a mano, ese valor pasa a ser el costo vigente.</td></tr>
+      <tr><td><strong>Precio Compra (costo)</strong></td><td>Lo que te cuesta una unidad. <strong>Se actualiza solo con cada compra</strong> que registres; si compras por presentación (una caja de 12), el sistema divide el precio entre el factor (ver <em>5.7</em>). Si lo escribes a mano, ese valor pasa a ser el costo vigente.</td></tr>
       <tr><td><strong>Precio Especial (promo)</strong></td><td>Precio temporal que se usa en el PDV sin cambiar el precio real. Útil para promociones de temporada.</td></tr>
       <tr><td><strong>Precio mínimo (piso)</strong></td><td>Seguridad: si el precio final baja de este monto, se bloquea la venta. excepto productos con ≤7 días a vencer.</td></tr>
       <tr><td><strong>Afectación IGV</strong></td><td>10 = Gravado, 20 = Exonerado, 30 = Inafecto. Debe coincidir con tu catálogo SUNAT.</td></tr>
       <tr><td><strong>Proveedor Preferido</strong></td><td>Vincula el producto a un proveedor para reportes de compras.</td></tr>
-      <tr><td><strong>Presentaciones</strong></td><td>Unidades de venta/compra (ej: Caja 24u, Paquete 6u). Factor de conversión incluido.</td></tr>
+      <tr><td><strong>Presentaciones</strong></td><td>Unidades de venta/compra (ej: Caja 24u, Paquete 6u). Factor de conversión incluido: al comprar, el costo se divide por el factor (ver <em>5.7</em>) y al vender el precio es por la presentación.</td></tr>
       <tr><td><strong>Es Kit / Combo</strong></td><td>Producto compuesto por otros. El stock se calcula automáticamente.</td></tr>
     </tbody>
   </table>
@@ -490,10 +490,34 @@
     <p><strong>Crear "Leche Gloria 400g":</strong> Nombre: "Leche Gloria 400g". Código: 7891234567890. Precio compra: S/ 3.20. Precio venta: S/ 4.50. Stock: 48. Stock mínimo: 10. Categoría: Lácteos. Afectación: 20 (Exonerado). Proveedor: Distribuidora Lima. Presentación: Caja 12u (factor 12, compra + venta).</p>
   </div>
 
-  <h3>4.3 Editar precio histórico</h3>
+  <h3>4.3 Cómo poner el precio de venta (calculadora)</h3>
+  <p>El precio no se adivina: se calcula desde el <strong>costo</strong> y el <strong>margen</strong> que quieres ganar. En el formulario del producto, debajo de <em>Precio Compra / Precio Venta</em>, está la <strong>Calculadora de precio de venta</strong>: te dice <strong>cuánto margen deja el precio que escribiste</strong> y te calcula el precio que hace falta para un margen objetivo.</p>
+  <table>
+    <thead><tr><th>Qué</th><th>Cómo funciona</th></tr></thead>
+    <tbody>
+      <tr><td><strong>El margen del precio actual</strong></td><td>Muestra el margen del precio que está escrito y, al lado, el mismo número <strong>sobre el costo</strong>. Un precio de S/ 4.50 con un costo de S/ 3.17 deja <strong>29,6%</strong> de margen, que es <strong>42,1%</strong> sobre el costo.</td></tr>
+      <tr><td><strong>Margen que quieres ganar</strong></td><td>Escribes el porcentaje y eliges <strong>sobre qué</strong> se mide: <em>el precio de venta</em> (margen) o <em>el costo</em> (markup).</td></tr>
+      <tr><td><strong>Precio sugerido</strong></td><td>El precio final que hace falta para ese margen. <strong>No se aplica solo</strong>: aprietas <em>Usar S/ …</em> y recién ahí se carga en el campo del precio.</td></tr>
+      <tr><td><strong>Redondeo</strong></td><td>Se puede redondear a <em>.00 / .50</em> o a <em>.00 / .50 / .90</em>. El redondeo <strong>siempre sube</strong>: el margen que pides es un piso, nunca un techo.</td></tr>
+    </tbody>
+  </table>
+  <div class="warning">
+    <div class="warning-label">⚠️ Margen y markup NO son lo mismo (la confusión que cuesta plata)</div>
+    <p>Con un costo de <strong>S/ 3.17</strong>: pedir <strong>30% sobre el precio de venta</strong> da <strong>S/ 4.52</strong>; pedir <strong>30% sobre el costo</strong> da <strong>S/ 4.12</strong>, y ese precio deja <strong>23,1%</strong> de margen, no 30%. La calculadora muestra las dos lecturas justamente para que no haya duda de cuál estás usando.</p>
+  </div>
+  <div class="tip">
+    <div class="tip-label">💡 Si el producto lleva IGV</div>
+    <p>Con afectación <strong>10 (Gravado)</strong> el margen se mide <strong>sobre el precio sin IGV</strong>, porque el IGV no es plata del negocio: un precio de S/ 4.50 con IGV deja <strong>17,0%</strong> de margen (no 29,6%) y, para ganar 30%, el precio final tiene que ser <strong>S/ 5.34</strong>. Con afectación <strong>20 (Exonerado)</strong> —el caso de esta región— el precio no lleva IGV y la cuenta es directa. El precio que sugiere la calculadora <strong>ya incluye</strong> el IGV cuando corresponde.</p>
+  </div>
+  <div class="warning">
+    <div class="warning-label">⚠️ Sin costo no hay margen</div>
+    <p>Si al producto nunca se le cargó un costo, la calculadora <strong>no inventa nada</strong>: pide el precio de compra. El costo sale del <em>Precio Compra</em> que escribas o del <strong>costo promedio</strong> del producto (ver <em>5.5</em>).</p>
+  </div>
+
+  <h3>4.4 Editar precio histórico</h3>
   <p>Al editar un producto, toca <strong>"Ver historial de precios"</strong> (ícono 📊) para ver todos los cambios de precio anteriores con fecha y usuario.</p>
 
-  <h3>4.4 Eliminar un producto</h3>
+  <h3>4.5 Eliminar un producto</h3>
   <p>Toca el ícono 🗑 en la tabla. El sistema verifica que no tenga movimientos registrados (ventas/compras). Si tiene, no permite eliminarlo.</p>
 </div>
 
@@ -561,6 +585,27 @@
   <h3>5.6 Exportar a Excel</h3>
   <p>Toca <strong>"Excel"</strong> para descargar la tabla de productos actual como archivo .xlsx con todos los campos.</p>
   <p>Para el reporte <strong>valorizado</strong> (con costos y valores) usa el botón <strong>"Valorización"</strong> de la sección anterior.</p>
+
+  <h3>5.7 Ingreso de mercadería (compra)</h3>
+  <p>Para cargar lo que compraste a un proveedor: <strong>Inventario → "Ingreso / Compra"</strong>. Se agregan los productos con su <strong>presentación</strong> (caja, paquete…), la <strong>cantidad</strong> y el <strong>precio de la presentación</strong>; el resto lo calcula el sistema.</p>
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Ejemplo real</div>
+    <p>Compras <strong>1 caja de 12 botellas a S/ 38</strong>: eliges la presentación <em>Caja (×12)</em>, cantidad 1 y costo 38. La pantalla muestra <strong>«S/ 38.00 ÷ 12 = S/ 3.17 por unidad base»</strong>, y esa división es la que queda guardada. Igual con un <strong>paquete de 6 galletas a S/ 12</strong>: S/ 2.00 por galleta.</p>
+  </div>
+  <table>
+    <thead><tr><th>Qué hace el sistema al registrar la compra</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Convierte el costo a unidad base</strong></td><td>Divide el precio de la presentación por su factor (38 ÷ 12). Ese es el costo que alimenta el margen del producto.</td></tr>
+      <tr><td><strong>Suma el stock en unidad base</strong></td><td>Una caja de 12 suma <strong>12 unidades</strong> al stock, no 1.</td></tr>
+      <tr><td><strong>Actualiza el costo promedio</strong></td><td>La compra mueve el <strong>costo promedio ponderado</strong> (ver <em>5.5</em>): el costo del producto pasa a ser el promedio entre lo que había y lo que entró.</td></tr>
+      <tr><td><strong>Deja el rastro</strong></td><td>El cambio de costo queda en el <strong>historial de precios</strong> del producto, con fecha y usuario, y la entrada queda en el <strong>kardex</strong> con la presentación y el factor.</td></tr>
+      <tr><td><strong>Si el costo va en 0</strong></td><td>Un ítem sin costo (una <strong>bonificación</strong>) <strong>no</strong> pisa el costo del producto: no hay costo que registrar.</td></tr>
+    </tbody>
+  </table>
+  <div class="tip">
+    <div class="tip-label">💡 Para que el margen sea el real</div>
+    <p>Si el flete o el empaque se pagan aparte, hoy se cargan como <strong>gasto</strong> (<em>Egresos</em>) y <strong>no</strong> entran al costo del producto: el margen que ves es el de la mercadería sola. Si quieres que entren al costo, hay que repartirlos <strong>dentro del precio de la compra</strong> de cada ítem.</p>
+  </div>
 </div>
 
 <!-- ============ 6. TURNOS DE CAJA ============ -->
@@ -1452,7 +1497,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.14</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.15</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>
