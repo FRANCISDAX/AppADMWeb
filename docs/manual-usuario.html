@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.16 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.17 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -611,6 +611,18 @@
     <div class="warning-label">⚠️ El costo es lo que PAGASTE (y el IGV de afuera es costo)</div>
     <p>Cuando compras <strong>fuera de la región</strong>, la factura viene <strong>con IGV</strong>: carga el <strong>total de la factura</strong>. Ese IGV <strong>no se recupera</strong> —las ventas son exoneradas, así que no hay crédito fiscal que usar— y por eso <strong>es parte del costo</strong>. Cuando compras <strong>en la región</strong>, la factura no lleva IGV y se carga tal cual.</p>
     <p style="margin-top:6px;">⚠️ Si en una compra de afuera cargaras el <strong>valor sin IGV</strong>, el margen del producto se vería <strong>unos 9 puntos más alto</strong> de lo real, y la valorización del inventario quedaría por debajo de lo que pagaste.</p>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">💡 Si tu empresa SÍ recupera el IGV de sus compras (empresa de Lima)</div>
+    <p>Un negocio que <strong>compra y vende gravado</strong> usa el IGV de la factura como <strong>crédito fiscal</strong>: no es un costo, es plata que se descuenta de lo que se debe declarar. Para esa empresa existe el interruptor <strong>«Recupero el IGV de mis compras»</strong> en <em>Configuración → Empresa</em> (viene <strong>apagado</strong>, que es lo correcto cuando el IGV no se recupera, como en la región).</p>
+    <p style="margin-top:6px;">Con el interruptor <strong>prendido</strong>: en el ingreso de mercadería cargas el <strong>total de la factura</strong> —igual que siempre— y el sistema guarda el <strong>costo sin IGV</strong>. La pantalla te muestra la cuenta que va a quedar: <em>«S/ 118.00 − IGV S/ 18.00 = S/ 100.00 el costo»</em>. El <strong>total pagado no cambia</strong> (es lo que salió de la caja) y el costo sin IGV es el que se usa para el <strong>margen</strong> y para valorizar el inventario.</p>
+    <p style="margin-top:6px;">⚠️ Si <strong>algún proveedor te factura sin IGV</strong> (un exonerado, un RUS, una boleta interna), toca el botón <em>«¿la factura viene sin IGV?»</em> en la línea de ese producto: así el monto se guarda tal cual y no se le inventa un IGV que la factura no tenía.</p>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">💡 El margen siempre se mide sin el IGV que no es tuyo</div>
+    <p>En un producto <strong>gravado</strong> (<em>10 · Gravado</em>), el IGV que cobras en la venta <strong>no es ganancia</strong>: hay que declararlo. Por eso el <strong>margen</strong> de la app —en <em>Estadísticas</em>, en los reportes de inventario y en el aviso <em>BAJO COSTO</em> del PDV— se mide sobre el <strong>precio sin IGV</strong>. En un producto <strong>exonerado</strong> (<em>20 · Exonerado</em>) el precio no lleva IGV y la cuenta es la misma de siempre.</p>
   </div>
 
   <div class="tip">
@@ -1509,7 +1521,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.16</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.17</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

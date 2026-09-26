@@ -95,3 +95,50 @@ describe('los reportes de inventario valorizan con el mismo costo que el Inventa
     assert.equal(r.margenGanancia, '31.5')
   })
 })
+
+// 📌 **El caso medido el 25/09/2026 en el emulador** (negocio de Lima que compra y vende con IGV):
+// precio final S/ 150 y costo neto S/ 100. La app mostraba **33%** donde el margen real era **21,3%**,
+// porque le restaba el costo a un precio que **incluye** el IGV que hay que declarar.
+const ACEITE_GRAVADO = producto({
+  id: 'AE1', nombre: 'Aceite 1L', categoria: 'ABARROTES', stock: 10,
+  costoPromedio: 100, precioVenta: 150, tipoAfectacion: '10',
+})
+
+describe('un producto GRAVADO mide el margen sobre el precio SIN IGV', () => {
+  it('utilidad: 21,3% (y no el 33% que salía restando sobre el precio con IGV)', () => {
+    const r = generarReporteUtilidad([ACEITE_GRAVADO])
+    const fila = r.productos[0]
+    assert.equal(fila.costoUnitario, 100)
+    assert.equal(fila.valorNeto, 127.12, '150 con IGV → 127.12 para el negocio')
+    assert.equal(fila.utilidadUnidad, 27.12)
+    assert.equal(Number(fila.margen.toFixed(1)), 21.3)
+    assert.equal(Number(fila.utilidadTotal.toFixed(2)), 271.2, '10 unidades')
+    assert.equal(r.totalValorCompra, '1000.00')
+    assert.equal(r.totalValorVenta, '1271.20')
+    assert.equal(r.utilidadGeneral, '271.20')
+    assert.equal(r.margenGeneral, '21.3')
+  })
+
+  it('el reporte general cuadra: valor de venta − valor de compra = ganancia potencial', () => {
+    const r = generarReporteGeneral([ACEITE_GRAVADO])
+    assert.equal(r.totalValorVenta, '1271.20')
+    assert.equal(r.gananciaPotencial, '271.20')
+    assert.equal(r.margenGanancia, '21.3')
+  })
+
+  it('el mismo producto EXONERADO no cambia nada (esta región: el IGV no existe)', () => {
+    // Mismos números, afectación '20': ahí el precio no lleva IGV y el margen es el de siempre (33,3%).
+    const r = generarReporteUtilidad([{ ...ACEITE_GRAVADO, tipoAfectacion: '20' }])
+    assert.equal(r.productos[0].valorNeto, 150)
+    assert.equal(r.productos[0].utilidadUnidad, 50)
+    assert.equal(Number(r.productos[0].margen.toFixed(1)), 33.3)
+    assert.equal(r.totalValorVenta, '1500.00')
+  })
+
+  it('un producto sin tipoAfectacion se lee como exonerado (no se le inventa IGV)', () => {
+    // Es el caso de los ítems guardados antes del 18/09/2026 y de los productos viejos del catálogo.
+    const r = generarReporteUtilidad([{ ...ACEITE_GRAVADO, tipoAfectacion: undefined }])
+    assert.equal(r.productos[0].valorNeto, 150)
+    assert.equal(r.totalValorVenta, '1500.00')
+  })
+})

@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { generarReporte } from '@/lib/inventario-reportes'
 import type { Producto } from '@/hooks/use-productos'
 
-type Ctx = { nombre?: string; categoria?: string; stock?: number; minStock?: number; precioCompra?: number; precioVenta?: number; inversionTotal?: number; costoUnitario?: number; utilidadUnidad?: number; margen?: number; utilidadTotal?: number }
+type Ctx = { nombre?: string; categoria?: string; stock?: number; minStock?: number; precioCompra?: number; precioVenta?: number; inversionTotal?: number; costoUnitario?: number; utilidadUnidad?: number; margen?: number; utilidadTotal?: number; /** El valor de venta **sin IGV**: es la base del margen en los gravados (`lib/inventario-reportes.ts`). */ valorNeto?: number }
 
 const OPCIONES = [
   { tipo: 'general', titulo: 'Reporte General', desc: 'Resumen global del inventario', icono: BarChart3, color: '#FF6B35' },
@@ -47,7 +47,7 @@ function TablaProductos({ productos, puedeVerCostos, modo }: { productos: Ctx[];
               <td className="px-3 py-2 font-semibold">{p.nombre}</td>
               <td className="px-3 py-2">{p.stock ?? 0}</td>
               {puedeVerCostos && <td className="px-3 py-2 text-right">{inver ? fmt(p.costoUnitario ?? 0) : fmt(p.precioCompra ?? 0)}</td>}
-              {puedeVerCostos && <td className="px-3 py-2 text-right">{inver ? fmt(p.precioVenta ?? 0) : fmt(p.inversionTotal ?? p.precioVenta ?? 0)}</td>}
+              {puedeVerCostos && <td className="px-3 py-2 text-right">{inver ? fmt(p.valorNeto ?? p.precioVenta ?? 0) : fmt(p.inversionTotal ?? p.precioVenta ?? 0)}</td>}
               {puedeVerCostos && inver && <td className={cn('px-3 py-2 text-right font-bold', (p.utilidadTotal ?? 0) < 0 && 'text-destructive')}>{fmt(p.utilidadTotal ?? 0)}</td>}
               {puedeVerCostos && inver && <td className="px-3 py-2 text-right text-muted-foreground">{((p.margen ?? 0)).toFixed(1)}%</td>}
             </tr>

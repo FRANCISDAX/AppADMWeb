@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import {
   IGV_RATE,
   afectacionDe,
+  afectacionGuardada,
   cantidadSunat,
   descuentoDeVenta,
   esGravado,
@@ -267,4 +268,29 @@ test('itemsParaSunat avisa con una cantidad de 3 decimales: se declara con 2', (
   assert.equal(cantidadSunat(0), 1, 'una cantidad inválida se declara como 1 (nunca 0)')
   assert.equal(cantidadSunat(-2), 1)
   assert.equal(cantidadSunat(2), 2)
+})
+
+// ── afectacionGuardada: leer la afectación de un documento ya emitido ───────────────────────────────
+//
+// 🔑 Se usa para medir **plata de ventas pasadas** (margen de Análisis y reportes de inventario). Manda
+// la afectación del ítem; si no la tiene (un pedido de antes del 18/09/2026), la del producto; y si el
+// producto ya no está, **exonerado** — nunca se supone gravado, porque eso le restaría al margen un 18%
+// que nadie declaró.
+
+test('afectacionGuardada: manda la del ítem (es lo que salió en el comprobante)', () => {
+  assert.equal(afectacionGuardada({ tipoAfectacion: '10' }, { tipoAfectacion: '20' }), '10')
+  assert.equal(afectacionGuardada({ tipoAfectacionEfectivo: '30', tipoAfectacion: '10' }), '30')
+  assert.equal(afectacionGuardada({ tipoAfectacion: '  ' }, { tipoAfectacion: '10' }), '10', 'un valor en blanco no manda')
+})
+
+test('afectacionGuardada: sin dato en el ítem usa la del producto del catálogo', () => {
+  assert.equal(afectacionGuardada({ cantidad: 2 }, { tipoAfectacion: '10' }), '10')
+  assert.equal(afectacionGuardada(null, { tipoAfectacion: '10' }), '10')
+})
+
+test('afectacionGuardada: sin ítem ni producto NO se supone gravado', () => {
+  assert.equal(afectacionGuardada({ cantidad: 2 }), '20')
+  assert.equal(afectacionGuardada({ cantidad: 2 }, null), '20')
+  assert.equal(afectacionGuardada(undefined, {}), '20')
+  assert.equal(afectacionGuardada({ tipoAfectacion: '10' }), '10', 'si lo trae, se respeta')
 })

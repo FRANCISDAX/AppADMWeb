@@ -1,5 +1,7 @@
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { costoDeProducto, valorDeStock } from '@/lib/valorizacion'
+import { margenDePrecio } from '@/lib/precio-venta'
+import { afectacionGuardada } from '@/lib/sunat-importes'
 import { COL } from '@/constants/colecciones'
 import { CATEGORIA_SIN_ASIGNAR } from '@/lib/categorias'
 import { db } from '@/lib/firebase'
@@ -7,7 +9,7 @@ import { db } from '@/lib/firebase'
 const TIPOS_VENTA = ['NV', 'BOLETA', 'FACTURA']
 const fmt2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
-type Item = { id?: string; nombre?: string; cantidad?: number; precioVenta?: number; subtotal?: number }
+type Item = { id?: string; nombre?: string; cantidad?: number; precioVenta?: number; subtotal?: number; tipoAfectacion?: string }
 type VentasDoc = { id: string; tipoDoc?: string; serieNumero?: string; fecha?: string; createdAt?: string; estado?: string; consolidado?: boolean; venta?: { total?: number; tipoPago?: string; cobrado?: number; cliente_dni?: string; cliente_nombre?: string; items?: Item[]; pagos?: { tipo?: string; monto?: number }[] } }
 
 export type AnalisisMes = {
@@ -107,19 +109,26 @@ export async function obtenerAnalisisMes(anio: number, mes: number): Promise<Ana
     // Items → margen / top productos / categoría
     for (const it of ven.items || []) {
       const pid = String(it.id || '')
-      const cat = (it as any).categoria || productos.get(pid)?.categoria || CATEGORIA_SIN_ASIGNAR
-      const nombre = it.nombre || productos.get(pid)?.nombre || pid
-      const codigo = productos.get(pid)?.codigo || (pid as string)
+      const prod = productos.get(pid)
+      const cat = (it as any).categoria || prod?.categoria || CATEGORIA_SIN_ASIGNAR
+      const nombre = it.nombre || prod?.nombre || pid
+      const codigo = prod?.codigo || (pid as string)
       const cant = Number(it.cantidad) || 0
       const precioVenta = Number(it.precioVenta) || 0
-      const ingresoT = fmt2(precioVenta * cant)
+      // 🔑 **El margen se mide sobre la base NETA** (`lib/precio-venta.ts` → `margenDePrecio`): si el
+      // ítem es **gravado**, el IGV que se cobró no es plata del negocio y el costo ya está en esa
+      // misma base (el ingreso de mercadería lo guarda sin IGV cuando el negocio recupera el crédito).
+      // 📌 Antes se restaba `costo` de un precio **con IGV**, y con eso una venta de S/ 150 con costo
+      // neto de S/ 100 daba **33%** donde el margen real era **21,3%** (medido el 25/09/2026). Con un
+      // producto **exonerado** (`'20'`, el caso de esta región) el neto es el precio y **no cambia nada**.
+      const m = margenDePrecio(precioVenta, costoDeProducto(prod), afectacionGuardada(it, prod))
+      const ingresoT = fmt2(m.neto * cant)
       if (!porProd[pid]) porProd[pid] = { nombre, codigo, cantidad: 0, ingreso: 0, categoria: cat }
       porProd[pid].cantidad += cant
       porProd[pid].ingreso += ingresoT
       if (!cat) porCat[cat] = 0
       porCat[cat] = (porCat[cat] || 0) + ingresoT
-      const costo = costoDeProducto(productos.get(pid))
-      margenBruto += fmt2((precioVenta - costo) * cant)
+      margenBruto += fmt2(m.margen * cant)
     }
   }
 
@@ -127,6 +136,9 @@ export async function obtenerAnalisisMes(anio: number, mes: number): Promise<Ana
   const porTipoDocArr = Object.entries(porTipoDoc).map(([tipo, o]) => ({ tipo, ...o })).sort((a, b) => b.total - a.total)
 
   // Productos: margen y margen%
+  // 🔑 El `ingreso` de estas dos tablas es el **neto de IGV** (lo que le queda al negocio), para que la
+  // resta que se muestra en pantalla —ingreso − costo = margen— sea la real. Con productos exonerados
+  // (`'20'`) el neto es el precio cobrado, así que la tabla muestra exactamente lo de antes.
   const allProductos = Object.entries(porProd)
     .map(([pid, o]) => {
       const costo = costoDeProducto(productos.get(pid)) * o.cantidad

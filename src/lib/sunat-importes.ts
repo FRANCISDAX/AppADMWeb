@@ -59,6 +59,26 @@ export function afectacionDe(
   return opts?.regionExonerada ? AFECTACION_EXONERADO : AFECTACION_GRAVADO
 }
 
+/**
+ * **La afectación con la que se declaró una venta ya guardada** (para leer documentos, no para crearlos).
+ *
+ * 🔑 Cadena de respaldo: la del **ítem** → la del **producto** del catálogo → **exonerado** (`'20'`).
+ * ⚠️ Acá **no** se usa `config.regionExonerada` (ese es el default de lo que se está **creando**):
+ * aplicarlo a un documento histórico le inventaría un IGV que nunca se declaró. Un ítem sin
+ * `tipoAfectacion` es un **pedido de antes del 18/09/2026** (el bug de `enviarACaja`), así que lo que
+ * vale es la afectación del producto; y si el producto ya no está, **no se supone gravado**: suponerlo
+ * restaría un 18% que nadie declaró.
+ */
+export function afectacionGuardada(
+  item?: { tipoAfectacion?: unknown; tipoAfectacionEfectivo?: unknown; [k: string]: unknown } | null,
+  producto?: { tipoAfectacion?: unknown; [k: string]: unknown } | null,
+): string {
+  const propia = String(item?.tipoAfectacionEfectivo || item?.tipoAfectacion || '').trim()
+  if (propia) return propia
+  const delProducto = String(producto?.tipoAfectacion || '').trim()
+  return delProducto || AFECTACION_EXONERADO
+}
+
 /** Cantidad de unidades de la línea (el web la guarda en `cantidad`). */
 export function cantidadDe(item: ItemVenta): number {
   const n = Number(item?.cantidad ?? item?.quantity ?? 0)

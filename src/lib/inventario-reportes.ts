@@ -1,5 +1,8 @@
 import type { Producto } from '@/hooks/use-productos'
+import { redondear2 } from './dinero.ts'
 import { costoDeProducto } from './valorizacion.ts'
+import { margenDePrecio, precioSinIgv } from './precio-venta.ts'
+import { afectacionGuardada } from './sunat-importes.ts'
 
 // Port de services/inventario.js → generarReporte de la app RN (misma lógica).
 //
@@ -8,6 +11,19 @@ import { costoDeProducto } from './valorizacion.ts'
 // calculan la utilidad con un costo distinto al del Inventario y al del kardex. `precioCompra` es el
 // **último costo**, que sirve para precargar una compra o comparar precios entre proveedores, no para
 // valorizar plata. ⚠️ La RN tiene el mismo defecto: hay que portarlo cuando se retome la móvil.
+//
+// 🔑 **Y el valor de venta se mide SIN IGV cuando el producto es gravado** (`lib/precio-venta.ts`): el
+// IGV que se cobra no es plata del negocio, así que restarle el costo a un precio con IGV infla la
+// ganancia. 📌 Medido el 25/09/2026 (negocio de Lima, precio 150 y costo neto 100): el reporte daba
+// **33%** donde el margen real era **21,3%**. Con un producto **exonerado** (`'20'`, el caso de esta
+// región) el neto es el precio cobrado y **no cambia ningún número** de estos reportes.
+
+/**
+ * **El valor de venta de UNA unidad, en la base del negocio**: el precio **sin IGV** si el producto es
+ * gravado (el IGV que se cobra no es plata del negocio) y el precio tal cual si es exonerado.
+ * Se redondea por unidad para que la columna que se ve en pantalla y el total digan lo mismo.
+ */
+const valorUnitarioNeto = (p: Producto) => redondear2(precioSinIgv(p.precioVenta || 0, afectacionGuardada(p)))
 
 export function generarReporteStockGeneral(productos: Producto[]) {
   const ordenados = [...productos].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
@@ -73,7 +89,10 @@ export function generarReportePorCategoria(productos: Producto[]) {
 
 export function generarReporteGeneral(productos: Producto[]) {
   const totalValorCompra = productos.reduce((s, p) => s + costoDeProducto(p) * (p.stock || 0), 0)
-  const totalValorVenta = productos.reduce((s, p) => s + (p.precioVenta || 0) * (p.stock || 0), 0)
+  // `totalValorVenta` es lo que **queda para el negocio** (sin IGV en los gravados): con el precio tal
+  // como está en la etiqueta, la resta «venta − compra» le sumaría a la ganancia un IGV que hay que
+  // declarar. El margen tiene que cuadrar con esa resta, así que las dos puntas van en la misma base.
+  const totalValorVenta = productos.reduce((s, p) => s + valorUnitarioNeto(p) * (p.stock || 0), 0)
   const gananciaPotencial = totalValorVenta - totalValorCompra
   return {
     titulo: '📈 REPORTE GENERAL DE INVENTARIO',
@@ -93,16 +112,17 @@ export function generarReporteUtilidad(productos: Producto[]) {
   const conUtilidad = productos
     .map((p) => {
       const costo = costoDeProducto(p)
-      const venta = p.precioVenta || 0
       const stock = p.stock || 0
-      const utilidadUnidad = venta - costo
-      const margen = venta > 0 ? (utilidadUnidad / venta) * 100 : 0
-      return { ...p, costoUnitario: costo, utilidadUnidad, margen, utilidadTotal: utilidadUnidad * stock }
+      // 🔑 La regla única del margen (`lib/precio-venta.ts`): si el producto es **gravado**, el margen se
+      // mide sobre el precio **sin IGV** (y `valorNeto` es esa base, para que la tabla cuadre); si es
+      // exonerado es el precio tal cual, exactamente como antes.
+      const m = margenDePrecio(p.precioVenta || 0, costo, afectacionGuardada(p))
+      return { ...p, costoUnitario: costo, valorNeto: m.neto, utilidadUnidad: m.margen, margen: m.margenPct, utilidadTotal: m.margen * stock }
     })
     .sort((a, b) => (b.utilidadTotal || 0) - (a.utilidadTotal || 0))
 
   const totalValorCompra = productos.reduce((s, p) => s + costoDeProducto(p) * (p.stock || 0), 0)
-  const totalValorVenta = productos.reduce((s, p) => s + (p.precioVenta || 0) * (p.stock || 0), 0)
+  const totalValorVenta = productos.reduce((s, p) => s + valorUnitarioNeto(p) * (p.stock || 0), 0)
   const utilidadGeneral = totalValorVenta - totalValorCompra
   const margenGeneral = totalValorVenta > 0 ? (utilidadGeneral / totalValorVenta) * 100 : 0
 

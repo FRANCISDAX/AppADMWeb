@@ -27,6 +27,7 @@
  */
 import { redondear2 } from './dinero.ts'
 import { IGV_RATE, esGravado } from './sunat-importes.ts'
+import { redondearCosto } from './valorizacion.ts'
 
 /** Sobre qué se mide el porcentaje: el costo (markup) o el precio de venta (margen). */
 export type BaseMargen = 'precio' | 'costo'
@@ -95,6 +96,41 @@ export function margenDePrecio(precioFinal: number, costo: number, afectacion?: 
     margenPct: neto > 0 ? (margen / neto) * 100 : 0,
     markupPct: c > 0 ? (margen / c) * 100 : 0,
   }
+}
+
+/**
+ * **El costo que se guarda de una compra**: al monto que se cargó se le **separa el IGV** cuando esa
+ * plata es un **crédito fiscal** (el negocio lo recupera) y el ítem es **gravado**.
+ *
+ * 🔑 **Por qué existe.** El precio de venta es **final al público** (lleva el IGV adentro) y el margen
+ * se mide sobre el **neto**, así que el costo tiene que estar en la misma base:
+ *
+ * | Costo cargado | Costo guardado | Margen que sale |
+ * |---|---|---|
+ * | S/ 118 (total de la factura) con IGV recuperable | S/ 100 | correcto (21,3% con un precio de 150) |
+ * | S/ 118 sin separar | S/ 118 | correcto **si el IGV no es recuperable** (ahí el IGV es costo) |
+ *
+ * 📌 **Medido el 25/09/2026** (emulador, negocio de Lima): con el costo neto cargado a mano y los
+ * reportes midiendo sobre el precio con IGV, la app mostraba **33%** donde el negocio ganaba **21,3%**;
+ * y cargando el total de la factura, el inventario quedaba **18% arriba**. Las dos cosas se arreglan
+ * guardando el costo en la base correcta y midiendo el margen en esa misma base.
+ *
+ * ⚠️ **El ítem tiene que ser gravado**: un producto exonerado (`'20'`) no lleva IGV en la factura, así
+ * que separarlo lo hundiría 18% — es el caso de esta región, y por eso acá **no cambia nada**.
+ * ⚠️ **Y el proveedor tiene que haber facturado con IGV**: si la factura viene sin IGV (un proveedor
+ * exonerado, un RUS, una boleta interna), quien carga la compra lo dice con `yaSinIgv` y el monto se
+ * guarda tal cual.
+ */
+export function costoDeCompra(
+  montoCargado: number,
+  opts: { igvRecuperable?: boolean; afectacion?: string; yaSinIgv?: boolean } = {},
+): { costo: number; igvSeparado: number; separaIgv: boolean } {
+  const monto = Number(montoCargado) || 0
+  const separaIgv = Boolean(opts.igvRecuperable) && esGravado(String(opts.afectacion ?? '')) && !opts.yaSinIgv
+  if (!separaIgv) return { costo: monto, igvSeparado: 0, separaIgv: false }
+  const costo = monto / (1 + IGV_RATE)
+  // El costo se guarda con la precisión del inventario (4 decimales): 118 ÷ 1.18 da 100.00000000000001.
+  return { costo: redondearCosto(costo), igvSeparado: redondear2(monto - costo), separaIgv: true }
 }
 
 /**

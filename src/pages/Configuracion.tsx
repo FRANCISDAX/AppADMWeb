@@ -310,6 +310,34 @@ export function Configuracion() {
               </span>
             </button>
 
+            {/* 🔑 **El IGV de las compras como crédito fiscal** (empresa que compra y vende gravado). Es
+                lo que decide con qué costo se valoriza el inventario y contra qué se mide el margen: con
+                esto prendido el ingreso de mercadería pide el **total de la factura** y guarda el neto
+                (`lib/precio-venta.ts` → `costoDeCompra`). Apagado, el IGV es costo (lo que ya hacía). */}
+            <button
+              onClick={() => set('igvRecuperable', !config.igvRecuperable)}
+              className={cn(
+                'flex w-full items-start justify-between gap-3 rounded-lg border p-3 text-left text-sm cursor-pointer',
+                config.igvRecuperable ? 'border-emerald-300 bg-emerald-50' : 'border-input'
+              )}
+            >
+              <span>
+                <span className={cn('font-medium', config.igvRecuperable && 'text-emerald-700')}>
+                  Recupero el IGV de mis compras
+                </span>
+                <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                  Si tu empresa <b>compra y vende gravado</b> (Lima), el IGV de la factura es un
+                  crédito fiscal: al ingresar mercadería se escribe el <b>total de la factura</b> y el
+                  sistema guarda el costo <b>sin IGV</b>, que es la base del margen y de la
+                  valorización. Dejalo apagado si el IGV <b>no</b> se recupera (región exonerada): ahí
+                  el IGV es parte del costo.
+                </span>
+              </span>
+              <span className={cn('shrink-0 rounded-md px-2.5 py-1 text-xs font-bold text-white', config.igvRecuperable ? 'bg-emerald-600' : 'bg-slate-400')}>
+                {config.igvRecuperable ? 'SÍ' : 'NO'}
+              </span>
+            </button>
+
             <button
               onClick={() => set('conteoCiego', !config.conteoCiego)}
               className={cn(

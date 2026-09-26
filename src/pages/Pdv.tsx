@@ -56,6 +56,7 @@ import { abrirPDFComprobanteA4, compartirPDFComprobanteA4 } from '@/lib/comproba
 import { cn } from '@/lib/utils'
 import { fmt, useToast, estadoVencimiento } from '@/lib/ui-utils'
 import { AFECTACION_EXONERADO } from '@/lib/sunat-importes'
+import { precioSinIgv } from '@/lib/precio-venta'
 import { redondear2 } from '@/lib/dinero'
 import { costoDeProducto } from '@/lib/valorizacion'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
@@ -984,8 +985,11 @@ export function Pdv() {
       // ¿Debajo del costo? Se compara contra el **costo vigente del producto**
       // (`costoDeProducto`: promedio ponderado con respaldo en el último costo), la misma regla con
       // la que se valoriza el inventario: si no, el aviso compara contra un costo que puede estar viejo.
+      // 🔑 **Y con el precio SIN IGV**: el IGV que se cobra no es plata del negocio, así que un producto
+      // gravado que deja 1 sol no está «sobre el costo» solo porque la etiqueta diga más
+      // (`lib/precio-venta.ts` → `precioSinIgv`). Un producto exonerado (`'20'`) compara igual que antes.
       const costo = costoDeProducto(p)
-      if (costo > 0 && precioItem < costo) {
+      if (costo > 0 && precioSinIgv(precioItem, p.tipoAfectacion) < costo) {
         productosDebajoCosto.push(p.nombre ?? id)
       }
 
@@ -1830,14 +1834,15 @@ export function Pdv() {
                   const presActual = presSel ? presVenta.find((pr) => pr.id === presSel) : null
                   const factorActual = presActual?.factor ?? 1
                   // El badge BAJO COSTO usa el **costo vigente** (promedio ponderado), igual que el
-                  // aviso del cobro y que la valorización del inventario.
+                  // aviso del cobro y que la valorización del inventario, y compara contra el precio
+                  // **sin IGV** (el IGV cobrado no es del negocio: ver `precioSinIgv`).
                   const costoActual = costoDeProducto(p)
                   return (
                   <div key={p.id} className="flex items-center gap-2 py-2.5">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="truncate text-[13px] font-semibold">{p.nombre}</span>
-                        {costoActual > 0 && precioFinal(p) * factorActual < costoActual && (
+                        {costoActual > 0 && precioSinIgv(precioFinal(p) * factorActual, p.tipoAfectacion) < costoActual && (
                           <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-600">BAJO COSTO</span>
                         )}
                         {p.fechaVencimiento && (() => {

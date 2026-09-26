@@ -16,7 +16,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { margenDePrecio, precioDesdeMargen, precioFinalConIgv, precioSinIgv, redondearPrecio } from './precio-venta.ts'
+import { costoDeCompra, margenDePrecio, precioDesdeMargen, precioFinalConIgv, precioSinIgv, redondearPrecio } from './precio-venta.ts'
 
 /** El costo del caso real del usuario: una caja de 12 a S/ 38. */
 const COSTO_CAJA = 38 / 12 // 3.1666…
@@ -77,6 +77,57 @@ describe('margenDePrecio (qué deja el precio que ya se escribió)', () => {
     const sinCosto = margenDePrecio(4.5, 0, '20')
     assert.equal(sinCosto.markupPct, 0, 'sin costo no hay markup que calcular')
     assert.equal(sinCosto.margenPct, 100)
+  })
+})
+
+describe('costoDeCompra (el costo con el que se valoriza y se mide el margen)', () => {
+  it('con IGV recuperable y producto gravado, del total de la factura sale el neto', () => {
+    // La factura de Lima dice 118 (100 + 18%): lo que vale la mercadería son 100.
+    const r = costoDeCompra(118, { igvRecuperable: true, afectacion: '10' })
+    assert.equal(r.separaIgv, true)
+    assert.equal(r.costo, 100)
+    assert.equal(r.igvSeparado, 18)
+  })
+
+  it('📌 el caso medido: guardar el neto es lo que hace que el margen sea el real', () => {
+    // Precio de venta 150 (final, con IGV) y factura de 118 → 21,3% de margen, no 33%.
+    const { costo } = costoDeCompra(118, { igvRecuperable: true, afectacion: '10' })
+    const m = margenDePrecio(150, costo, '10')
+    assert.equal(Number(m.margenPct.toFixed(1)), 21.3)
+    assert.equal(m.margen, 27.12)
+  })
+
+  it('apagado (el IGV es COSTO) el monto se guarda tal cual: es el caso de esta región', () => {
+    const r = costoDeCompra(118, { igvRecuperable: false, afectacion: '10' })
+    assert.equal(r.separaIgv, false)
+    assert.equal(r.costo, 118, 'no se toca lo que se escribió')
+    assert.equal(r.igvSeparado, 0)
+  })
+
+  it('un producto exonerado nunca separa IGV, ni con el interruptor prendido', () => {
+    // Un exonerado no lleva IGV en la factura: dividirlo hundiría el costo 18%.
+    const r = costoDeCompra(118, { igvRecuperable: true, afectacion: '20' })
+    assert.equal(r.costo, 118)
+    assert.equal(r.separaIgv, false)
+    // Y sin afectación tampoco: no se supone gravado un producto que no lo dice.
+    assert.equal(costoDeCompra(118, { igvRecuperable: true }).costo, 118)
+  })
+
+  it('si el proveedor facturó sin IGV, el monto se guarda tal cual', () => {
+    const r = costoDeCompra(118, { igvRecuperable: true, afectacion: '10', yaSinIgv: true })
+    assert.equal(r.separaIgv, false)
+    assert.equal(r.costo, 118)
+  })
+
+  it('el costo neto queda con la precisión del inventario (118 ÷ 1.18 no da 100.00000000000001)', () => {
+    assert.equal(costoDeCompra(118, { igvRecuperable: true, afectacion: '10' }).costo, 100)
+    assert.equal(costoDeCompra(38, { igvRecuperable: true, afectacion: '10' }).costo, 32.2034)
+  })
+
+  it('sin monto no inventa nada', () => {
+    const r = costoDeCompra(0, { igvRecuperable: true, afectacion: '10' })
+    assert.equal(r.costo, 0)
+    assert.equal(r.igvSeparado, 0)
   })
 })
 

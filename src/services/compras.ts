@@ -4,10 +4,11 @@ import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { efectivoEsperadoDe } from '@/lib/arqueo'
 import { costoPorUnidadBase } from '@/lib/valorizacion'
+import { costoDeCompra } from '@/lib/precio-venta'
 import { valorizacionDeMovimiento } from '@/services/kardex'
 import { registrarCambioPrecio } from '@/services/historial-precios'
 
-type ItemCompra = { productoId: string; productoNombre: string; codigo?: string; cantidad: number; costoUnitario: number; factor?: number; presentacionId?: string; presentacionNombre?: string }
+type ItemCompra = { productoId: string; productoNombre: string; codigo?: string; cantidad: number; costoUnitario: number; factor?: number; presentacionId?: string; presentacionNombre?: string; /** El monto cargado **ya viene sin IGV** (el proveedor facturó sin IGV): no se separa nada. */ yaSinIgv?: boolean }
 
 /** Lo que devuelve la compra por cada producto, para poder registrar el cambio de costo. */
 export type ResultadoCompra = {
@@ -30,6 +31,7 @@ export async function registrarCompra({
   usuario = 'sistema',
   tipoPago = 'Transferencia',
   turnoId,
+  igvRecuperable = false,
 }: {
   items: ItemCompra[]
   proveedor: string
@@ -39,6 +41,8 @@ export async function registrarCompra({
   usuario?: string
   tipoPago?: 'caja' | 'Transferencia'
   turnoId?: string | null
+  /** `config.igvRecuperable`: ¿el IGV de esta compra es crédito fiscal? Ver `costoDeCompra`. */
+  igvRecuperable?: boolean
 }): Promise<{ success: boolean; error?: string; compraId?: string; totalPagado?: number; resultados?: ResultadoCompra[] }> {
   const lista = (items || []).filter((i) => i && i.cantidad > 0)
   if (lista.length === 0) return { success: false, error: 'Selecciona al menos un producto.' }
@@ -92,25 +96,35 @@ export async function registrarCompra({
         // se lleva **por unidad base**: por eso se divide por el factor de conversión. La división vive
         // en **`costoPorUnidadBase`** (puro) para que sea exactamente la misma que muestra el modal.
         const costoBase = costoPorUnidadBase(item.costoUnitario, factor)
+        // 🔑 **Y acá se separa el IGV, si esa plata es un crédito fiscal** (`costoDeCompra`, la regla
+        // única que el modal usa para mostrar el mismo número). ⚠️ Se decide con la afectación con la
+        // que se **vende** el producto (un exonerado no lleva IGV en la factura) y con lo que dijo
+        // quien cargó la compra (`yaSinIgv`). El **total pagado no cambia**: lo que se pagó es lo que
+        // salió de la caja; lo que cambia es el **costo** con el que se valoriza y se mide el margen.
+        const { costo, igvSeparado, separaIgv } = costoDeCompra(costoBase, {
+          igvRecuperable,
+          afectacion: String(data.tipoAfectacion || ''),
+          yaSinIgv: item.yaSinIgv,
+        })
         const valorizado = valorizacionDeMovimiento({
           tipoMovimiento: 'compra',
           cantidad: cantidadBase,
           stockAntes: stockActual,
           stockNuevo: nuevoStock,
           producto: data as { costoPromedio?: number | null; precioCompra?: number | null },
-          costoEntrada: costoBase,
+          costoEntrada: costo,
         })
         tx.update(prodRef, {
           stock: nuevoStock,
           ...valorizado.camposProducto,
-          // 🔑 **La compra también deja actualizado el último costo del producto.** `costoBase` es el
-          // costo por **unidad base** (el de la presentación dividido por su factor), que es la unidad
-          // en la que se guarda `precioCompra`. Antes **ninguna compra lo escribía** —solo el
-          // formulario manual— así que el campo quedaba viejo y lo mostraban desactualizado la columna
-          // «Precio Compra» del Inventario, la precarga del modal de compra y el respaldo de
-          // `costoDeProducto()`. ⚠️ Un ítem **sin costo** (una bonificación) **no** lo pisa: no hay
-          // costo que registrar, y pisarlo con 0 haría que el producto valga 0.
-          ...(costoBase > 0 ? { precioCompra: costoBase } : {}),
+          // 🔑 **La compra también deja actualizado el último costo del producto.** Es el costo por
+          // **unidad base** (el de la presentación dividido por su factor, y sin IGV si es crédito
+          // fiscal), que es la unidad en la que se guarda `precioCompra`. Antes **ninguna compra lo
+          // escribía** —solo el formulario manual— así que el campo quedaba viejo y lo mostraban
+          // desactualizado la columna «Precio Compra» del Inventario, la precarga del modal de compra y
+          // el respaldo de `costoDeProducto()`. ⚠️ Un ítem **sin costo** (una bonificación) **no** lo
+          // pisa: no hay costo que registrar, y pisarlo con 0 haría que el producto valga 0.
+          ...(costo > 0 ? { precioCompra: costo } : {}),
           ultimaActualizacion: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })
@@ -136,6 +150,10 @@ export async function registrarCompra({
             proveedorDireccion: proveedorDireccion || '',
             totalPagado,
             precioUnitario: item.costoUnitario,
+            // ⚠️ `precioUnitario` es lo que dice la **factura** (con IGV si vino con IGV): es la
+            // referencia para cuadrar contra el papel. El costo con el que se valorizó está en
+            // `costoUnitario` (arriba, `camposMovimiento`), que es el neto cuando se separó el IGV.
+            ...(separaIgv ? { igvSeparado, costoConIgv: item.costoUnitario } : {}),
             cantidadPresentacion: item.cantidad,
             factorConversion: factor,
             presentacionId: item.presentacionId || 'unidad',
@@ -151,7 +169,7 @@ export async function registrarCompra({
           stockAnterior: stockActual,
           nuevoStock,
           precioCompraAnterior: Number(data.precioCompra) || 0,
-          precioCompraNuevo: costoBase > 0 ? costoBase : Number(data.precioCompra) || 0,
+          precioCompraNuevo: costo > 0 ? costo : Number(data.precioCompra) || 0,
         })
       }
 

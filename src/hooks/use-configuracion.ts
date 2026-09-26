@@ -58,6 +58,7 @@ export function useConfiguracion() {
           ...config,
           topeBoletaDni: Number(config.topeBoletaDni) > 0 ? Number(config.topeBoletaDni) : 700,
           regionExonerada: Boolean(config.regionExonerada),
+          igvRecuperable: Boolean(config.igvRecuperable),
           updatedAt: new Date().toISOString(),
         },
         { merge: true }

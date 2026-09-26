@@ -11,6 +11,32 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 46 — La base de la plata: el IGV del costo y el «modo empresa gravada»)
+
+**Objective**: responder con números si **el app funcionaría bien para una empresa de Lima que compra y vende con IGV** —y arreglar lo que no— sin tocar nada de lo que hoy usa el negocio de la región.
+
+**Etapa 1 · medir antes de tocar (emulador, app real, sin cambios de código)**
+- Se sembró un negocio de Lima (`regionExonerada: false`, productos afectación `'10'`), precio final **S/ 150**, **costo neto real S/ 100** (la factura con IGV dice S/ 118) y se manejó la UI: login → compra → venta → ticket → Estadísticas.
+- ✅ **Lo que ya estaba bien**: el comprobante. El ticket que genera la app declaró **Op. Gravadas S/ 127.12 + I.G.V. S/ 22.88 = TOTAL S/ 150.00**. La venta gravada, el correlativo y el PDF no necesitaban nada.
+- ❌ **Costo de la compra**: cargando el total de la factura (118) el costo guardado fue **118** (la app no pregunta si el IGV es recuperable) ⇒ si el negocio recupera el crédito, el inventario queda **+18%**.
+- ❌ **Margen**: con el costo **neto** 100 cargado a mano, la tabla daba **33%** (S/ 50.00 de utilidad) donde el margen real era **21,3%** (S/ 27.12): comparaba un precio **con** IGV contra un costo **sin** IGV. Con el costo de la factura el % coincidía **por casualidad** (21%) pero el inventario quedaba inflado.
+- ❌ **Aviso BAJO COSTO**: un producto a **S/ 110** con costo 100 (sin IGV el precio es **93.22**) **no avisaba** que se vendía a pérdida (la comparación era 110 contra 100).
+- 📌 **La conclusión que ordenó el trabajo**: la mezcla de bases estaba en **tres** lugares (Análisis, reportes de utilidad y el aviso del PDV) y `lib/precio-venta.ts` **ya tenía la regla correcta** desde la calculadora de precios.
+
+**Etapa 2 · lo implementado**
+- 🔑 **Los tres lugares se miden sobre la base neta** (`margenDePrecio` / `precioSinIgv`): `services/analisis.ts` (margen bruto y utilidad por producto), `lib/inventario-reportes.ts` (reportes general y de utilidad; el `Ingreso`/`Valor` que se muestra es **sin IGV**) y `components/ModalReportes.tsx` (la fila muestra el valor neto para que la resta cuadre con la utilidad) y el PDV (**badge del carrito** y **confirmación antes de cobrar**).
+- 🔑 **`afectacionGuardada()`** (`lib/sunat-importes.ts`): para leer una venta **ya guardada** la afectación sale del **ítem** → del **producto** → y si no hay dato, **exonerado**. ⚠️ **Nunca** de `config.regionExonerada`: aplicarlo a un documento histórico le inventaría un IGV que nadie declaró (un ítem sin `tipoAfectacion` es un pedido de antes del 18/09/2026).
+- 🔑 **`config.igvRecuperable`** (Configuración → Empresa, **apagado por defecto** = el IGV es costo, que es la realidad de esta región) y **`costoDeCompra()`** (`lib/precio-venta.ts`): con el interruptor prendido y el ítem **gravado**, `registrarCompra` guarda el costo **sin IGV**. El modal de compra muestra **la misma cuenta** que va a quedar (*«S/ 118.00 − IGV S/ 18.00 = S/ 100.00 el costo»*) y cada ítem se puede marcar *«¿la factura viene sin IGV?»* (proveedor exonerado/RUS, factura sin IGV).
+- ⚠️ **El total pagado NO cambia** (es lo que salió de la caja) y el movimiento del kardex guarda **las dos referencias**: `costoUnitario` (neto, con el que se valoriza) y `precioUnitario` + `igvSeparado` (lo que dice la factura).
+
+**Work State**: Completed (sin desplegar). **495/495 tests** (20 nuevos), `npx tsc -b` ✓, lint **80/0** (baseline), `build` ✓. 🛡️ Guarda nueva **`lib/margen-base-neta.test.ts`**: lee los archivos y falla si alguien vuelve a restar el costo de un precio con IGV, si el PDV deja de comparar contra el precio sin IGV, si el modal y el servicio dejan de compartir la regla, o si el interruptor dejara de nacer **apagado**.
+- 🔬 **Verificado con la app real (emulador + Chrome, `run-igv.mjs`): TODO OK, 12/12 comprobaciones**. **Fase 1 (región, tal como está hoy)**: exonerado comprado a 118 → costo **118** y margen **21%** (32.00 sobre 150.00) = **igual que siempre**; el modal **ni menciona el IGV**; un gravado con el interruptor apagado guarda **118** (el IGV es costo). **Fase 2 (los dos interruptores puestos desde Configuración → Empresa, con «Guardar» y leído en Firestore)**: la compra del total de la factura guardó **S/ 100.00** y el margen del gravado pasó a **21% (27.12)** = **el real**; cargando una factura **sin IGV** el costo quedó **118** (no se le inventa un IGV). Además el aviso **BAJO COSTO** ahora sale con 110 contra un costo de 100 (antes no salía).
+- 📌 Lo que **no** cambia para el negocio de la región: los 40 productos son `'20'` y `precioSinIgv` los devuelve igual ⇒ **ningún número de ningún reporte se mueve** (los tests de `inventario-reportes` con productos exonerados siguen dando los mismos valores que antes).
+
+**Next Move**: si el usuario dice «procede», desplegar (commit → `npm run build` → verificar el `dist` → `firebase deploy --only hosting`) y, para un cliente de Lima, poner los **dos** interruptores (región **NO** + recupero el IGV) **antes** de cargar compras. ⚠️ Falta portar los tres defectos a la **RN** (`AppAdm`): margen sobre el precio con IGV, aviso BAJO COSTO y costo de compra sin separar el IGV. Y sigue pendiente que el cliente de Lima **cargue sus costos de nuevo** si venía usando este app (los costos ya guardados con IGV no se convierten solos).
+
+**Relevant Files**: `src/lib/precio-venta.ts` (+ `costoDeCompra`), `src/lib/sunat-importes.ts` (+ `afectacionGuardada`), `src/lib/inventario-reportes.ts` (+ `valorUnitarioNeto`), `src/services/analisis.ts`, `src/services/compras.ts`, `src/components/ModalCompra.tsx`, `src/components/ModalReportes.tsx`, `src/pages/Pdv.tsx`, `src/pages/Configuracion.tsx`, `src/constants/tributario.ts`, `src/hooks/use-configuracion.ts`, `src/lib/precio-venta.test.ts`, `src/lib/sunat-importes.test.ts`, `src/lib/inventario-reportes.test.ts`, `src/lib/margen-base-neta.test.ts` (nuevo), `package.json`.
+
 ### (2026-09 · 45 — El choque entre cajas: reintento automático y mensaje en castellano)
 
 **Objective**: que cuando **dos cajas tocan el mismo documento a la vez** (lo típico: vender el mismo producto en las tres cajas) el sistema **reintente solo** y, si no alcanza, le explique al cajero qué pasó en castellano — en vez del *«aborted: Transaction lock timeout»* crudo que llegaba a la pantalla.

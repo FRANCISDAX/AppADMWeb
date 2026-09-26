@@ -81,6 +81,16 @@ export const CONFIG_POR_DEFECTO = {
   logo_url: '',
   tipoRegimen: 'general',
   regionExonerada: false,
+  // 🔑 **¿El IGV de las compras es un crédito fiscal?** (empresa de Lima que compra **y** vende
+  // gravado). Si está prendido, el **ingreso de mercadería** le separa el IGV al costo que se carga:
+  // se escribe el total de la factura (S/ 118) y el costo que se guarda es el neto (S/ 100), que es la
+  // base con la que se mide el margen y se valoriza el inventario (`lib/precio-venta.ts` →
+  // `costoDeCompra`).
+  // ⚠️ **Apagado = el IGV es COSTO** (por defecto): es el caso de esta región, donde los productos son
+  // exonerados y el IGV de una compra hecha afuera **no se recupera**, así que lo que se escribe es lo
+  // que vale la mercadería. Con esto apagado **nada cambia** (medido el 25/09/2026).
+  // ⚠️ Es una decisión **fiscal**: la confirma el contador, no la app.
+  igvRecuperable: false,
   /** Conteo ciego: al cerrar el turno NO se muestra el "Debería haber" hasta que el cajero
    *  registre lo que contó (control anti-fraude; apagado por defecto). */
   conteoCiego: false,

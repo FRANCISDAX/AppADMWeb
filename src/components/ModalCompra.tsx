@@ -9,6 +9,9 @@ import { cargarProveedores, consultarProveedor, guardarProveedor, type Proveedor
 import { useNotifications } from '@/components/notifications'
 import { cn } from '@/lib/utils'
 import { costoPorUnidadBase } from '@/lib/valorizacion'
+import { costoDeCompra } from '@/lib/precio-venta'
+import { esGravado } from '@/lib/sunat-importes'
+import { useConfiguracion } from '@/hooks/use-configuracion'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
@@ -22,7 +25,7 @@ type Presentacion = { id: string; nombre: string; factor: number }
 type DocProveedor = Proveedor & { confirmado: boolean }
 // `costoTexto` guarda el texto crudo del precio para permitir escribir decimales
 // sin que se "coman" al parsear; el valor numérico se deriva con parseDecimal.
-type CartItem = { id: string; nombre: string; cantidad: number; costoTexto: string; factor: number; presentacionId: string; presentacionNombre: string }
+type CartItem = { id: string; nombre: string; cantidad: number; costoTexto: string; factor: number; presentacionId: string; presentacionNombre: string; /** El monto cargado **ya viene sin IGV** (el proveedor facturó sin IGV). */ yaSinIgv?: boolean }
 
 // Presentaciones de compra de un producto. Si no tiene, devuelve la unidad base (factor 1).
 const getPresCompra = (p: Producto): Presentacion[] => {
@@ -35,6 +38,7 @@ const PROV_INICIAL: DocProveedor = { nombre: '', documento: '', tipoDocumento: '
 
 export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGuardado: () => void }) {
   const { productos } = useProductos()
+  const { config } = useConfiguracion()
   const { user } = useAuth()
   const { tienePermiso } = usePermisos()
   const { toast, confirm } = useNotifications()
@@ -150,13 +154,14 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
     // Crea/actualiza el proveedor (si no existe lo guarda en la colección Proveedor).
     await guardarProveedor({ id: docProv.documento?.trim() || undefined, nombre: docProv.nombre, documento: docProv.documento, tipoDocumento: docProv.tipoDocumento, direccion: docProv.direccion, telefono: docProv.telefono, correo: docProv.correo })
     const r = await registrarCompra({
-      items: carrito.map((i) => ({ productoId: i.id.split('__')[0], productoNombre: i.nombre, cantidad: i.cantidad, costoUnitario: parseDecimal(i.costoTexto), factor: i.factor, presentacionId: i.presentacionId, presentacionNombre: i.presentacionNombre })),
+      items: carrito.map((i) => ({ productoId: i.id.split('__')[0], productoNombre: i.nombre, cantidad: i.cantidad, costoUnitario: parseDecimal(i.costoTexto), factor: i.factor, presentacionId: i.presentacionId, presentacionNombre: i.presentacionNombre, yaSinIgv: i.yaSinIgv })),
       proveedor: docProv.nombre,
       proveedorId: docProv.documento?.trim() || docProv.nombre.trim().toLowerCase().replace(/\s+/g, '_'),
       proveedorDireccion: docProv.direccion,
       nota,
       tipoPago,
       turnoId,
+      igvRecuperable: config.igvRecuperable,
     })
     setProcesando(false)
     if (r.success) {
@@ -208,6 +213,15 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
                   const hayPres = pres.length > 1
                   /** Lo que se escribió en el casillero del costo (por **presentación**). */
                   const costoItem = parseDecimal(i.costoTexto)
+                  /** El costo por **unidad base** que se está por guardar (misma cuenta que el servicio). */
+                  const costoBaseItem = costoPorUnidadBase(costoItem, i.factor)
+                  const { costo: costoNeto, igvSeparado, separaIgv } = costoDeCompra(costoBaseItem, {
+                    igvRecuperable: config.igvRecuperable,
+                    afectacion: String(prod?.tipoAfectacion || ''),
+                    yaSinIgv: i.yaSinIgv,
+                  })
+                  /** ¿Este ítem entra en la lógica de separar el IGV? (negocio que lo recupera + producto gravado). */
+                  const aplicaIgv = Boolean(config.igvRecuperable) && esGravado(String(prod?.tipoAfectacion || ''))
                   return (
                     <div key={i.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
                       <div className="min-w-0 flex-1 basis-40">
@@ -242,6 +256,29 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
                       {i.factor > 1 && costoItem > 0 && (
                         <div className="w-full text-right text-[10px] text-muted-foreground">
                           {fmt(costoItem)} ÷ {i.factor} = <span className="font-bold text-foreground">{fmt(costoPorUnidadBase(costoItem, i.factor))}</span> por unidad base
+                        </div>
+                      )}
+                      {/* 🔑 **Si el IGV de la compra es crédito fiscal**, el costo que se guarda es el
+                          **neto**: acá se ve el mismo número que va a quedar (`costoDeCompra`, la regla
+                          que usa `registrarCompra`). Sin eso, el margen se mediría contra un costo
+                          inflado. ⚠️ Si el proveedor facturó **sin IGV** (exonerado, RUS, boleta
+                          interna), el interruptor de la izquierda deja el monto tal cual. */}
+                      {aplicaIgv && costoBaseItem > 0 && (
+                        <div className="flex w-full items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                          <button
+                            type="button"
+                            onClick={() => setCarrito((p) => p.map((x) => x.id === i.id ? { ...x, yaSinIgv: !x.yaSinIgv } : x))}
+                            className="cursor-pointer rounded border px-1.5 py-0.5 hover:bg-muted"
+                          >
+                            {i.yaSinIgv ? 'la factura viene CON IGV' : '¿la factura viene sin IGV?'}
+                          </button>
+                          <span>
+                            {separaIgv ? (
+                              <>{fmt(costoBaseItem)} − IGV {fmt(igvSeparado)} = <span className="font-bold text-foreground">{fmt(costoNeto)}</span> el costo</>
+                            ) : (
+                              <>se guarda <span className="font-bold text-foreground">{fmt(costoNeto)}</span> tal cual (la factura no trae IGV)</>
+                            )}
+                          </span>
                         </div>
                       )}
                     </div>
