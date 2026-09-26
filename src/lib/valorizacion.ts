@@ -34,6 +34,29 @@ export function redondearCosto(n: number): number {
 }
 
 /**
+ * **Costo por unidad base de una compra cargada por presentación.**
+ *
+ * El proveedor cobra por el bulto: una **caja de 12 botellas a S/ 38** cuesta S/ 3.1667 por botella y un
+ * **paquete de 6 galletas a S/ 12** cuesta S/ 2.00 por galleta. Esa división es la que hace que el stock
+ * (que se lleva en unidad base) y el costo hablen del mismo objeto: sin ella, el promedio ponderado
+ * tomaría el precio del bulto como si fuera el de una unidad y el inventario quedaría valorizado de más.
+ *
+ * 🔑 **Es la regla ÚNICA**: la usan `services/compras.ts` (lo que se **guarda**) y el modal de compra
+ * (`components/ModalCompra.tsx`, lo que se **muestra**), para que el número que ve el usuario y el que
+ * queda en la base no puedan diferir.
+ *
+ * ⚠️ **Sin redondear, a propósito**: devuelve el cociente exacto. Redondea quien corresponde — la
+ * valorización lleva el promedio a 4 decimales (`redondearCosto`) y la plata se muestra a 2. Si acá se
+ * devolviera 3.17, comprar 12 unidades daría 38.04 y la valorización se iría desviando céntimo a céntimo.
+ * ⚠️ Un **factor 0 o inválido** devuelve el costo tal cual (nunca divide por cero ni lo vuelve infinito).
+ */
+export function costoPorUnidadBase(costoPresentacion: number, factor: number): number {
+  const costo = Number(costoPresentacion) || 0
+  const f = Number(factor) || 0
+  return f > 0 ? costo / f : costo
+}
+
+/**
  * **Costo promedio ponderado móvil después de una entrada.**
  *
  * `cantidad` debe ser positiva (lo que entra). Si no hay stock previo, el promedio pasa a ser el

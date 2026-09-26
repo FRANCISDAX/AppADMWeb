@@ -8,8 +8,10 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
+import { redondear2 } from './dinero.ts'
 import {
   costoDeProducto,
+  costoPorUnidadBase,
   costoVigente,
   promedioConEntrada,
   redondearCosto,
@@ -179,5 +181,38 @@ describe('resumenValorizacion', () => {
     const r = resumenValorizacion([{}, { id: 'z', stock: -3, costoPromedio: 2 }])
     assert.equal(r.filas.length, 2)
     assert.equal(r.total, -6, 'no esconde un stock negativo: el dato raro se ve')
+  })
+})
+
+describe('costoPorUnidadBase (comprar por presentación)', () => {
+  it('divide el precio del bulto por su factor: los dos casos reales', () => {
+    // 1 caja de 12 botellas a S/ 38 → S/ 3.1667 por botella.
+    assert.equal(costoPorUnidadBase(38, 12), 38 / 12)
+    // 1 paquete de 6 galletas a S/ 12 → S/ 2.00 exacto por galleta.
+    assert.equal(costoPorUnidadBase(12, 6), 2)
+  })
+
+  it('NO redondea: redondear acá haría que 12 unidades cuesten 38.04', () => {
+    // 🔑 Es la decisión que hace que la valorización no se desvíe. Quien redondea es la valorización
+    // (4 decimales) y la pantalla (2); el número que se guarda es el cociente.
+    const unitario = costoPorUnidadBase(38, 12)
+    assert.equal(redondearCosto(unitario), 3.1667)
+    assert.equal(Number((unitario * 12).toFixed(2)), 38, 'el total vuelve a dar lo que se pagó')
+    assert.equal(
+      Number((redondear2(unitario) * 12).toFixed(2)),
+      38.04,
+      'y por eso NO se guarda el precio ya redondeado a 2 decimales',
+    )
+  })
+
+  it('sin presentación (factor 1) el costo queda igual', () => {
+    assert.equal(costoPorUnidadBase(4.5, 1), 4.5)
+  })
+
+  it('un factor inválido no divide por cero ni devuelve infinito', () => {
+    assert.equal(costoPorUnidadBase(38, 0), 38)
+    assert.equal(costoPorUnidadBase(38, Number.NaN), 38)
+    assert.equal(costoPorUnidadBase(38, -3), 38, 'un factor negativo es un dato roto: no se usa')
+    assert.equal(costoPorUnidadBase(0, 12), 0)
   })
 })

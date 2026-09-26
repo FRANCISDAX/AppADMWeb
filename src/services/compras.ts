@@ -2,6 +2,7 @@ import { collection, doc, runTransaction, type DocumentSnapshot } from 'firebase
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { efectivoEsperadoDe } from '@/lib/arqueo'
+import { costoPorUnidadBase } from '@/lib/valorizacion'
 import { valorizacionDeMovimiento } from '@/services/kardex'
 import { registrarCambioPrecio } from '@/services/historial-precios'
 
@@ -87,8 +88,9 @@ export async function registrarCompra({
         const nuevoStock = stockActual + cantidadBase
         // 🔑 **Comprar es lo que alimenta el costo promedio ponderado** (`lib/valorizacion.ts`).
         // ⚠️ El costo del ítem es **por presentación** (así se calcula `totalPagado`), y el promedio
-        // se lleva **por unidad base**: por eso se divide por el factor de conversión.
-        const costoBase = factor > 0 ? (Number(item.costoUnitario) || 0) / factor : Number(item.costoUnitario) || 0
+        // se lleva **por unidad base**: por eso se divide por el factor de conversión. La división vive
+        // en **`costoPorUnidadBase`** (puro) para que sea exactamente la misma que muestra el modal.
+        const costoBase = costoPorUnidadBase(item.costoUnitario, factor)
         const valorizado = valorizacionDeMovimiento({
           tipoMovimiento: 'compra',
           cantidad: cantidadBase,

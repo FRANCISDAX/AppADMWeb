@@ -8,6 +8,7 @@ import { registrarCompra } from '@/services/compras'
 import { cargarProveedores, consultarProveedor, guardarProveedor, type Proveedor } from '@/services/proveedores'
 import { useNotifications } from '@/components/notifications'
 import { cn } from '@/lib/utils'
+import { costoPorUnidadBase } from '@/lib/valorizacion'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
@@ -205,6 +206,8 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
                   const prod = activos.find((a) => a.id === prodId)
                   const pres = prod ? getPresCompra(prod) : []
                   const hayPres = pres.length > 1
+                  /** Lo que se escribió en el casillero del costo (por **presentación**). */
+                  const costoItem = parseDecimal(i.costoTexto)
                   return (
                     <div key={i.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
                       <div className="min-w-0 flex-1 basis-40">
@@ -232,6 +235,15 @@ export function ModalCompra({ onClose, onGuardado }: { onClose: () => void; onGu
                         <input value={i.costoTexto} onChange={(e) => setCarrito((p) => p.map((x) => x.id === i.id ? { ...x, costoTexto: e.target.value } : x))} inputMode="decimal" className="ml-1 h-7 w-20 rounded border px-2 text-right text-xs" />
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setCarrito((p) => p.filter((x) => x.id !== i.id))}><Trash2 className="h-3.5 w-3.5" /></Button>
                       </div>
+                      {/* 🔑 **El costo se carga por PRESENTACIÓN y el stock entra en unidad base**: acá se
+                          ve la división que hace el sistema (una caja de 12 a S/ 38 → S/ 3.17 por botella).
+                          ⚠️ La cuenta la hace `costoPorUnidadBase()` (la misma que usa `registrarCompra`
+                          para guardar el costo), así que lo que se lee acá **es** lo que va a quedar. */}
+                      {i.factor > 1 && costoItem > 0 && (
+                        <div className="w-full text-right text-[10px] text-muted-foreground">
+                          {fmt(costoItem)} ÷ {i.factor} = <span className="font-bold text-foreground">{fmt(costoPorUnidadBase(costoItem, i.factor))}</span> por unidad base
+                        </div>
+                      )}
                     </div>
                   )
                 })}
