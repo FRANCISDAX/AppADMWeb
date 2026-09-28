@@ -32,6 +32,7 @@ import {
   type LineaPedido,
   type PedidoPublico,
 } from '@/lib/pedido-publico'
+import { desempaquetarCatalogo, urlCatalogoPublico } from '@/lib/link-pedidos'
 import { cn } from '@/lib/utils'
 
 const soles = (n: number) => `S/ ${Number(n || 0).toFixed(2)}`
@@ -52,19 +53,56 @@ export function PedidoPublico() {
 
   React.useEffect(() => {
     let vivo = true
-    fetch('/catalogo.json', { cache: 'no-cache' })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((data: CatalogoPublico) => {
-        if (!vivo) return
-        setCatalogo(data)
-        setCargando(false)
-      })
-      .catch((e) => {
-        console.error('No se pudo cargar el catálogo del link:', e)
-        if (!vivo) return
-        setErrorCatalogo('El catálogo todavía no está publicado. Pedilo por WhatsApp al negocio.')
-        setCargando(false)
-      })
+    /**
+     * 🔑 **Primero el catálogo PUBLICADO (en vivo) y, si no se puede, la foto desplegada.**
+     *
+     * El app publica el catálogo en `tblPublico/catalogo` cada vez que cambia el stock o un precio, y esa
+     * colección se puede leer **sin sesión** (la regla lo permite, igual que la pantalla del cliente). Así el
+     * link no queda viejo sin que nadie tenga que regenerar nada.
+     *
+     * ⚠️ Si la lectura falla (sin internet, o la regla todavía no está desplegada), el link **usa igual** el
+     * `/catalogo.json` del hosting: nunca se queda sin mostrar productos.
+     */
+    const urlVivo = urlCatalogoPublico({
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+      // En desarrollo con el emulador se lee del emulador (mismo criterio que `lib/firebase.ts`).
+      emulador:
+        import.meta.env.DEV && import.meta.env.VITE_USE_EMULATOR === '1'
+          ? `http://${window.location.hostname === '127.0.0.1' ? '127.0.0.1' : 'localhost'}:8080`
+          : undefined,
+    })
+
+    async function cargar() {
+      if (urlVivo) {
+        try {
+          const r = await fetch(urlVivo, { cache: 'no-store' })
+          if (r.ok) {
+            const enVivo = desempaquetarCatalogo(await r.json())
+            if (vivo && enVivo) {
+              setCatalogo(enVivo)
+              setCargando(false)
+              return
+            }
+          }
+        } catch (e) {
+          console.warn('No se pudo leer el catálogo publicado; se usa la foto desplegada:', e)
+        }
+      }
+      const r = await fetch('/catalogo.json', { cache: 'no-cache' })
+      if (!r.ok) throw new Error(String(r.status))
+      const foto = (await r.json()) as CatalogoPublico
+      if (!vivo) return
+      setCatalogo(foto)
+      setCargando(false)
+    }
+
+    cargar().catch((e) => {
+      console.error('No se pudo cargar el catálogo del link:', e)
+      if (!vivo) return
+      setErrorCatalogo('El catálogo todavía no está publicado. Pedilo por WhatsApp al negocio.')
+      setCargando(false)
+    })
     return () => {
       vivo = false
     }

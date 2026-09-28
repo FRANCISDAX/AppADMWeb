@@ -13,5 +13,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if signedIn();
     }
+    // Catálogo público del link de pedidos (`/pedido`): lo LEE cualquiera (el cliente no tiene sesión) y lo
+    // ESCRIBE el app con sesión (lo publica solo cuando cambia el stock o un precio). Solo este documento:
+    // adentro va el catálogo como texto (nombre, precio y stock de productos activos), nada más.
+    match /tblPublico/catalogo {
+      allow read: if true;
+      allow write: if signedIn();
+    }
   }
 }

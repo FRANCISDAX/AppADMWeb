@@ -11,6 +11,32 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 49 — El link se publica solo (y el QR está en Configuración))
+
+**Objective**: el usuario aprobó el link de pedidos y preguntó lo que definía el resto —*«si la venta se hace de a diario esos stocks van a estar desactualizados??? habrá manera de que se regenere automáticamente eso y no estar pidiendote que generes otra vez link actualizado???»*—. O sea: **que el link no dependa de pedirle al programador que lo regenere**. Con eso aprobó también la tarjeta con el link y el QR.
+
+**La decisión de fondo**: el catálogo del link **no se lee en vivo** —eso exigiría abrir `tblProductos` al público— y **no lo publica una persona** (era el defecto real del bloque ·48: `public/catalogo.json` se generaba a mano desde una carpeta temporal, así que el link mostraba los precios **del día del deploy**). Ahora **lo publica el propio app** en `tblPublico/catalogo` y el link lo baja de ahí; `public/catalogo.json` queda como **respaldo** (si la colección no se puede leer, el link sigue funcionando con la última foto).
+
+- 🔑 **`usePublicarCatalogo()`** (montado en el `Shell`, al lado de `useSunatAuto()`) republica cuando cambia el catálogo o la config, **como mucho cada 5 min** (`INTERVALO_PUBLICACION_MS` + `debePublicar`, `lib/link-pedidos.ts`). **Por qué 5 min y no en cada venta**: una venta mueve el stock y el negocio **igual confirma el pedido**; publicar por cada cobro sería escribir en Firestore en cada venta para una vidriera que nadie mira al segundo. El dato exacto está en el PDV.
+- 🔑 **El catálogo viaja como TEXTO JSON en un solo campo** (`datos`): **una lectura REST** y **sin decoder de tipos escrito a mano** (ahí es donde un `Timestamp` del SDK se rompe). Los campos sueltos (`items`, `negocio`, `actualizado`) quedan para poder mirarlo desde la consola.
+- **`components/LinkPedidos.tsx`** (Configuración → Empresa): el link con botón de copiar, «Compartir por WhatsApp», «Publicar el catálogo ahora», el estado (*«Última publicación: hace 3 min · 38 productos. Se vuelve a publicar sola cuando cambia el catálogo (como mucho cada 5 min)»*), el **QR** (`/qr-pedido.png`) y el aviso ámbar si falta el teléfono de la empresa. ⚠️ El QR se generó **fuera del repo** (librería `qrcode` en la carpeta temporal del arnés): el web no lleva esa dependencia.
+- **`firestore.rules`**: bloque propio para `tblPublico/catalogo` — `read: if true` (es una vidriera) y `write: if signedIn()`—, con la misma forma que `tblDisplaySessions`. ⚠️ **Commiteado pero NO desplegado**: mientras no se despliegue, el link lee la **foto** y la republicación no tiene efecto visible (no rompe nada).
+- ⚠️ **Dos trampas de lint que habrían subido el baseline**: `Date.now()` en el render (`react(purity)`) y `setState` sincrónico dentro de un efecto (`react(set-state-in-effect)`). Se resolvió calculando el «hace cuánto» **fuera del render** (`aEstado()`, a nivel de módulo) y dejando los `setEstado` dentro de un `.then`/timer. Baseline intacto: **80/0**.
+
+**Lo que se midió (emulador fresco, arnés `run-publicacion.mjs`) — TODO OK 15/15**
+- El app **escribe solo** `tblPublico/catalogo`: items, el producto sembrado en el emulador, `whatsapp 51951178055` y el nombre del negocio.
+- La tarjeta de Configuración muestra el link `https://appadm-b359e.web.app/pedido`, carga el QR (640 px), el botón de compartir, la leyenda «se vuelve a publicar sola» y el estado de publicación.
+- `/pedido` muestra el producto **sembrado en el emulador** («PRODUCTO SOLO DEL EMULADOR») ⇒ está leyendo **en vivo** de `tblPublico`, no la foto desplegada, y **sin login**.
+- **La regla se verificó aparte**: un GET **sin credenciales** a `tblPublico/catalogo` contra el emulador devuelve **404 (permitido)**, no 403.
+- ⚠️ **Trampa del arnés (costó una hora)**: `firebase emulators:start` deja hijos java/node que **sobreviven** al kill del wrapper ⇒ matar por dueño del puerto (`Get-NetTCPConnection -LocalPort 8080 | Stop-Process -Id $_.OwningProcess`). Con el emulador viejo vivo, el segundo arranque falla con *"port taken"* y el navegador contra Firestore tira `net::ERR_ABORTED` con un `FirebaseError` **vacío** — parece un bug de la app y no lo es.
+- 📌 Antes, contra el **sitio desplegado** (`run-pedido-link.mjs`, 18/18, bloque ·48): el link abre sin login, 38 productos, búsqueda, total, código y `wa.me/51951178055`.
+
+**Work State**: Completed. `npm test` **553/553** (+10 de `link-pedidos.test.ts` sobre los 543 del bloque ·48), `tsc` ✓, lint **80/0**, `build` ✓. Manual **2.20** §2.16 ampliada (el link y el QR están en Configuración, el catálogo se publica solo y **igual es una foto, no un espejo**) y PDF regenerado. **Falta desplegar `firestore.rules`** (permiso aparte).
+
+**Next Move**: (1) desplegar las reglas para que la republicación tenga efecto — desde ahí **el deploy ya no necesita regenerar `public/catalogo.json`**, que queda solo como respaldo; (2) **el negocio decide**: si los **cigarrillos** salen del catálogo público (en el Perú la publicidad de tabaco está restringida) y si carga los **alias** de los genéricos («gaseosa», «agua»); (3) fase 2 si el link se usa: que el pedido **caiga solo** en `PanelVentasPendientes`.
+
+**Relevant Files**: `src/lib/link-pedidos.ts` + `src/lib/link-pedidos.test.ts` (nuevos), `src/services/catalogo-publico.ts` (nuevo), `src/hooks/use-publicar-catalogo.ts` (nuevo), `src/components/LinkPedidos.tsx` (nuevo), `src/pages/Configuracion.tsx`, `src/App.tsx`, `src/pages/PedidoPublico.tsx`, `firestore.rules`, `public/qr-pedido.png` (nuevo), `docs/manual-usuario.html` + `.pdf`, `AGENTS.md`, `package.json`.
+
 ### (2026-09 · 48 — El pedido por link (vidriera pública `/pedido`))
 
 **Objective**: el usuario eligió, de la lista de funciones que faltaban, **«empecemos con pedido por link»** (descartó la impresión silenciosa): que un cliente arme su pedido desde el celular y le llegue al negocio — *«la que más puede vender con menos obra»*.

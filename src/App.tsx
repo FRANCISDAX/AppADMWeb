@@ -4,6 +4,7 @@ import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
 import { useTheme } from '@/hooks/use-theme'
 import { useSunatAuto } from '@/hooks/use-sunat-auto'
+import { usePublicarCatalogo } from '@/hooks/use-publicar-catalogo'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { LoadingSquare } from '@/components/loading-square'
@@ -89,6 +90,10 @@ function Shell() {
   // y dos pestañas no pueden mandar el mismo comprobante (reclamo transaccional). No hace nada si el
   // negocio lo apagó en Configuración → SUNAT, ni si no hay sesión, ni sin conexión.
   useSunatAuto()
+  // 🔑 **Publicación del catálogo del link de pedidos**, también en el Shell: así se mantiene fresco con solo
+  // tener el app abierto (una venta cambia el stock y el link lo refleja), sin depender de que alguien entre a
+  // Configuración. Está limitado a una publicación cada 5 min para no escribir la base en cada venta.
+  usePublicarCatalogo()
   const [seccion, setSeccion] = React.useState<string | null>(null)
   const [abiertas, setAbiertas] = React.useState<Record<string, boolean>>({ Operación: true, Reportes: true })
   const [toast, setToast] = React.useState<string | null>(null)

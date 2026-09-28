@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { usePermisos } from '@/context/permisos'
 import { useNotifications } from '@/components/notifications'
 import { EstadoPuenteYape } from '@/components/EstadoPuenteYape'
+import { LinkPedidos } from '@/components/LinkPedidos'
 import { AFECTACION_POR_DEFECTO, CONFIG_POR_DEFECTO, TIPO_AFECTACION, TIPOS_REGIMEN } from '@/constants/tributario'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos } from '@/hooks/use-productos'
@@ -274,6 +275,8 @@ export function Configuracion() {
               </div>
             </div>
           </div>
+
+          <LinkPedidos />
 
           <div className="rounded-xl border bg-card p-5 shadow-card">
             <div className="mb-3 flex items-center gap-2">
