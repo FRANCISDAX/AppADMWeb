@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.19 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.20 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -363,6 +363,33 @@
   <div class="tip">
     <div class="tip-label">💡 Esa línea es el chico que avisa</div>
     <p>Es lo único que distingue «no yapeó nadie» de «el aviso se perdió». El control de fondo sigue siendo el <strong>cruce del cierre</strong> (ver <em>6.6</em>): si hubo cobros por Yape y ningún aviso, el sistema lo dice. El estado también se ve en <em>Configuración → Yape</em>, con el último aviso que mandó el celular (ver <em>12.9</em>).</p>
+  </div>
+
+  <h3>2.16 El link de pedidos (para que el cliente pida solo)</h3>
+  <p>El negocio tiene una <strong>página pública</strong> donde el cliente arma su pedido desde el celular y lo manda por <strong>WhatsApp</strong>. Se comparte por estado, por redes o por donde quieras:</p>
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 El link</div>
+    <p><code>https://appadm-b359e.web.app/pedido</code> — no pide usuario ni contraseña: la abre cualquier cliente.</p>
+  </div>
+  <p>Qué hace el cliente: busca el producto, lo agrega con la cantidad, escribe <strong>su nombre y su teléfono</strong>, elige <strong>recojo en tienda</strong> o <strong>envío a domicilio</strong> (con la dirección) y aprieta <strong>«Enviar pedido por WhatsApp»</strong>. El pedido le llega al WhatsApp del negocio como un <strong>texto ordenado</strong>, con un <strong>código</strong> para citarlo:</p>
+  <div class="ejemplo">
+    <div class="ejemplo-label">📋 Lo que le llega al negocio</div>
+    <p><code>*PEDIDO P-8F3K2*</code><br><code>Cliente: Rosa Quispe · 999888777</code><br><code>Entrega: recojo en tienda</code><br><code>2 × GALLETA SODA = S/ 3.00</code><br><code>*TOTAL: S/ 6.00*</code><br><code>Precios del catálogo al 26/09/2026</code></p>
+  </div>
+  <table>
+    <thead><tr><th>Qué tenés que saber</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr><td><strong>No es una venta</strong></td><td>Un pedido del link <strong>no toca el stock ni emite nada</strong>: llega como mensaje. El cajero lo arma en el PDV como cualquier pedido (ver <em>3</em>) y <strong>ahí</strong> se descuenta el stock y sale el comprobante.</td></tr>
+      <tr><td><strong>El precio es el del catálogo</strong></td><td>El total lo calcula el sistema con los <strong>precios del negocio</strong> (los mismos del mostrador). El cliente no puede cambiar ningún precio: solo elige cantidades.</td></tr>
+      <tr><td><strong>⚠️ Los precios son una FOTO</strong></td><td>El link muestra <strong>de cuándo son los precios</strong> (y esa fecha viaja en el mensaje). Si cambiás precios, el catálogo del link se actualiza <strong>al volver a publicarlo</strong>: avisá para regenerarlo, así nadie ve un precio viejo.</td></tr>
+      <tr><td><strong>Sujeto a stock</strong></td><td>El link muestra lo que había cuando se publicó. Si el cliente pide algo agotado o más de lo que hay, el mensaje lo dice (<em>«A confirmar por stock: …»</em>) y el negocio lo confirma antes de prepararlo.</td></tr>
+      <tr><td><strong>El genérico y los alias</strong></td><td>Los productos están cargados por <strong>marca</strong> («Coca Cola 1LT»), así que quien escribe «gaseosa» no lo encuentra <strong>salvo</strong> que le cargues ese <strong>alias</strong> al producto (el mismo campo que usa la búsqueda por voz). Con el alias, el link lo encuentra.</td></tr>
+      <tr><td><strong>El WhatsApp es el del negocio</strong></td><td>Sale del <strong>teléfono</strong> cargado en <em>Configuración → Empresa</em> (se le agrega el código de país solo). Si ese campo está vacío, el link no puede abrir WhatsApp y ofrece <strong>copiar el pedido</strong> para pegarlo donde quieras.</td></tr>
+    </tbody>
+  </table>
+  <div class="warning">
+    <div class="warning-label">⚠️ Es una página pública: lo que se ve, lo ve cualquiera con el link</div>
+    <p>Muestra <strong>todos los productos activos con precio</strong> (nombre, precio y si queda poco stock). <strong>No</strong> muestra costos, proveedores ni datos de clientes. Si algún rubro no querés publicarlo (por ejemplo <strong>cigarrillos</strong>: en el Perú la publicidad de tabaco está restringida), avisá para dejarlo fuera del catálogo del link.</p>
   </div>
 </div>
 
@@ -1535,7 +1562,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.19</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.20</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

@@ -11,6 +11,33 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 48 — El pedido por link (vidriera pública `/pedido`))
+
+**Objective**: el usuario eligió, de la lista de funciones que faltaban, **«empecemos con pedido por link»** (descartó la impresión silenciosa): que un cliente arme su pedido desde el celular y le llegue al negocio — *«la que más puede vender con menos obra»*.
+
+**La decisión que definía todo (consultada y elegida: opción A)**: el link vive **fuera del login**, así que había que decidir **por dónde entra el pedido**. Se descartó exponer el backend `appadm-sunat` a internet (túnel con URL fija, lo despliega el usuario y hay que tocar el CSP) y se descartó tocar el acceso a Firestore. **La v1 es:** el link baja **una foto** del catálogo y **manda el pedido por WhatsApp** (texto ordenado, con código y total); el cajero lo arma en el PDV, donde el circuito de pedidos ya existe.
+
+**Por qué es poca obra**: no se inventó nada del ciclo de pedidos — `crearVentaPendiente`, `PanelVentasPendientes`, `pedidoParaCarrito()`, `repartirPedidos()`, el anti-duplicado `huellaPedido()`, `cancelarVentaPendiente` con motivo y `Reportes → Pedidos` **ya estaban**. Lo nuevo es **una vidriera**. **No toca stock, correlativos, comprobante, caja ni SUNAT.**
+
+**Lo implementado**
+- 🔑 **`lib/pedido-publico.ts`** (puro, 17 tests): `catalogoPublico()` (deja afuera inactivos, sin nombre y **sin precio**; aplana stock negativo; redondea a 2), `buscarEnCatalogo()`, `totalPedido()`, `armarPedido()` (valida nombre/teléfono/dirección, acota a `MAX_UNIDADES_POR_ITEM` = 50, recalcula el total), `textoPedido()`, `enlaceWhatsApp()`, `codigoPedidoPublico()` (`P-XXXXX`) y `fechaPublicacion()`.
+- 🔑 **El precio sale SIEMPRE del catálogo publicado, nunca del navegador**: el cliente solo manda cantidades, y un ítem que ya no está en el catálogo **no se pide** (no se le inventa precio).
+- **`src/pages/PedidoPublico.tsx`** + **`PedidoPublico-ruta.tsx`**: mobile-first, buscador, carrito, «Recojo en tienda / Envío a domicilio», envío por `window.open` (⚠️ **no** un `<form action="https://wa.me">`: el CSP `form-action 'self'` lo bloquearía). Sin número de WhatsApp cargado, el link ofrece **copiar el pedido**.
+- **`main.tsx`**: `/pedido` se monta **antes de `AuthProvider`/`PermisosProvider`** ⇒ **ni Firebase ni el login entran en esa rama**; el `lazy()` la deja en su propio chunk (`PedidoPublico-*.js`, 11 kB). La rama vive en su archivo por el lint de *fast refresh* (un componente declarado en `main.tsx` subía el baseline a 81).
+- **`public/catalogo.json`**: lo genera el arnés (`generar-catalogo.mjs`, **fuera del repo**: el web no lleva la llave ni `firebase-admin`) **reusando `catalogoPublico()`**, así el catálogo publicado no puede diferir del que valida el pedido.
+
+**Lo que se midió (y lo que se corrigió por medirlo)**
+- 🔴 **La primera generación pesó 8,2 MB**: cada producto tiene su foto en **base64** (`data:image/jpeg…`) y viajaba entera al JSON. Imposible de abrir desde un celular con datos ⇒ **las fotos en base64 no se publican** (solo viajaría una URL corta `http…`). Ahora el catálogo pesa **6,3 KB** para 38 ítems. Fijado por test.
+- 🔴 **Buscar «gaseosa» no encontraba nada**: los productos están por **marca** («Coca Cola 1LT», «AQUA MIA 625ML»…). Se sumó al catálogo el **`aliasVoz`** que el producto ya tiene (búsqueda por voz) y al buscador la **categoría**, el **plural** («galletas» → «galleta») y el cruce por palabras («galleta soda» exige las dos). Fijado por test.
+- ✅ **Verificado con un navegador real** (`run-pedido-link.mjs`, Chrome + puppeteer contra el **build de producción** servido por `vite preview`): **TODO OK, 18/18** — el link abre **sin login** (0 campos de contraseña en el DOM), muestra el negocio y la fecha de los precios, se ven 38 productos, buscar filtra (38 → 3) y un genérico sin alias avisa («No encontramos…»), el total sube al agregar (0.20 → 0.40), el carrito muestra «2 ×», sin nombre **avisa**, el pedido sale con **código** y `*TOTAL: S/ …*`, el enlace es `https://wa.me/51951178055?text=…` con el pedido escrito, **0 errores de consola**, y **la raíz del app sigue mostrando el login**.
+- 📌 **Datos reales de la generación**: 40 productos en la base ⇒ **38 publicados** (2 afuera), categorías ABARROTES 2 · BEBIDAS 18 · CIGARROS 1 · DULCES 16 · LIMPIEZA 1; el teléfono de la config (`951178055`, 9 dígitos) se normaliza a **`51951178055`**.
+
+**Work State**: Completed (sin desplegar). **543/543 tests** (17 nuevos), `tsc` ✓, lint **80/0** (baseline intacto), `build` ✓.
+
+**Next Move**: (1) **desplegar cuando el usuario diga «procede»** — y desde ahí **cada deploy tiene que regenerar `public/catalogo.json`** (es una foto: los precios que muestra el link son los del último publish, y su fecha viaja en el texto del pedido); (2) **el negocio decide**: si excluye los **cigarrillos** del catálogo público (en Perú la publicidad de tabaco está restringida — no es una decisión técnica) y si **carga los alias** de los genéricos que la gente escribe («gaseosa», «agua», «chela»); (3) fase 2 si el link se usa: que el pedido **caiga solo** en `PanelVentasPendientes` (eso ya necesita el backend publicado o un acceso acotado: la decisión que quedó pendiente).
+
+**Relevant Files**: `src/lib/pedido-publico.ts` (nuevo), `src/lib/pedido-publico.test.ts` (nuevo), `src/pages/PedidoPublico.tsx` (nuevo), `src/pages/PedidoPublico-ruta.tsx` (nuevo), `src/main.tsx`, `public/catalogo.json` (nuevo), `package.json`.
+
 ### (2026-09 · 47 — El Registro de Compras (SUNAT · RCE) y las dos pestañas del SIRE)
 
 **Objective**: pedido del usuario —*«dentro de registro sire coloca 2 tabs una para ventas y otras para las compras, procede a crear el registro de compras, revisa como sunat trabaja con las compras para armar compras sire»*—. O sea: **averiguar cómo SUNAT pide el registro de compras antes de escribirlo**, y que se vea al lado del de ventas.

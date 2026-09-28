@@ -1,0 +1,374 @@
+{
+ "publicado": "2026-09-28T21:57:53.511Z",
+ "negocio": "Jorge Felipe Reyna Sandy",
+ "whatsapp": "51951178055",
+ "items": [
+  {
+   "id": "5143",
+   "nombre": "Fosforo Kangaroo",
+   "codigo": "5143",
+   "categoria": "ABARROTES",
+   "precio": 0.2,
+   "unidad": "unidad",
+   "stock": 70,
+   "alias": "fósforo"
+  },
+  {
+   "id": "P-1788835884480",
+   "nombre": "HUEVOS",
+   "codigo": "P-1788835884480",
+   "categoria": "ABARROTES",
+   "precio": 0.6,
+   "unidad": "unidad",
+   "stock": 89
+  },
+  {
+   "id": "5983",
+   "nombre": "AQUA MIA 625ML",
+   "codigo": "5983",
+   "categoria": "BEBIDAS",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 10,
+   "alias": "aqua mia"
+  },
+  {
+   "id": "4213",
+   "nombre": "Aquarey 625ML",
+   "codigo": "4213",
+   "categoria": "BEBIDAS",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 31,
+   "alias": "aquarey"
+  },
+  {
+   "id": "5399",
+   "nombre": "Big Cola 350ML",
+   "codigo": "5399",
+   "categoria": "BEBIDAS",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 31,
+   "alias": "big cola"
+  },
+  {
+   "id": "9515",
+   "nombre": "CERVEZA CRISTAL  650ML",
+   "codigo": "9515",
+   "categoria": "BEBIDAS",
+   "precio": 7,
+   "unidad": "unidad",
+   "stock": 0
+  },
+  {
+   "id": "5883",
+   "nombre": "Cielo C/G 625ML",
+   "codigo": "5883",
+   "categoria": "BEBIDAS",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 7,
+   "alias": "agua cielo"
+  },
+  {
+   "id": "8791",
+   "nombre": "Coca Cola 1LT",
+   "codigo": "8791",
+   "categoria": "BEBIDAS",
+   "precio": 5,
+   "unidad": "unidad",
+   "stock": 4,
+   "alias": "coca litro"
+  },
+  {
+   "id": "3485",
+   "nombre": "Coca Cola Personal 500ML",
+   "codigo": "3485",
+   "categoria": "BEBIDAS",
+   "precio": 3,
+   "unidad": "unidad",
+   "stock": 4,
+   "alias": "coca personal"
+  },
+  {
+   "id": "3650",
+   "nombre": "Coca Cola Pirañita 237ML",
+   "codigo": "3650",
+   "categoria": "BEBIDAS",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 1,
+   "alias": "coca pirañita"
+  },
+  {
+   "id": "5202",
+   "nombre": "Fanta Fresa 400ML",
+   "codigo": "5202",
+   "categoria": "BEBIDAS",
+   "precio": 2,
+   "unidad": "unidad",
+   "stock": 6,
+   "alias": "fanta fresa"
+  },
+  {
+   "id": "8870",
+   "nombre": "Fanta Naranja 400ML",
+   "codigo": "8870",
+   "categoria": "BEBIDAS",
+   "precio": 2,
+   "unidad": "unidad",
+   "stock": 4,
+   "alias": "fanta naranja"
+  },
+  {
+   "id": "7685",
+   "nombre": "Inka Cola Gordita 625ML",
+   "codigo": "7685",
+   "categoria": "BEBIDAS",
+   "precio": 3.5,
+   "unidad": "unidad",
+   "stock": 0,
+   "alias": "inka gordita"
+  },
+  {
+   "id": "3106",
+   "nombre": "Inka Cola Personal 500ML",
+   "codigo": "3106",
+   "categoria": "BEBIDAS",
+   "precio": 3,
+   "unidad": "unidad",
+   "stock": 3,
+   "alias": "inka personal"
+  },
+  {
+   "id": "7126",
+   "nombre": "Inka Cola Pirañita 237ML",
+   "codigo": "7126",
+   "categoria": "BEBIDAS",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 5,
+   "alias": "inca pirañita"
+  },
+  {
+   "id": "4746",
+   "nombre": "KR FRESA",
+   "codigo": "4746",
+   "categoria": "BEBIDAS",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 4
+  },
+  {
+   "id": "4527",
+   "nombre": "KR Mixto",
+   "codigo": "4527",
+   "categoria": "BEBIDAS",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 14,
+   "alias": "kr mixto"
+  },
+  {
+   "id": "6460",
+   "nombre": "KR NARANJA",
+   "codigo": "6460",
+   "categoria": "BEBIDAS",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 1
+  },
+  {
+   "id": "7750670013451",
+   "nombre": "KR PIÑA",
+   "codigo": "7750670013451",
+   "categoria": "BEBIDAS",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 18
+  },
+  {
+   "id": "8949",
+   "nombre": "ORO",
+   "codigo": "8949",
+   "categoria": "BEBIDAS",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 17
+  },
+  {
+   "id": "78404311",
+   "nombre": "Cigarro Hamilton Fresh",
+   "codigo": "78404311",
+   "categoria": "CIGARROS",
+   "precio": 0.5,
+   "unidad": "unidad",
+   "stock": 19,
+   "alias": "cigarro hamilton"
+  },
+  {
+   "id": "7750885025966",
+   "nombre": "BIZCOCHO CANCUN",
+   "codigo": "7750885025966",
+   "categoria": "DULCES",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 11,
+   "alias": "cancun costa"
+  },
+  {
+   "id": "7750243058261",
+   "nombre": "GAL CHOM NARANJA",
+   "codigo": "7750243058261",
+   "categoria": "DULCES",
+   "precio": 1.2,
+   "unidad": "unidad",
+   "stock": 5,
+   "alias": "chomp naranja"
+  },
+  {
+   "id": "7590011251100",
+   "nombre": "GAL OREO ORIGINAL",
+   "codigo": "7590011251100",
+   "categoria": "DULCES",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 4
+  },
+  {
+   "id": "7750243077521",
+   "nombre": "GAL SODA DIA",
+   "codigo": "7750243077521",
+   "categoria": "DULCES",
+   "precio": 0.5,
+   "unidad": "unidad",
+   "stock": 34,
+   "alias": "soda día"
+  },
+  {
+   "id": "P-1789333061671",
+   "nombre": "GAL SODA FIELD",
+   "codigo": "P-1789333061671",
+   "categoria": "DULCES",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 6
+  },
+  {
+   "id": "7750243034562",
+   "nombre": "GAL SODA V",
+   "codigo": "7750243034562",
+   "categoria": "DULCES",
+   "precio": 0.7,
+   "unidad": "unidad",
+   "stock": 9,
+   "alias": "soda v"
+  },
+  {
+   "id": "7750243077613",
+   "nombre": "GAL TENTACION NARANJA",
+   "codigo": "7750243077613",
+   "categoria": "DULCES",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 6
+  },
+  {
+   "id": "7861004914006",
+   "nombre": "GAL TRIKIS",
+   "codigo": "7861004914006",
+   "categoria": "DULCES",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 4,
+   "alias": "triquis"
+  },
+  {
+   "id": "7750243050340",
+   "nombre": "GAL VAINILLA DIA",
+   "codigo": "7750243050340",
+   "categoria": "DULCES",
+   "precio": 0.5,
+   "unidad": "unidad",
+   "stock": 12,
+   "alias": "vainilla dia"
+  },
+  {
+   "id": "7622300279783",
+   "nombre": "GAL VAINILLA FIELD",
+   "codigo": "7622300279783",
+   "categoria": "DULCES",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 6,
+   "alias": "vainilla field"
+  },
+  {
+   "id": "P-1788488631763",
+   "nombre": "GALLETAS MINI MOROCHAS SNACK",
+   "categoria": "DULCES",
+   "precio": 1.5,
+   "unidad": "unidad",
+   "stock": 3,
+   "alias": "morochas"
+  },
+  {
+   "id": "784961000513",
+   "nombre": "POKEKE CHAVO",
+   "codigo": "784961000513",
+   "categoria": "DULCES",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 6,
+   "alias": "poqueque"
+  },
+  {
+   "id": "9411",
+   "nombre": "TUYO",
+   "codigo": "9411",
+   "categoria": "DULCES",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 1,
+   "alias": "tuyo costa"
+  },
+  {
+   "id": "0326",
+   "nombre": "WAFER NIK CHOCOLATE",
+   "codigo": "0326",
+   "categoria": "DULCES",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 4
+  },
+  {
+   "id": "8742",
+   "nombre": "WAFER NIK FRESA",
+   "codigo": "8742",
+   "categoria": "DULCES",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 5
+  },
+  {
+   "id": "7750885019859",
+   "nombre": "WAFER NIK VAINILLA",
+   "codigo": "7750885019859",
+   "categoria": "DULCES",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 3,
+   "alias": "nik vainilla"
+  },
+  {
+   "id": "P-1788833920708",
+   "nombre": "PH SUAVE NARANJA",
+   "codigo": "P-1788833920708",
+   "categoria": "LIMPIEZA",
+   "precio": 1,
+   "unidad": "unidad",
+   "stock": 12
+  }
+ ]
+}
