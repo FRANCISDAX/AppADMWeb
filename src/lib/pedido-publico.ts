@@ -120,8 +120,13 @@ export function catalogoPublico(
   }
 }
 
-/** Sin tildes y en minúsculas: buscar «galleta» tiene que encontrar «GALLETA» y «Galletas». */
-const normalizar = (t: string) =>
+/**
+ * Sin tildes y en minúsculas: buscar «galleta» tiene que encontrar «GALLETA» y «Galletas».
+ * **Es la regla única de comparación de nombres**: la usa el buscador del link y también el lector
+ * del pedido pegado en el PDV (`lib/pedido-pegado.ts`), para que el nombre que el cliente vio en el
+ * link sea el que el cajero puede resolver.
+ */
+export const normalizar = (t: string) =>
   String(t ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')

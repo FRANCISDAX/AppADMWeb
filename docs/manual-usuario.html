@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.20 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.21 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -444,7 +444,27 @@
     <p>En el PDV vas a ver <strong>"Cobrar pedido"</strong> en cada pedido enviado por un vendedor y <strong>"Cobrar"</strong> al pie del carrito: el primero trae <em>ese pedido</em> al carrito para cobrarlo; el segundo cobra la venta normal. Mientras hay un pedido activo, el botón de abajo dice <strong>"Cobrar pedido S/ …"</strong> y las acciones del carrito (Vaciar, Pausar, Enviar a caja) no se muestran.</p>
   </div>
 
-  <h3>3.3 Los nombres en el papel</h3>
+  <h3>3.3 El pedido del link: pegar el WhatsApp y listo</h3>
+  <p>Cuando el cliente arma su pedido en la <strong>página pública del negocio</strong> (ver <em>2.16</em>), el pedido llega por <strong>WhatsApp</strong> como un mensaje ordenado. El cajero <strong>no lo carga producto por producto</strong>: lo pega y el sistema lo arma.</p>
+  <div class="steps">
+    <div class="step">En el PDV, en el panel <strong>Ventas Pendientes</strong>, toca <strong>"Pegar pedido del link"</strong>.</div>
+    <div class="step"><strong>Copia el mensaje del cliente</strong> desde WhatsApp (el que empieza con <code>*PEDIDO P-…*</code>) y pégalo en el cuadro. Puedes pegarlo con o sin las negritas.</div>
+    <div class="step">El sistema <strong>busca cada producto en tu catálogo</strong> y muestra el pedido con <strong>los precios de hoy</strong>, el cliente, su teléfono y la entrega. Los avisos salen en amarillo (ver abajo).</div>
+    <div class="step">Si el pedido es <strong>envío a domicilio</strong> y le vas a cobrar el flete, escríbelo en <strong>"Costo de envío a cobrar"</strong> (el link no lo cotiza).</div>
+    <div class="step">Toca <strong>"Cargar como pedido"</strong> y confirma. Queda un pedido <strong><code>PED-000123</code></strong> esperando en la lista, <strong>igual que uno del vendedor</strong>: se cobra con "Cobrar pedido" y recién ahí se descuenta el stock y sale el comprobante.</div>
+  </div>
+
+  <div class="warning">
+    <div class="warning-label">⚠️ El precio es el de TU catálogo, no el del mensaje</div>
+    <p>El mensaje dice cuánto costaba cuando el cliente vio el link, pero el pedido se arma con <strong>los precios de hoy</strong>. Si el precio cambió, aparece un aviso con la diferencia (<em>"Los precios subieron desde que el cliente vio el link…"</em>) para que decidas qué hacer con el cliente: <strong>nunca se cobra el importe escrito en el mensaje</strong>. Si un producto ya no está en el catálogo (o está inactivo, o sin precio), la línea queda <strong>en rojo</strong> y el botón de cargar se <strong>deshabilita</strong>: corrige el nombre en el texto, o quita esa línea con el ícono de papelera, pero <strong>el pedido no se carga a medias</strong>. También avisa si <strong>hoy no alcanza el stock</strong> (el pedido no reserva: se valida al cobrar).</p>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">🔁 El mismo mensaje no se carga dos veces</div>
+    <p>Cada pedido del link queda identificado con <strong>el código del mensaje</strong> (<code>P-8F3K2</code>, que se ve en la tarjeta del pedido). Si alguien pega <strong>el mismo mensaje</strong> otra vez —aunque sea desde otra caja—, el sistema avisa que ya está cargado y no crea un pedido nuevo. Si el cliente pidió <strong>dos veces lo mismo</strong> (dos mensajes distintos), confirma <em>"Cargar otro igual"</em> y se carga el segundo.</p>
+  </div>
+
+  <h3>3.4 Los nombres en el papel</h3>
   <p>El comprobante y el arqueo dejan claro <strong>quién vendió y quién cobró</strong>:</p>
   <ul style="list-style:none; padding:0; margin: 8px 0;">
     <li style="padding:3px 0; font-size:13px; color:#475569;">• Vendedor y cajero distintos: <code>Vendedor: Carlos · Cajero: Luis</code>.</li>
@@ -463,7 +483,7 @@
     <p>¿Por qué importa? Si el cajero vende directo lo mismo que un vendedor ya mandó a caja, <strong>el pedido queda pendiente para siempre</strong> en la lista: la venta se cobra una sola vez (la del cajero), pero el pedido viejo confunde a la caja y ensucia el seguimiento del vendedor.</p>
   </div>
 
-  <h3>3.4 Pedidos enviados (solo vendedores)</h3>
+  <h3>3.5 Pedidos enviados (solo vendedores)</h3>
   <p>En el PDV, arriba del carrito, el <strong>vendedor</strong> tiene un botón <strong>"Pedidos enviados"</strong>. Ábrelo para saber <strong>qué mandaste a caja y en qué terminó cada pedido</strong>, sin tener que preguntarle al cajero:</p>
   <ul>
     <li><strong>En caja</strong>: todavía espera que un cajero lo cobre (todavía no hay comprobante).</li>
@@ -473,7 +493,7 @@
   <p>Cada pedido muestra su <strong>código</strong> (<code>PED-000123</code>), <strong>los productos que enviaste</strong> (por ejemplo <em>2 × Huevos, 2 × Galletas</em>), el <strong>total</strong> y la <strong>fecha y hora</strong>. Se puede cambiar el mes con el selector de arriba.</p>
   <p>⚠️ Este botón lo ven <strong>solo los vendedores</strong>: cada uno ve únicamente <strong>sus propios pedidos</strong>. El cajero y el administrador tienen la lista completa en <em>Reportes → Pedidos</em>.</p>
 
-  <h3>3.5 Cajas</h3>
+  <h3>3.6 Cajas</h3>
   <p>Cada caja define sus propias series de comprobante. En <code>Configuración → Cajas</code> el admin puede crear cajas con series distintas:</p>
   <table>
     <thead><tr><th>Caja</th><th>Serie Boleta</th><th>Serie Factura</th><th>Serie NV</th></tr></thead>
@@ -1564,7 +1584,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.20</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.21</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

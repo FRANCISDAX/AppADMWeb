@@ -171,6 +171,19 @@ describe('huellaPedido', () => {
     assert.equal(huellaPedido({}), '|', 'sin datos no inventa un total: queda vacío')
     assert.equal(huellaPedido({ items: [null, {}, 'x'] as never, total: 0 }), '|0')
   })
+
+  // 🔑 El pedido del link lo arma el CLIENTE y lo pega el cajero: la identidad es el código del
+  // mensaje, no quién lo cargó. Con el vendedor en la huella, dos cajas podían cargar el mismo
+  // mensaje dos veces (dos pedidos, y el cliente pagando dos veces si nadie mira).
+  it('un pedido del link se identifica por el código del mensaje, no por quién lo pegó', () => {
+    const enCaja1 = huellaPedido({ vendedorId: 'cajero-1', items, total: 2, codigoLink: 'P-8F3K2' })
+    const enCaja2 = huellaPedido({ vendedorId: 'cajero-2', items, total: 2, codigoLink: 'P-8F3K2' })
+
+    assert.equal(enCaja1, enCaja2, 'el mismo mensaje da la misma huella en cualquier caja')
+    assert.equal(enCaja1, 'link|P-8F3K2')
+    assert.notEqual(enCaja1, huellaPedido({ vendedorId: 'cajero-1', items, total: 2, codigoLink: 'P-OTRO1' }))
+    assert.notEqual(enCaja1, huellaPedido({ vendedorId: 'cajero-1', items, total: 2 }))
+  })
 })
 
 describe('pedidoDuplicado', () => {
@@ -221,6 +234,34 @@ describe('pedidoDuplicado', () => {
     assert.equal(
       pedidoDuplicado([pedido()], { vendedorId: 'vendedor-1', huella: huellaPedido({ vendedorId: 'vendedor-1', items: [{ id: 'pan', cantidad: 1, precioVenta: 3 }], total: 3 }), ahora }),
       null,
+    )
+  })
+
+  // 🔑 Un pedido del link se compara contra TODOS los pendientes: si no, el mismo mensaje se podía
+  // cargar en dos cajas y el cliente terminaba con dos pedidos idénticos esperando cobro.
+  it('el mismo mensaje del link no se carga dos veces, ni desde otra caja', () => {
+    const delLink = pedido({ vendedorId: 'cajero-1', huella: huellaPedido({ codigoLink: 'P-8F3K2' }) })
+    const encontrado = pedidoDuplicado([delLink], {
+      vendedorId: 'cajero-2',
+      huella: huellaPedido({ vendedorId: 'cajero-2', codigoLink: 'P-8F3K2' }),
+      ahora,
+    })
+    assert.equal(encontrado?.serieNumero, 'PED-000123')
+  })
+
+  it('dos mensajes distintos del link con los mismos productos entran los dos', () => {
+    const delLink = pedido({ vendedorId: 'cajero-1', huella: huellaPedido({ codigoLink: 'P-8F3K2' }) })
+    assert.equal(
+      pedidoDuplicado([delLink], { vendedorId: 'cajero-1', huella: huellaPedido({ vendedorId: 'cajero-1', codigoLink: 'P-ZZZZ9' }), ahora }),
+      null,
+    )
+  })
+
+  it('un pedido del link no se confunde con uno del vendedor, aunque sea la misma venta', () => {
+    assert.equal(
+      pedidoDuplicado([pedido()], { vendedorId: 'vendedor-1', huella: huellaPedido({ vendedorId: 'vendedor-1', codigoLink: 'P-8F3K2' }), ahora }),
+      null,
+      'el mismo pedido enviado a caja por el vendedor y pedido por el link son dos ventas distintas',
     )
   })
 })

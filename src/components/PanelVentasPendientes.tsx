@@ -1,7 +1,8 @@
-import { Check, Clock, Loader2, Trash2, User } from 'lucide-react'
+import { Check, Clock, Link2, Loader2, Trash2, User } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { useNotifications } from '@/components/notifications'
+import { PegarPedidoLink } from '@/components/PegarPedidoLink'
 import { usePermisos } from '@/context/permisos'
 import { useAuth } from '@/context/auth'
 import { fmt } from '@/lib/ui-utils'
@@ -118,6 +119,14 @@ export function PanelVentasPendientes({
     const cancelando = cancelandoId === v.id
     // La caja solo se aclara cuando aporta (usuario sin caja, o caja distinta de la suya).
     const otraCaja = Boolean(v.cajaId) && v.cajaId !== cajaId
+    // Un pedido cargado pegando el WhatsApp del link: el cliente lo armó afuera, así que lo que
+    // importa en la tarjeta es **quién lo pidió** (y su código), no quién lo pegó.
+    const delLink = v.origen === 'link'
+    const codigoLink = String(v.codigoLink ?? '')
+    const venta = (v.venta ?? {}) as Record<string, unknown>
+    const clienteNombre = String(venta.cliente_nombre ?? '')
+    const clienteTelefono = String(venta.cliente_telefono ?? '')
+    const envio = venta.envio as { direccion?: string } | undefined
 
     return (
       <div key={v.id} className="rounded-xl border bg-card p-3 space-y-2">
@@ -126,6 +135,12 @@ export function PanelVentasPendientes({
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold">{v.serieNumero}</span>
               <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Pendiente</span>
+              {delLink && (
+                <span className="flex items-center gap-0.5 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                  <Link2 className="h-2.5 w-2.5" />
+                  {codigoLink || 'Del link'}
+                </span>
+              )}
               {otraCaja && (
                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                   {nombreCaja(v.cajaId)}
@@ -133,9 +148,18 @@ export function PanelVentasPendientes({
               )}
             </div>
             <p className="text-[10px] text-muted-foreground">Pedido sin comprobante · el stock se descuenta al cobrar</p>
+            {delLink && (clienteNombre || clienteTelefono) && (
+              <p className="mt-1 text-[11px]">
+                <b>{clienteNombre || 'Cliente'}</b>
+                {clienteTelefono ? ` · ${clienteTelefono}` : ''}
+              </p>
+            )}
+            {delLink && envio?.direccion && (
+              <p className="text-[10px] text-muted-foreground">Envío a {envio.direccion}</p>
+            )}
             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground">
               <User className="h-3 w-3" />
-              <span>{v.vendedorNombre || '—'}</span>
+              <span>{delLink ? `lo cargó ${v.vendedorNombre || '—'}` : v.vendedorNombre || '—'}</span>
               <span>·</span>
               <span>{itemCount} item(s)</span>
               <span>·</span>
@@ -203,6 +227,10 @@ export function PanelVentasPendientes({
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">{ventas.length}</span>
         )}
       </div>
+
+      {/* El pedido del link llega por WhatsApp: acá se pega y se convierte en un pedido igual que
+          el del vendedor (mismo circuito, misma lista, mismas reglas). */}
+      <PegarPedidoLink />
 
       {cargando ? (
         <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>

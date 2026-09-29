@@ -65,6 +65,12 @@ export type VentaData = {
   cliente_dni?: string
   cliente_nombre?: string
   cliente_direccion?: string
+  /**
+   * Teléfono del cliente. Lo trae el **pedido del link** (el cliente lo deja en la vidriera) y va en
+   * su propio campo, **nunca** en `cliente_dni`: un teléfono no es un documento de identidad y el
+   * comprobante lo imprimiría como si lo fuera.
+   */
+  cliente_telefono?: string
   referencia?: string
   montoRecibido?: number
   cambio?: number
@@ -570,6 +576,7 @@ export async function crearVentaPendiente({
   vendedorId,
   vendedorNombre,
   cajaId,
+  codigoLink,
   permitirDuplicado = false,
 }: {
   items: VentaItem[]
@@ -578,6 +585,14 @@ export async function crearVentaPendiente({
   vendedorId: string
   vendedorNombre: string
   cajaId?: string
+  /**
+   * **El código del mensaje del link** (`P-8F3K2`) cuando el pedido se cargó pegando el WhatsApp en
+   * el PDV (`lib/pedido-pegado.ts`). Cambia la **identidad** del pedido: la huella pasa a ser el
+   * código, así el mismo mensaje no se puede cargar dos veces **desde ninguna caja** (el que pega es
+   * el cajero, pero la venta la armó el cliente) y dos clientes distintos que pidan lo mismo siguen
+   * entrando, porque cada mensaje trae su código. Queda guardado como `origen: 'link'`.
+   */
+  codigoLink?: string
   /**
    * `true` cuando el vendedor **confirmó** que quiere enviar otra vez la misma venta (venta
    * distinta con los mismos productos). Sin esto, un pedido idéntico y pendiente del mismo
@@ -593,7 +608,7 @@ export async function crearVentaPendiente({
     // vendedor ya mandó esta misma venta y ese pedido sigue pendiente, no se crea otro. Caso real
     // (18/09/2026): un reenvío dejaba dos pedidos idénticos (`PED-000123` y `PED-000124`), el cajero
     // cobraba uno y el otro quedaba colgado para siempre en su lista.
-    const huella = huellaPedido({ vendedorId, items, total: venta.total })
+    const huella = huellaPedido({ vendedorId, items, total: venta.total, codigoLink })
     if (!permitirDuplicado) {
       try {
         const repetido = pedidoDuplicado(await obtenerVentasPendientes(), { vendedorId, huella })
@@ -684,6 +699,7 @@ export async function crearVentaPendiente({
         cliente_nombre: venta.cliente_nombre || '',
         cliente_dni: venta.cliente_dni || '',
         cliente_direccion: venta.cliente_direccion || '',
+        cliente_telefono: venta.cliente_telefono || '',
         montoRecibido: 0,
         cambio: 0,
         // Todavía nadie cobró (eso lo hace el cajero) y el vendedor va en su propio campo: si se
@@ -726,6 +742,9 @@ export async function crearVentaPendiente({
         huella,
         // Queda constancia de que el vendedor confirmó un envío idéntico al anterior.
         ...(permitirDuplicado ? { duplicadoConfirmado: true } : {}),
+        // Un pedido que entró **pegando el WhatsApp del link**: se guarda de dónde vino y con qué
+        // código lo citó el cliente, para poder buscarlo y para que la tarjeta del panel lo diga.
+        ...(codigoLink ? { origen: 'link', codigoLink: String(codigoLink) } : {}),
       }
 
       tx.set(pedidoRef, { [CAMPO_CONTADOR]: numeroPedido, updatedAt: f.toISOString() }, { merge: true })

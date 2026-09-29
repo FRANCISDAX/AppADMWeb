@@ -237,19 +237,35 @@ export function pedidoPendienteCoincidente(
  * Incluye vendedor, total y las líneas (producto, cantidad y precio). **No** incluye la fecha —
  * es justamente lo que hay que ignorar para detectar un reenvío— ni el cliente: si el vendedor
  * reenvía la misma venta habiendo corregido el cliente, sigue siendo el mismo pedido.
+ *
+ * 🔑 **Un pedido del LINK se identifica por el código del mensaje** (`P-8F3K2`), no por quién lo
+ * cargó: el que pega el WhatsApp es el cajero, pero la venta la armó el cliente. Con el código, el
+ * mismo mensaje no se puede cargar dos veces **desde ninguna caja** (`pedidoDuplicado` compara contra
+ * todos cuando la huella es de link), y dos clientes distintos que pidan lo mismo siguen entrando
+ * los dos, porque cada mensaje trae su propio código.
  */
 export function huellaPedido({
   vendedorId,
   items,
   total,
+  codigoLink,
 }: {
   vendedorId?: string | null
   items?: readonly ItemParaHuella[] | null
   total?: number | null
+  /** El código del mensaje del link (`P-…`): cambia la identidad del pedido (ver arriba). */
+  codigoLink?: string | null
 }): string {
+  const codigo = norm(codigoLink)
+  if (codigo) return ['link', codigo].join('|')
   // Mismo formato de siempre (`vendedor|total|líneas…`): se compone con `huellaVenta` para no
   // duplicar el armado de las líneas. Las huellas ya guardadas en los pedidos siguen valiendo.
   return [norm(vendedorId), huellaVenta({ items, total })].join('|')
+}
+
+/** Una huella de pedido del link, que se compara contra **todos** los pedidos y no contra los de uno. */
+export function esHuellaDeLink(huella?: string | null): boolean {
+  return norm(huella).startsWith('link|')
 }
 
 /** Pedido pendiente, con lo mínimo para compararlo contra uno nuevo. */
@@ -279,9 +295,12 @@ export function pedidoDuplicado(
   const ventana = (candidato.ventanaMinutos ?? VENTANA_DUPLICADO_MINUTOS) * 60000
   const ahora = (candidato.ahora ?? new Date()).getTime()
   const vendedor = norm(candidato.vendedorId)
+  // Un pedido del link no es «de» quien lo pegó: la comparación es contra **todos** los pendientes,
+  // así el mismo mensaje no se carga dos veces desde dos cajas distintas.
+  const deLink = esHuellaDeLink(candidato.huella)
 
   for (const pedido of pendientes ?? []) {
-    if (norm(pedido?.vendedorId) !== vendedor) continue
+    if (!deLink && norm(pedido?.vendedorId) !== vendedor) continue
     if ((pedido?.estado || 'pendiente') !== 'pendiente') continue
 
     const huella =
