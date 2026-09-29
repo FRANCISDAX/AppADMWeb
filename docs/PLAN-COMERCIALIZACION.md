@@ -66,22 +66,50 @@ ofrecer como plan premium.
 
 En este orden:
 
-1. **Reglas de Firestore por colección y por rol.** Cerrar la escritura de `tblUsuarios` a ADMIN (hoy
-   es la puerta de la escalada de privilegios), y dejar cada colección con lo que su rol necesita
-   (el cajero lee catálogo y escribe ventas/turnos; el almacén, inventario y compras; etc.).
-   ⚠️ Tiene que convivir con la app móvil (`AppAdm`), que usa la misma base.
-2. **App Check (reCAPTCHA v3)** en la web, y evaluar la RN. Se quitó por CSP: hay que volver a
-   habilitarlo **con** la clave y el dominio autorizado.
-3. **Altas de usuario**: que crear cuentas y tocar roles/permisos sea **solo** de ADMIN, y que nadie
-   pueda escribir su propio documento (punto 1). Hoy la app crea usuarios con la sesión del admin:
-   funciona, pero la regla no lo impide.
-4. **Llaves**: sacar las service accounts de OneDrive, rotarlas, y dejar **una** copia en un gestor de
-   secretos. El puente de Yape ya usa su propia cuenta (bien).
-5. **Respaldo automático de Firestore** (export programado a un bucket, con retención) **y una
-   restauración de prueba**. Una restauración probada vale más que diez páginas de política.
-6. **Auditoría**: `tblAuditLog` ya existe; definir **retención** y **qué se revisa** (cierres, anulaciones,
-   cambios de precio, altas de usuario).
-7. **Plan de incidentes**: quién avisa, a quién y en cuánto tiempo (esto además va en el contrato).
+1. ✅ **HECHO (29/09/2026) — Reglas de Firestore por colección y por rol.** `firestore.rules` reescrito
+   (263 líneas) y **desplegado**. Cierra la escalada de privilegios (la ficha solo la escribe un ADMIN;
+   el dueño toca solo `activeSession`/`dashboardWidgets`), deja los avisos de Yape al puente y con el
+   estado avanzando en un solo sentido, y hace que **una colección nueva nazca cerrada**. Probado con el
+   arnés **`run-reglas.mjs` (64/64)** contra el emulador, con el token real de cada rol y el uid real del
+   puente. Antes de desplegar se verificó que las **6 cuentas** reales tienen ficha y están activas.
+   ⚠️ Convive con la app móvil y con el puente: por eso están `Proveedor` (**sin** prefijo `tbl`),
+   `tblPerfil`, `tblVoiceIntents` y las `*_test`.
+2. ⏳ **PENDIENTE — App Check (reCAPTCHA v3)** en la web, y evaluar la RN. Se quitó por CSP: hay que
+   volver a habilitarlo **con** la clave y el dominio autorizado.
+3. ⏳ **A MEDIAS — Altas de usuario.** Las reglas ya impiden que alguien se dé permisos o se cree una
+   ficha, y la app móvil **ya no crea ADMIN** (se sacó `migrarUsuario`, 29/09/2026). Falta **cerrar el
+   alta libre por correo/contraseña** en Firebase Auth: mientras esté abierta, cualquiera con la clave
+   pública puede crearse una cuenta (no verá nada, pero es ruido y superficie).
+4. ⏳ **PENDIENTE — Llaves**: sacar las service accounts de OneDrive, rotarlas y dejarlas en un gestor
+   de secretos. El puente ya usa su propia cuenta (bien).
+5. ✅ **HECHO (29/09/2026) — Respaldo automático** (ver **4 bis**).
+6. ⏳ **PENDIENTE — Auditoría**: `tblAuditLog` ya existe (223 documentos hoy); falta definir **retención**
+   y **qué se revisa** (cierres, anulaciones, cambios de precio, altas de usuario).
+7. ⏳ **PENDIENTE — Plan de incidentes**: quién avisa, a quién y en cuánto tiempo (esto va en el contrato).
+
+### 4 bis. Respaldos (hecho el 29/09/2026)
+
+🔑 **Dónde vive**: `C:\Users\aaval\appadm-backup\` — **fuera de los repos y fuera de OneDrive**
+(las fotos del catálogo en base64 hacen que un respaldo pese ~11 MB comprimido; en OneDrive serían
+~330 MB sincronizando todo el tiempo).
+
+- **`respaldar.mjs`** — **solo lectura**: exporta **todas** las colecciones (y sus subcolecciones, si
+  algún día hubiera) a `datos/<sello>/<coleccion>.jsonl.gz`, con los tipos de Firestore marcados
+  (`{ "__tipo": "timestamp", … }`), un **manifiesto** con el conteo y el **sha256** de cada archivo, y
+  las **cuentas de Auth** (`auth.json`, con las contraseñas cifradas) vía la CLI de Firebase. Borra los
+  respaldos de más de **30 días**. Tarda ~90 segundos y **1.413 documentos en 25 colecciones** (medido).
+- **`restaurar.mjs`** — el único que escribe: **sin `--confirmar` no toca nada** (simula y muestra qué
+  escribiría). Tiene `--coleccion` para restaurar una sola, y `--probar-tipos`: una prueba **de solo
+  lectura** que toma documentos reales, los serializa, los revive y los compara ⇒ **92 documentos en
+  las 25 colecciones, 0 problemas** (esa es la prueba de que una restauración no deforma fechas ni mapas).
+- **Cuándo corre**: tarea programada de Windows **«AppADM respaldo diario»**, todos los días a las
+  **23:30** (verificado corriéndola a mano: dejó el respaldo completo y su registro). También se puede
+  correr a mano con doble clic en **`respaldar.cmd`**.
+- ⚠️ **Lo que este respaldo NO cubre**: si la PC está apagada a las 23:30, ese día no hay respaldo; y
+  vive en el mismo local que los datos. Cuando el negocio pase al plan **Blaze**, hay que activar los
+  **respaldos administrados de Firestore** (en la nube, con retención propia) y dejar este como copia
+  extra. **Un respaldo que nadie probó no es un respaldo**: la prueba es `--probar-tipos` y, antes de
+  vender, una **restauración de verdad** en un proyecto de prueba.
 
 ## 5. Alta de un cliente nuevo (checklist operativa)
 
