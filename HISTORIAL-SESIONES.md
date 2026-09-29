@@ -11,6 +11,29 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 51 — El gasto que no se podía guardar (`undefined` en Egresos))
+
+**Objective**: el usuario reportó, **trabajando en producción**, que al cargar una compra de bolsas en **Gastos/Egresos** el guardado fallaba: *«Function transaction.set called invalid data proveedorId in document»*.
+
+**La causa (no era la pantalla de Egresos, era el invariante de Firestore)**: el proveedor lo escribió **a mano** y ese proveedor **no estaba cargado** en la colección ⇒ `resolverProveedorId()` devolvía `undefined` ⇒ el payload del alta llevaba `proveedorId: undefined` (y `rucProveedor` / `proveedorNombre` / `comprobante` también, cuando quedan vacíos) ⇒ **Firestore rechaza `undefined`** y tira *"Unsupported field value: undefined"*. Detalle que agravaba el daño: el alta va **dentro de una transacción** que también actualiza el turno, así que no se guardaba **ni el gasto ni el total del turno**.
+
+- 🔑 **Arreglo en el borde de escritura** (la regla de `lib/limpio.ts`, no un parche de pantalla): `services/egresos.ts` ahora limpia **los tres** caminos —`registrarEgreso` (`addDoc`), `registrarEgresoEnTurno` (`tx.set` **y** el `gastosDelTurno` del turno, que es un array y un `undefined` adentro hace fallar la misma transacción) y `actualizarEgreso` (`updateDoc`)—.
+- **La pantalla manda `''`, no `undefined`** (`pages/Egresos.tsx`): así, además, **editar y borrar** el RUC/nombre/comprobante **limpia de verdad** el campo (con `undefined`, `limpiarUndefined` lo descartaba y quedaba el valor viejo — un dato viejo silencioso).
+- 🔑 **El error críptico se traduce**: `mensajeDeDatoInvalido()` (`lib/limpio.ts`, puro y testeado) detecta ese mensaje y devuelve *«Faltó completar un dato (proveedorId) y no se guardó nada…»*. Nació de esto: el usuario leyó un texto que no le decía nada. ⚠️ El primer intento agarraba `value:` como «campo» (la palabra `field` aparece antes en *"Unsupported **field** value"*): la regex apunta a `found in field`.
+- **Barrido de la misma clase de bug** (para no arreglar solo el síntoma reportado): `proveedores.ts` (`|| ''`), `turnos.ts` (`cajaId || ''`), `usuarios.ts` (`seriesParaGuardar()` nunca escribe `undefined`), `clientes.ts` (`pago.operacion` solo si viene) y `ventas/sunat/yape` (ya usaban `limpiarUndefined`) ⇒ **el único camino con el defecto era Egresos**.
+
+**Lo que se midió (emulador fresco, arnés `run-egreso.mjs`) — TODO OK 18/18, 0 errores de consola**
+- Con **0 proveedores cargados** y el nombre escrito a mano, el gasto **se guarda** (antes: error y nada guardado).
+- El documento queda con `proveedorNombre 'DISTRIBUIDORA NUEVA'`, `proveedorId ''`, `rucProveedor ''`, `comprobante ''` y `turnoId` del turno abierto.
+- **El turno suma el gasto**: `totalGastos 50`, `totalGastosEfectivo 50` y `gastosDelTurno` con 1 elemento (los dos se perdían juntos).
+- Editando el gasto y borrando el proveedor, el campo **se limpia** de verdad.
+
+**Work State**: Completed. `npm test` **584/584** (+3 de `mensajeDeDatoInvalido`, +6 de la guarda de escritura), `tsc` ✓, lint **80/0**, `build` ✓.
+
+**Next Move**: **desplegar** (hosting) cuando el usuario diga «procede»: el bug está en producción y bloquea la carga de gastos.
+
+**Relevant Files**: `src/services/egresos.ts`, `src/lib/limpio.ts` + `src/lib/limpio.test.ts`, `src/lib/egresos-escritura.test.ts` (nuevo), `src/pages/Egresos.tsx`, `package.json`, `AGENTS.md`.
+
 ### (2026-09 · 50 — La fase 2 del link, versión barata: pegar el WhatsApp en el PDV)
 
 **Objective**: el usuario eligió cómo seguir con el pedido por link —*«vamos por la opcion C»*—: que **el cajero no cargue los productos a mano**. Se le habían presentado cuatro caminos con su costo (escritura pública en reglas, backend/Función, pegar el texto, y que el puente de Android lea el WhatsApp) y eligió el más chico y sin superficie nueva: **pegar el mensaje y que el sistema lo arme**.

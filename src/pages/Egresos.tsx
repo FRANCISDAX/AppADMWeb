@@ -113,10 +113,14 @@ export default function Egresos() {
         descripcion: formDesc.trim(),
         categoria: formCat,
         tipoPago: formTipo,
-        rucProveedor: formRuc.trim() || undefined,
-        proveedorNombre: formProveedor.trim() || undefined,
-        proveedorId: resolverProveedorId(),
-        comprobante: formComprobante.trim() || undefined,
+        // ⚠️ **Vacío va como `''`, nunca como `undefined`**: Firestore rechaza `undefined`
+        // (*"Unsupported field value: undefined"*) y con el proveedor escrito a mano que no está
+        // cargado el alta **no guardaba nada** (bug real del 28/09/2026, en Gastos/Egresos).
+        // 🔑 Además, al **editar**, `''` sí limpia el campo: con `undefined` el valor viejo quedaba.
+        rucProveedor: formRuc.trim(),
+        proveedorNombre: formProveedor.trim(),
+        proveedorId: resolverProveedorId() ?? '',
+        comprobante: formComprobante.trim(),
         fecha: formFecha || hoy(),
         usuarioId: user?.uid ?? '',
         usuarioNombre: user?.displayName ?? user?.email ?? '',
@@ -253,7 +257,7 @@ export default function Egresos() {
                     </span>
                   </td>
                   <td className="px-3 py-2 text-xs">{e.proveedorNombre || e.rucProveedor || '-'}</td>
-                  <td className="px-3 py-2 text-xs">{e.comprobante ?? '-'}</td>
+                  <td className="px-3 py-2 text-xs">{e.comprobante || '-'}</td>
                   <td className="num whitespace-nowrap px-3 py-2 text-right font-semibold">{fmt(e.monto)}</td>
                   <td className="px-3 py-2">
                     <div className="flex gap-1">

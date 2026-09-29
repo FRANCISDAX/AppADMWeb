@@ -76,3 +76,25 @@ export function rutaConUndefined(valor: unknown, ruta = ''): string {
   }
   return ''
 }
+
+/**
+ * **Traduce el error de Firestore** cuando igual se cuela un `undefined`, para que el que está
+ * cargando el dato no lea un mensaje incomprensible.
+ *
+ * 📌 **Caso real (28/09/2026)**: registrando una compra en **Gastos/Egresos** salía
+ * *«Function transaction.set() called with invalid data. Unsupported field value: undefined (found in
+ * field proveedorId…)»* — el proveedor escrito a mano **no estaba cargado** en la colección, la
+ * pantalla mandaba `proveedorId: undefined` y Firestore rechazaba **toda** la escritura.
+ *
+ * ⚠️ **No reemplaza limpiar el payload** (`limpiarUndefined`): esto solo explica lo que pasó. Devuelve
+ * `null` cuando el mensaje no es de este tipo, así el llamador puede mostrar el error original.
+ */
+export function mensajeDeDatoInvalido(mensaje: unknown): string | null {
+  const m = String(mensaje ?? '')
+  if (!/unsupported field value:\s*undefined/i.test(m)) return null
+  // ⚠️ **`found in field`**, no `field` a secas: la primera aparición de la palabra es
+  // *"Unsupported **field** value"* y un `[^\s)]+` laxo devolvía `value:` como «campo».
+  const campo = /found in field\s+([^\s)]+)/i.exec(m)?.[1] ?? ''
+  const cual = campo ? ` (${campo})` : ''
+  return `Faltó completar un dato${cual} y no se guardó nada. Volvé a intentar; si sigue igual, avisale al administrador.`
+}

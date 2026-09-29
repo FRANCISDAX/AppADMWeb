@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
 import { exigirRateLimit } from '@/lib/rate-limit'
 import { efectivoEsperadoDe } from '@/lib/arqueo'
+import { limpiarUndefined, mensajeDeDatoInvalido } from '@/lib/limpio'
 
 export type Egreso = {
   id?: string
@@ -34,11 +35,18 @@ export async function registrarEgreso(egreso: Omit<Egreso, 'id' | 'createdAt'>):
     if (!egreso.descripcion?.trim()) return { success: false, error: 'La descripción es obligatoria.' }
     if (!egreso.categoria) return { success: false, error: 'Selecciona una categoría.' }
 
-    await addDoc(collection(db, COL.EGRESOS), {
-      ...egreso,
-      fecha: egreso.fecha || new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    })
+    // ⚠️ **`limpiarUndefined` es obligatorio acá**: los datos del proveedor y el comprobante son
+    // opcionales y llegan como `undefined` cuando el que carga el gasto no los completa. Firestore
+    // **rechaza** `undefined` (*"Unsupported field value: undefined"*) y sin esto **no se guardaba
+    // nada**: es el bug real del 28/09/2026 (una compra de bolsas cargada a mano en Gastos/Egresos).
+    await addDoc(
+      collection(db, COL.EGRESOS),
+      limpiarUndefined({
+        ...egreso,
+        fecha: egreso.fecha || new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      }),
+    )
 
     logActividad({ accion: 'crear_egreso', entidad: COL.EGRESOS, entidadId: 'nuevo', detalle: { monto: egreso.monto, categoria: egreso.categoria, descripcion: egreso.descripcion } })
 
@@ -46,7 +54,7 @@ export async function registrarEgreso(egreso: Omit<Egreso, 'id' | 'createdAt'>):
   } catch (e) {
     const err = e as { code?: string; message?: string }
     console.error('❌ Error registrando egreso:', err.message)
-    return { success: false, error: err.message || 'Error al registrar egreso.' }
+    return { success: false, error: mensajeDeDatoInvalido(err.message) || err.message || 'Error al registrar egreso.' }
   }
 }
 
@@ -75,18 +83,23 @@ export async function registrarEgresoEnTurno(egreso: Omit<Egreso, 'id' | 'create
         }
       }
 
-      // Registrar egreso
-      const egresoDoc = {
+      // Registrar egreso.
+      // ⚠️ **`limpiarUndefined` antes de escribir** (bug real del 28/09/2026): con el proveedor sin
+      // cargar, la pantalla manda `proveedorId: undefined` y el `tx.set` se caía con *"Function
+      // transaction.set() called with invalid data. Unsupported field value: undefined"*.
+      // 🔑 Y el **mismo objeto limpio** va al turno: `gastosDelTurno` es un array y un `undefined`
+      // adentro hace fallar **la misma transacción** (o sea: se perdía también el gasto del turno).
+      const egresoLimpio = limpiarUndefined({
         ...egreso,
         fecha: egreso.fecha || new Date().toISOString(),
         createdAt: new Date().toISOString(),
         turnoId,
-      }
+      })
       const egresoRef = doc(collection(db, COL.EGRESOS))
-      tx.set(egresoRef, egresoDoc)
+      tx.set(egresoRef, egresoLimpio)
 
       // Actualizar turno
-      const nuevosGastos = [...(turnoData.gastosDelTurno || []), egresoDoc]
+      const nuevosGastos = [...(turnoData.gastosDelTurno || []), egresoLimpio]
       const gastosEfectivo = (turnoData.totalGastosEfectivo || 0) + (egreso.tipoPago === 'caja' ? egreso.monto : 0)
       const gastosTransferencia = (turnoData.totalGastosTransferencia || 0) + (egreso.tipoPago === 'transferencia' ? egreso.monto : 0)
       tx.update(turnoRef, {
@@ -106,7 +119,7 @@ export async function registrarEgresoEnTurno(egreso: Omit<Egreso, 'id' | 'create
   } catch (e) {
     const err = e as { code?: string; message?: string }
     console.error('❌ Error registrando egreso en turno:', err.message)
-    return { success: false, error: err.message || 'Error al registrar egreso.' }
+    return { success: false, error: mensajeDeDatoInvalido(err.message) || err.message || 'Error al registrar egreso.' }
   }
 }
 
@@ -127,13 +140,15 @@ export async function actualizarEgreso(egresoId: string, datos: Partial<Egreso>)
   try {
     if (!egresoId) return { success: false, error: 'ID de egreso no válido.' }
     const { id, ...rest } = datos
-    await updateDoc(doc(db, COL.EGRESOS, egresoId), rest)
+    // ⚠️ El mismo cuidado que al crear: editar un gasto también puede mandar `undefined`
+    // (el RUC, el nombre del proveedor o el comprobante vacíos) y `updateDoc` lo rechaza igual.
+    await updateDoc(doc(db, COL.EGRESOS, egresoId), limpiarUndefined(rest))
     logActividad({ accion: 'editar_egreso', entidad: COL.EGRESOS, entidadId: egresoId, detalle: rest })
     return { success: true }
   } catch (e) {
     const err = e as { code?: string; message?: string }
     console.error('❌ Error actualizando egreso:', err.message)
-    return { success: false, error: err.message || 'Error al actualizar egreso.' }
+    return { success: false, error: mensajeDeDatoInvalido(err.message) || err.message || 'Error al actualizar egreso.' }
   }
 }
 
