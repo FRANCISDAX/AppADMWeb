@@ -386,6 +386,32 @@ export function Configuracion() {
                 </span>
               </div>
             </div>
+
+            <div className="rounded-lg border p-3">
+              <Label className="font-medium">Impuesto a las ventas (%)</Label>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                El impuesto que pagás <b>como porcentaje de lo que vendés</b> (por ejemplo el pago a
+                cuenta del <b>1,5 %</b>). Se usa en el <b>punto de equilibrio</b> del Dashboard
+                Gerencial: como <b>crece con las ventas</b>, se resta del <b>margen</b> y no se suma a
+                los costos fijos. <b>0 = no tenés ese impuesto.</b> Si algún día vendés gravado, la
+                base es la venta <b>sin IGV</b>: confirmalo con tu contador.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={100}
+                  placeholder="0"
+                  value={String(config.impuestoVentasPorcentaje ?? '')}
+                  onChange={(e) => set('impuestoVentasPorcentaje', Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                  className="h-8 w-24 text-xs"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {(Number(config.impuestoVentasPorcentaje) || 0) === 0 ? 'Sin impuesto' : `${config.impuestoVentasPorcentaje}% de lo vendido`}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}

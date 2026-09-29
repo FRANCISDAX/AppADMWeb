@@ -2,11 +2,15 @@
  * **El punto de equilibrio** (`lib/punto-equilibrio.ts`).
  *
  * ⚠️ Lo que estos tests fijan es lo que puede hacer daño si se calcula mal: que **la mercadería no
- * cuente como costo fijo** (se pagaría dos veces) y que **con margen 0 o negativo no se invente un
+ * cuente como costo fijo** (se pagaría dos veces), que **el impuesto a las ventas salga del margen**
+ * (es variable: como fijo el equilibrio queda corto) y que **con margen 0 o negativo no se invente un
  * número** — ahí no hay equilibrio posible y la pantalla tiene que decirlo.
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 
 import { comprasDeEgresos, costosFijosDe, esCostoFijo, puntoDeEquilibrio } from './punto-equilibrio.ts'
 
@@ -107,5 +111,81 @@ describe('puntoDeEquilibrio — la cuenta', () => {
     assert.equal(r.costosFijos, 0)
     assert.equal(r.vendido, 0)
     assert.equal(r.equilibrio, 0)
+  })
+})
+
+describe('puntoDeEquilibrio — el impuesto a las ventas (costo VARIABLE)', () => {
+  // 📌 El caso real (29/09/2026): fijos S/ 212 (internet 127 + agua 15 + luz 70) y un pago a cuenta del
+  // **1,5 % de lo vendido**. Cargarlo como Egreso del mes lo volvía un costo fijo y el equilibrio salía
+  // **S/ 966,11**; restándolo del margen da **S/ 1.015,81**. La diferencia no es cosmética: S/ 49,70 al mes.
+  const MARGEN = 0.2237
+  const IMPUESTO = 1.5
+
+  it('sin impuesto (0 o sin el parámetro) la cuenta es la de siempre', () => {
+    const sinParametro = puntoDeEquilibrio({ costosFijos: 212, vendido: 274.6, margen: MARGEN })
+    const conCero = puntoDeEquilibrio({ costosFijos: 212, vendido: 274.6, margen: MARGEN, impuestoVentasPct: 0 })
+    assert.equal(conCero.equilibrio, sinParametro.equilibrio, 'una config vieja (sin el campo) no paga nada')
+    assert.equal(conCero.margenContribucion, MARGEN)
+    assert.equal(conCero.impuestoDelMes, 0)
+  })
+
+  it('el impuesto se RESTA del margen y el equilibrio sube', () => {
+    const r = puntoDeEquilibrio({ costosFijos: 212, vendido: 274.6, margen: MARGEN, impuestoVentasPct: IMPUESTO })
+    assert.equal(r.margen, MARGEN, 'el margen medido no se toca: se informa aparte')
+    assert.equal(r.margenContribucion, 0.2087, '22,37 % − 1,50 %')
+    assert.equal(r.equilibrio, 1015.81, '212 ÷ 0,2087')
+    assert.equal(r.porDia, 39.07)
+    assert.equal(r.impuestoVentasPct, IMPUESTO)
+  })
+
+  it('y NO como un costo fijo: la diferencia se mide', () => {
+    const variable = puntoDeEquilibrio({ costosFijos: 212, vendido: 274.6, margen: MARGEN, impuestoVentasPct: IMPUESTO })
+    const comoFijo = puntoDeEquilibrio({ costosFijos: 212 + 4.12, vendido: 274.6, margen: MARGEN })
+    assert.equal(comoFijo.equilibrio, 966.12, 'cargado en Egresos del mes (el 1,5 % de lo vendido: S/ 4,12)')
+    assert.ok((variable.equilibrio ?? 0) > (comoFijo.equilibrio ?? 0), 'el variable exige vender más: el fijo queda corto')
+  })
+
+  it('dice cuánto se lleva el impuesto de lo vendido (para cotejarlo con lo que se paga)', () => {
+    const r = puntoDeEquilibrio({ costosFijos: 212, vendido: 1000, margen: MARGEN, impuestoVentasPct: IMPUESTO })
+    assert.equal(r.impuestoDelMes, 15, '1,5 % de 1.000')
+  })
+
+  it('⚠️ si el impuesto se come todo el margen, no hay equilibrio: null, no un número imposible', () => {
+    const r = puntoDeEquilibrio({ costosFijos: 212, vendido: 500, margen: 0.01, impuestoVentasPct: 1.5 })
+    assert.equal(r.equilibrio, null)
+    assert.equal(r.falta, null)
+    assert.equal(r.porDia, null)
+    assert.equal(r.margenContribucion, -0.005, 'queda negativo: vender más agranda la pérdida')
+  })
+
+  it('un impuesto basura o negativo no inventa plata', () => {
+    assert.equal(puntoDeEquilibrio({ costosFijos: 212, vendido: 0, margen: MARGEN, impuestoVentasPct: Number.NaN }).impuestoVentasPct, 0)
+    assert.equal(puntoDeEquilibrio({ costosFijos: 212, vendido: 0, margen: MARGEN, impuestoVentasPct: -5 }).margenContribucion, MARGEN)
+  })
+})
+
+/**
+ * 🛡️ **Test-guarda del cableado**: la cuenta del impuesto está en `lib/` (una sola implementación), y
+ * la tarjeta tiene que **leer el porcentaje de la configuración** y pasarlo. Si alguien agrega el campo
+ * y no lo conecta —o lo conecta a los fijos en vez del margen— el número vuelve a mentir sin que nada
+ * falle. Se lee el código fuente porque el cálculo es puro y el cableado es lo que puede romperse.
+ */
+describe('🛡️ el impuesto llega desde la configuración hasta la cuenta', () => {
+  const aca = dirname(fileURLToPath(import.meta.url))
+  const widget = readFileSync(join(aca, '..', 'components', 'dashboard', 'PuntoEquilibrioWidget.tsx'), 'utf8')
+
+  it('existe en la configuración y por defecto es 0 (sin impuesto)', () => {
+    const def = readFileSync(join(aca, '..', 'constants', 'tributario.ts'), 'utf8')
+    assert.match(def, /impuestoVentasPorcentaje: 0/, 'el default tiene que estar declarado')
+  })
+
+  it('la tarjeta lo lee de la config y se lo pasa a puntoDeEquilibrio', () => {
+    assert.match(widget, /const impuestoVentasPct = Number\(config\.impuestoVentasPorcentaje\) \|\| 0/)
+    assert.match(widget, /puntoDeEquilibrio\(\{[\s\S]*impuestoVentasPct,/)
+  })
+
+  it('y se puede guardar desde Configuración', () => {
+    const pagina = readFileSync(join(aca, '..', 'pages', 'Configuracion.tsx'), 'utf8')
+    assert.match(pagina, /set\('impuestoVentasPorcentaje',/)
   })
 })

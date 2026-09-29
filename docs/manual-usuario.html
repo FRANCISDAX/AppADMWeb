@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.21 — Septiembre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.22 — Septiembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -993,12 +993,16 @@
   </div>
   <ul style="list-style:none; padding:0; margin: 8px 0;">
     <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Costos fijos</strong>: los <strong>Egresos de este mes</strong> (alquiler, sueldos, servicios, impuestos…): lo que pagás aunque vendas cero.</li>
-    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Margen</strong>: el de los <strong>últimos 3 meses</strong> (un mes suelto es ruidoso y haría saltar el equilibrio de un mes al otro).</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Margen</strong>: el de los <strong>últimos 3 meses</strong> (un mes suelto es ruidoso y haría saltar el equilibrio de un mes al otro). Si configuraste un <strong>impuesto a las ventas (%)</strong>, la tarjeta lo muestra acá: del margen bruto le resta ese porcentaje y con lo que queda calcula el equilibrio.</li>
     <li style="padding:3px 0; font-size:13px; color:#475569;">• La tarjeta muestra además <strong>lo vendido este mes</strong>, <strong>cuánto falta</strong> y una barra con el avance. Si ya lo cubriste, lo dice en verde.</li>
   </ul>
   <div class="warning">
     <div class="warning-label">⚠️ La mercadería NO es un costo fijo</div>
     <p>Los egresos con la categoría <strong>«Compras»</strong> son <strong>mercadería</strong> y su costo <strong>ya está descontado en el margen</strong>: contarlos también como fijos sería <strong>pagar dos veces la misma compra</strong> y la app te pediría vender mucho más de lo necesario. Por eso la tarjeta los muestra <strong>aparte</strong> («+ S/ … de mercadería, que no es fijo») y no los suma. Otros dos avisos que da la tarjeta: si <strong>no cargaste costos fijos</strong> este mes, y si el margen es <strong>0% o negativo</strong> — con ese margen <strong>ningún</strong> nivel de venta cubre los costos, así que primero hay que revisar precios y costos.</p>
+  </div>
+  <div class="warning">
+    <div class="warning-label">⚠️ El impuesto que va como % de lo vendido NO es un costo fijo</div>
+    <p>Si pagás un impuesto <strong>como porcentaje de lo que vendés</strong> (por ejemplo el <strong>pago a cuenta del 1,5 %</strong>), cargalo en <strong>Configuración → Empresa → «Impuesto a las ventas (%)»</strong> y <strong>no</strong> como un gasto del mes: como <strong>crece con las ventas</strong>, es un costo variable y la app lo resta del <strong>margen</strong> (de cada sol vendido queda el margen menos ese porcentaje). Cargarlo como Egreso lo volvería un costo fijo y el equilibrio saldría <strong>más bajo de lo real</strong> justo cuando estás lejos de él. La tarjeta te dice cuánto te toca pagar por lo vendido del mes. <strong>0 = no tenés ese impuesto.</strong> Si algún día vendés gravado, la base es la venta sin IGV: confirmalo con tu contador.</p>
   </div>
 </div>
 
@@ -1008,7 +1012,7 @@
   <p>Solo accesible para ADMIN. Tiene 10 pestañas:</p>
 
   <h3>12.1 Empresa</h3>
-  <p>Datos que aparecen en los comprobantes: Razón Social, RUC, Dirección, Logo, Mensaje legal. También: Régimen tributario, Región exonerada de IGV (Amazonía), Conteo ciego.</p>
+  <p>Datos que aparecen en los comprobantes: Razón Social, RUC, Dirección, Logo, Mensaje legal. También: Régimen tributario, Región exonerada de IGV (Amazonía), Conteo ciego, Descuento manual máximo (%) e <strong>Impuesto a las ventas (%)</strong> (el pago a cuenta que se paga como porcentaje de lo vendido: se usa en el punto de equilibrio).</p>
 
   <h3>12.2 SUNAT</h3>
   <p>Configuración de facturación electrónica: URL de APIs, modo prueba/producción, series de comprobantes, punto de emisión, tope de DNI para boletas (S/ 700) y el receptor de la boleta consolidada.</p>
@@ -1611,7 +1615,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.21</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.22</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

@@ -11,6 +11,10 @@
  *     costo ya está adentro del margen: contarla dos veces pediría vender mucho más de lo necesario).
  *   - **Margen %** = el de los **últimos 3 meses** (ponderado por ventas): el de un mes suelto es
  *     ruidoso y haría saltar el equilibrio de un mes al otro.
+ *   - **Impuesto a las ventas** (`config.impuestoVentasPorcentaje`, Configuración → Empresa) = el
+ *     impuesto que se paga **como porcentaje de lo vendido** (el pago a cuenta del 1,5 %). Es un costo
+ *     **variable**, así que se **resta del margen** y no se suma a los fijos (`lib/punto-equilibrio.ts`
+ *     tiene la regla y el porqué).
  *   - **Vendido** = lo del **mes en curso**, para saber cuánto falta.
  *
  * ⚠️ **Los avisos son parte de la tarjeta**: si no hay costos fijos cargados, si hay mercadería sin
@@ -22,6 +26,7 @@ import { AlertTriangle, Scale, Target } from 'lucide-react'
 
 import { obtenerEgresosPorFecha } from '@/services/egresos'
 import { obtenerVentasPorRango } from '@/services/reportes'
+import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos } from '@/hooks/use-productos'
 import { comprasDeEgresos, costosFijosDe, puntoDeEquilibrio } from '@/lib/punto-equilibrio'
 import { anioDeFecha, mapaDeCostos, margenDelPeriodo, mesDeFecha, type DocDeVenta } from '@/lib/ventas-mensuales'
@@ -35,7 +40,10 @@ const MESES_PARA_MARGEN = 3
 
 export function PuntoEquilibrioWidget() {
   const { productos } = useProductos()
+  const { config } = useConfiguracion()
   const costos = React.useMemo(() => mapaDeCostos(productos), [productos])
+  /** Impuesto que se paga como **porcentaje de lo vendido** (`0` = no hay): sale del margen, no de los fijos. */
+  const impuestoVentasPct = Number(config.impuestoVentasPorcentaje) || 0
 
   const [datos, setDatos] = React.useState<{
     anio: number
@@ -92,9 +100,10 @@ export function PuntoEquilibrioWidget() {
         costosFijos: datos.fijos,
         vendido: vendidoMes,
         margen: periodo.margenPct / 100,
+        impuestoVentasPct,
       }),
     }
-  }, [datos, costos])
+  }, [datos, costos, impuestoVentasPct])
 
   if (!datos) {
     return (
@@ -137,7 +146,11 @@ export function PuntoEquilibrioWidget() {
         <div>
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Margen de los últimos {datos.mesesMedidos} meses</div>
           <div className="num text-lg font-extrabold">{periodo.margenPct.toFixed(1)}%</div>
-          <div className="text-[10px] text-muted-foreground">de cada sol vendido, después de la mercadería</div>
+          <div className="text-[10px] text-muted-foreground">
+            {r.impuestoVentasPct > 0
+              ? `− ${r.impuestoVentasPct}% de impuesto = ${(r.margenContribucion * 100).toFixed(1)}% de contribución`
+              : 'de cada sol vendido, después de la mercadería'}
+          </div>
         </div>
         <div>
           <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -171,8 +184,18 @@ export function PuntoEquilibrioWidget() {
         )}
         {sinMargen && !sinFijos && (
           <p className="font-semibold text-destructive">
-            ⚠️ El margen de los últimos meses es 0% o negativo: con ese margen <b>ningún</b> nivel de venta cubre los costos fijos. Antes
-            de mirar el equilibrio hay que revisar los precios y los costos (Inventario → «sin costo»).
+            ⚠️ El margen de los últimos meses es 0% o negativo
+            {r.impuestoVentasPct > 0 ? ` (o el impuesto del ${r.impuestoVentasPct}% se lo come todo)` : ''}: con ese margen{' '}
+            <b>ningún</b> nivel de venta cubre los costos fijos. Antes de mirar el equilibrio hay que revisar los precios y los costos
+            (Inventario → «sin costo»).
+          </p>
+        )}
+        {r.impuestoVentasPct > 0 && (
+          <p>
+            ℹ️ El <b>impuesto a las ventas</b> ({r.impuestoVentasPct} %, Configuración → Empresa) <b>no</b> se cuenta como costo fijo:
+            crece con lo que vendés, así que se resta del margen (del {periodo.margenPct.toFixed(1)}% de margen quedan{' '}
+            {(r.margenContribucion * 100).toFixed(1)}% para cubrir los fijos). Con lo vendido este mes ({fmt(r.vendido)}) te toca{' '}
+            <b>{fmt(r.impuestoDelMes)}</b> de impuesto.
           </p>
         )}
         {periodo.itemsSinCosto > 0 && (
@@ -191,8 +214,7 @@ export function PuntoEquilibrioWidget() {
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
           <span>
             El margen sale de las ventas y del <b>costo promedio</b> del catálogo (el mismo de Análisis), y asume que la mezcla de
-            productos se mantiene. Es una referencia para decidir, no un número de SUNAT.
-          </span>
+            productos se mantiene. Es una referencia para decidir, no un número de SUNAT.          </span>
         </p>
       </div>
     </div>

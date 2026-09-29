@@ -115,6 +115,13 @@ export const CONFIG_POR_DEFECTO = {
   // ningún negocio que no lo configure podría descontar nada. No afecta a las promociones ni a
   // los descuentos configurados (volumen, producto, cliente), que se aplican siempre.
   descuentoMaximoPorcentaje: 0,
+  // 🔑 **Impuesto que se paga como PORCENTAJE de las ventas** (el **pago a cuenta del 1,5 %** es el caso
+  // real). Se configura en **Configuración → Empresa** y lo usa el **punto de equilibrio** del Dashboard
+  // Gerencial: como **crece con lo que se vende**, es un **costo variable** y se **resta del margen**
+  // (`lib/punto-equilibrio.ts` es la regla única) — cargarlo como Egreso del mes lo metería entre los
+  // fijos y el equilibrio saldría corto justo cuando estás lejos de él. ⚠️ **`0` = no hay impuesto**
+  // (misma convención que `descuentoMaximoPorcentaje = 0`): una config sin este campo no paga nada.
+  impuestoVentasPorcentaje: 0,
   servidor: '',
   envioHabilitado: false,
   zonasEnvio: [
