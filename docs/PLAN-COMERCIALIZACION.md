@@ -225,8 +225,17 @@ constancia. Va en el contrato (punto 7).
 
 ## 7. Legal y comercial (para tu abogado y tu contador)
 
+> 🔑 **Los borradores están escritos**: `docs/legal/` → **`01-contrato-licencia.md`** (con garantía y
+> límite de responsabilidad), **`02-anexo-tratamiento-datos.md`** (encargado/responsable),
+> **`03-aviso-privacidad-web.md`** (lo que se publica en la vidriera y en el manual) y
+> **`04-que-datos-guarda-el-app.md`** (uso interno: qué datos hay, dónde, quién los ve — sirve también
+> para responder el cuestionario de seguridad de un cliente). El **`00-LEEME.md`** dice qué llenar y
+> las **6 preguntas** que tiene que cerrar el abogado. ⚠️ **No es asesoría legal**: son borradores.
+
+En el contrato tienen que estar, sí o sí:
+
 1. **Contrato de licencia** (licencia, no venta): alcance, actualizaciones, plazo, propiedad del
-   software y de los datos, y salida.
+   software y de los datos, y **salida** (exportar todo y borrar el proyecto, con constancia).
 2. **Garantía y límite de responsabilidad**: se entrega *«tal cual»*, sin garantizar resultados
    comerciales, con **tope de responsabilidad** (por ejemplo, lo pagado en los últimos meses).
 3. **Anexo de tratamiento de datos personales**: el cliente es el **responsable**, vos el
