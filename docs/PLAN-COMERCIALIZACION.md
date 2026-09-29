@@ -240,12 +240,16 @@ constancia. Va en el contrato (punto 7).
 
 ## 7. Legal y comercial (para tu abogado y tu contador)
 
-> 🔑 **Los borradores están escritos**: `docs/legal/` → **`01-contrato-licencia.md`** (con garantía y
-> límite de responsabilidad), **`02-anexo-tratamiento-datos.md`** (encargado/responsable),
-> **`03-aviso-privacidad-web.md`** (lo que se publica en la vidriera y en el manual) y
-> **`04-que-datos-guarda-el-app.md`** (uso interno: qué datos hay, dónde, quién los ve — sirve también
-> para responder el cuestionario de seguridad de un cliente). El **`00-LEEME.md`** dice qué llenar y
-> las **6 preguntas** que tiene que cerrar el abogado. ⚠️ **No es asesoría legal**: son borradores.
+> 🔑 **Los borradores están escritos**: `docs/legal/` → **`01-terminos-y-condiciones.md`** (el documento
+> que se **acepta**: contrato de adhesión en estilo genérico, **sin el nombre del cliente en el cuerpo**,
+> con la **Constancia de Aceptación** al final, garantía y límite de responsabilidad incluidos),
+> **`02-anexo-tratamiento-datos.md`** (Anexo B: encargado/responsable), **`03-aviso-privacidad-web.md`**
+> (lo que publica **cada negocio** en la vidriera y en el manual) y **`04-que-datos-guarda-el-app.md`**
+> (uso interno: qué datos hay, dónde, quién los ve — sirve también para responder el cuestionario de
+> seguridad de un cliente). Queda `01-bis-contrato-licencia-negociado.md` como **alternativa** para un
+> cliente que exija un contrato firmado con su nombre. El **`00-LEEME.md`** dice qué llenar, por qué el
+> documento es genérico y las **6 preguntas** que tiene que cerrar el abogado.
+> ⚠️ **No es asesoría legal**: son borradores.
 
 En el contrato tienen que estar, sí o sí:
 

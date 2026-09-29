@@ -9,17 +9,43 @@
 
 | Archivo | Para qué sirve | A quién se lo das |
 |---|---|---|
-| `01-contrato-licencia.md` | El contrato con **cada empresa** que te compra el app | Al cliente, firmado |
-| `02-anexo-tratamiento-datos.md` | **Anexo del contrato**: quién manda sobre los datos de sus clientes y qué te comprometés a hacer | Al cliente, firmado **junto** con el contrato |
-| `03-aviso-privacidad-web.md` | El aviso que va **en la vidriera pública** (`/pedido`) y en el app | Se publica en el app |
-| `04-que-datos-guarda-el-app.md` | **Uso interno**: el detalle técnico exacto (colecciones, campos, quién puede leer/escribir) | A tu abogado, y para responder **cuestionarios de seguridad** de un cliente grande |
+| `01-terminos-y-condiciones.md` | **El documento que se acepta** (contrato de adhesión, en **estilo genérico**: sin el nombre del cliente en el cuerpo). Incluye la **Constancia de Aceptación** del final, que es lo único que lleva sus datos | Al cliente para que acepte (una carilla) |
+| `02-anexo-tratamiento-datos.md` | **Anexo B**: quién manda sobre los datos de sus clientes y qué te comprometés a hacer | Va dentro de los Términos (se acepta y se iniciala) |
+| `03-aviso-privacidad-web.md` | El aviso que **publica el negocio cliente** en la vidriera pública (`/pedido`) y en el manual | Lo publica cada negocio (lleva **su** nombre: es inevitable, es él el responsable) |
+| `04-que-datos-guarda-el-app.md` | **Uso interno**: el detalle técnico exacto (colecciones, campos, quién puede leer/escribir) | A tu abogado, y para responder **cuestionarios de seguridad** |
+| `01-bis-contrato-licencia-negociado.md` | **Alternativa**: el contrato con las dos partes nombradas y firmado | Solo si un cliente grande **exige** un contrato negociado |
+
+## 🔑 Por qué los Términos no llevan el nombre del cliente
+
+Es un **contrato de adhesión**: el mismo texto para todos, y el cliente **acepta** en vez de negociar.
+Es lo estándar en software y evita reescribir el documento en cada alta. Pero **dos cosas tienen que
+quedar identificadas**, y por eso existe la **Constancia de Aceptación** del final (una carilla, un solo
+lugar con el nombre):
+
+1. **Quiénes son las partes**: razón social, RUC, representante, correo y fecha. Sin eso el documento no
+   acredita quién aceptó ni contra quién se reclama — y en el Anexo B (datos personales) la ley pide
+   saber **quién es el responsable y quién el encargado**.
+2. **Las cláusulas que limitan la responsabilidad** (7), la de **salida de datos** (4.3) y el
+   **Anexo B**: en un contrato de adhesión tienen que estar **destacadas** y **inicialadas** por el
+   cliente. `[CONFIRMAR]` con el abogado, pero esa es la práctica que las hace exigibles.
+
+**Alternativa sin papel (recomendada más adelante)**: que el app muestre los Términos en el primer
+ingreso del ADMIN y **registre la aceptación** (versión, fecha, hora y cuenta). Reemplaza la carilla y
+deja mejor prueba que un papel. Hoy **no** está implementado: se puede agregar.
+
+⚠️ **La versión importa**: cada vez que cambies los Términos, subí la versión (`v1.0 — fecha`) y anotá
+qué cambió: la Constancia y (si se implementa) el registro del app tienen que decir **qué versión** se
+aceptó.
 
 ## Lo que hay que llenar antes de usar (buscar `[…]`)
 
-- `[RAZÓN SOCIAL DEL PROVEEDOR]`, `[RUC DEL PROVEEDOR]`, `[DOMICILIO]`, `[CORREO]`, `[TELÉFONO]`
-- Lo mismo del **cliente** en cada contrato (van como campos a completar en la carátula).
+- `[RAZÓN SOCIAL]`, `[RUC]`, `[DOMICILIO]`, `[CORREO]`, `[TELÉFONO]` **del proveedor** (en los Términos y
+  en el Anexo B). Eso se llena **una sola vez** y queda.
+- **Del cliente**: **nada en el cuerpo** — sus datos van solo en la **Constancia de Aceptación** (una
+  carilla por cliente) o, si algún día se implementa, en el registro de aceptación del app.
 - Precio, plazo, cantidad de cajas/sucursales y usuarios incluidos (los ponés vos).
 - Los días de plazos que elijas: aviso de incidentes, devolución/borrado al terminar, plazo de pago.
+- La **versión** de los Términos (`v1.0 — fecha`) en la Constancia.
 
 ## Las preguntas para tu abogado o contador `[CONFIRMAR]`
 

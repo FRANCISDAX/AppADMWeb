@@ -1,11 +1,11 @@
 # ANEXO B — TRATAMIENTO DE DATOS PERSONALES
 
-> **Borrador para revisión legal.** Se firma **junto con** el Contrato de Licencia y forma parte de él.
-> Está escrito sobre lo que el sistema hace **hoy** (verificado en el código el 29/09/2026, ver
-> `04-que-datos-guarda-el-app.md`). Los `[CONFIRMAR]` los cierra el abogado.
+> **Borrador para revisión legal.** Es el **Anexo B de los Términos y Condiciones** y forma parte de
+> ellos. Está escrito en el mismo estilo **sin nombres en el cuerpo**: las partes se identifican **una
+> sola vez** en la **Constancia de Aceptación**. Los `[CONFIRMAR]` los cierra el abogado.
 
-Entre `[RAZÓN SOCIAL DEL PROVEEDOR]` (el «**Encargado**») y `[RAZÓN SOCIAL DEL CLIENTE]` (el
-«**Responsable**»), en el marco del Contrato de Licencia de uso del software AppADM.
+Entre el **Proveedor** (el «**Encargado**») y el **Cliente** (el «**Responsable**»), ambos identificados
+en la Constancia de Aceptación de los Términos y Condiciones de Uso de AppADM.
 
 ## 1. Roles
 
@@ -105,10 +105,7 @@ tiene en el sistema las herramientas para ver, corregir y dar de baja la informa
 Este Anexo rige mientras se traten datos por cuenta del Responsable y sobrevive a la terminación del
 Contrato en lo que respecta a **confidencialidad, devolución y eliminación**.
 
-Firmado en `[LUGAR]`, el `[FECHA]`.
+**Aceptado** por el Cliente junto con los Términos y Condiciones, en la **Constancia de Aceptación**
+(con la **inicial** correspondiente a este Anexo).
 
-| | Encargado | Responsable |
-|---|---|---|
-| Nombre | | |
-| DNI / RUC | | |
-| Firma | | |
+*Encargado: `[RAZÓN SOCIAL DEL PROVEEDOR]`, RUC `[RUC]` — `[CORREO]`.*

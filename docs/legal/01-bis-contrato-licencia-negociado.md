@@ -1,5 +1,11 @@
 # CONTRATO DE LICENCIA DE USO DE SOFTWARE
 
+> **ALTERNATIVA al documento que se usa por defecto.** Lo normal es dar a cada cliente los
+> **`01-terminos-y-condiciones.md`** (contrato de adhesión, **sin su nombre en el cuerpo**): se aceptan
+> una vez y listo. **Este** contrato se usa **solo si un cliente grande lo exige**: lleva las dos partes
+> nombradas y se firma. Si preferís no mantener dos documentos, se puede borrar sin perder nada: los
+> Términos cubren lo mismo (licencia, alcance, precio, salida, garantía, datos, propiedad y ley).
+>
 > **Borrador para revisión legal.** Los campos entre `[…]` se completan en cada contrato.
 
 Conste por el presente documento el **Contrato de Licencia de Uso de Software** (en adelante, el
