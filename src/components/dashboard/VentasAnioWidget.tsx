@@ -18,12 +18,14 @@
  * año anterior con la etiqueta del nuevo.
  */
 import * as React from 'react'
-import { CalendarRange, TrendingUp } from 'lucide-react'
+import { PiggyBank, TrendingUp } from 'lucide-react'
 
 import { primerAnioDeVentas, obtenerVentasPorRango } from '@/services/reportes'
+import { useProductos } from '@/hooks/use-productos'
 import {
   aniosParaSelector,
   etiquetaMes,
+  mapaDeCostos,
   serieMensual,
   type DocDeVenta,
 } from '@/lib/ventas-mensuales'
@@ -38,6 +40,9 @@ export function VentasAnioWidget() {
   const [datos, setDatos] = React.useState<{ anio: number; docs: DocDeVenta[] } | null>(null)
   const [primerAnio, setPrimerAnio] = React.useState(0)
   const [error, setError] = React.useState('')
+  // El costo de lo vendido sale del catálogo (promedio ponderado): sin él no hay margen que mostrar.
+  const { productos } = useProductos()
+  const costos = React.useMemo(() => mapaDeCostos(productos), [productos])
 
   // El selector: desde el año del primer comprobante hasta el actual (una lectura chica).
   React.useEffect(() => {
@@ -71,21 +76,33 @@ export function VentasAnioWidget() {
   }, [anio])
 
   const listo = datos?.anio === anio
-  const serie = React.useMemo(() => serieMensual(listo ? datos?.docs : [], anio), [listo, datos, anio])
+  const serie = React.useMemo(
+    () => serieMensual(listo ? datos?.docs : [], anio, { costos }),
+    [listo, datos, anio, costos],
+  )
   const anios = React.useMemo(() => aniosParaSelector(primerAnio, anioActual), [primerAnio, anioActual])
+  // Las barras son el MARGEN, así que el “mejor mes” es el de mejor margen (no el de más venta).
+  const mejorMargen = React.useMemo(
+    () => serie.meses.reduce<typeof serie.meses[number] | null>((mejor, m) => (m.margen > (mejor?.margen ?? 0) ? m : mejor), null),
+    [serie],
+  )
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <div className="flex items-center gap-2">
-          <CalendarRange className="h-4 w-4 text-primary" />
-          <span className="text-sm font-bold">Ventas por mes</span>
+          <PiggyBank className="h-4 w-4 text-primary" />
+          <span className="text-sm font-bold">Margen por mes</span>
+          <span className="text-[11px] text-muted-foreground">(ventas − costo de la mercadería)</span>
         </div>
         <div className="flex items-center gap-3">
           {listo && serie.comprobantes > 0 && (
             <span className="text-right">
-              <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">Total del año</span>
-              <span className="num text-sm font-extrabold">{fmt(serie.total)}</span>
+              <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">Margen del año</span>
+              <span className="num text-sm font-extrabold">{fmt(serie.margen)}</span>
+              <span className="block text-[10px] text-muted-foreground">
+                {serie.margenPct.toFixed(1)}% de {fmt(serie.ingreso)} vendidos
+              </span>
             </span>
           )}
           <select
@@ -115,14 +132,14 @@ export function VentasAnioWidget() {
           <>
             <div className="flex h-44 items-end gap-1">
               {serie.meses.map((m) => {
-                const alto = m.total > 0 ? Math.max(3, (m.total / serie.max) * 100) : 0
-                const esMejor = serie.mejorMes?.mes === m.mes
+                const alto = m.margen > 0 ? Math.max(3, (m.margen / serie.maxMargen) * 100) : 0
+                const esMejor = mejorMargen?.mes === m.mes && m.margen > 0
                 return (
                   <div key={m.mes} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
                     <div
-                      className={cn('w-full rounded-t', m.total < 0 ? 'bg-destructive/70' : esMejor ? 'bg-primary' : 'bg-primary/60')}
+                      className={cn('w-full rounded-t', m.margen < 0 ? 'bg-destructive/70' : esMejor ? 'bg-primary' : 'bg-primary/60')}
                       style={{ height: `${alto}%` }}
-                      title={`${etiquetaMes(anio, m.mes)}: ${fmt(m.total)} · ${m.comprobantes} comprobante${m.comprobantes === 1 ? '' : 's'}`}
+                      title={`${etiquetaMes(anio, m.mes)}: margen ${fmt(m.margen)} · vendido ${fmt(m.total)} · costo ${fmt(m.costo)} · ${m.comprobantes} comprobante${m.comprobantes === 1 ? '' : 's'}`}
                     />
                     <span className={cn('h-4 text-[9px] font-semibold', esMejor ? 'text-primary' : 'text-muted-foreground')}>
                       {m.label}
@@ -135,15 +152,21 @@ export function VentasAnioWidget() {
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-[11px] text-muted-foreground">
               <span>
                 {serie.comprobantes} comprobante{serie.comprobantes === 1 ? '' : 's'} ·{' '}
-                {serie.mesesConVentas} mes{serie.mesesConVentas === 1 ? '' : 'es'} con ventas
+                {serie.mesesConVentas} mes{serie.mesesConVentas === 1 ? '' : 'es'} con ventas · costo de lo vendido {fmt(serie.costo)}
               </span>
-              {serie.mejorMes && (
+              {mejorMargen && mejorMargen.margen > 0 && (
                 <span className="flex items-center gap-1 font-semibold text-foreground">
                   <TrendingUp className="h-3 w-3 text-primary" />
-                  Mejor mes: {etiquetaMes(anio, serie.mejorMes.mes)} · {fmt(serie.mejorMes.total)}
+                  Mejor mes: {etiquetaMes(anio, mejorMargen.mes)} · {fmt(mejorMargen.margen)}
                 </span>
               )}
             </div>
+            {serie.itemsSinCosto > 0 && (
+              <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                ⚠️ {serie.itemsSinCosto} línea{serie.itemsSinCosto === 1 ? '' : 's'} sin costo en el catálogo (los «Embalaje y otros»
+                se venden sin costo cargado): el margen está <b>inflado</b>. Cargales el costo en Inventario para que este número sea real.
+              </p>
+            )}
           </>
         )}
       </div>

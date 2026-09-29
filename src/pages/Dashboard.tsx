@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { ModalDetalleVenta } from '@/components/ModalDetalleVenta'
 import { PanelAlertas } from '@/components/PanelAlertas'
 import { VentasAnioWidget } from '@/components/dashboard/VentasAnioWidget'
+import { PuntoEquilibrioWidget } from '@/components/dashboard/PuntoEquilibrioWidget'
 
 const fmt = (n: number) => 'S/ ' + n.toFixed(2)
 
@@ -207,6 +208,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (seccion: string) => vo
       {/* La mirada larga: los 12 meses del año elegido. Va antes de “Ventas por Hora” porque
           responde la pregunta del gerente (“¿cómo viene el año?”) y no la del turno. */}
       <VentasAnioWidget />
+
+      {/* ¿Alcanza lo que vendí? Los costos fijos del mes contra el margen de los últimos 3 meses. */}
+      <PuntoEquilibrioWidget />
 
       {/* Ventas por hora */}
       <div className="overflow-hidden rounded-xl border bg-card shadow-card">

@@ -12,6 +12,8 @@ import {
   aniosParaSelector,
   esDocumentoDeVenta,
   importeNetoDeVenta,
+  mapaDeCostos,
+  margenDeDocumento,
   mesDeFecha,
   MESES_CORTOS,
   serieMensual,
@@ -151,6 +153,139 @@ describe('serieMensual — un año, mes por mes', () => {
     const s = serieMensual([doc({ tipoDoc: 'NC', fecha: '2026-05-02T10:00:00.000Z', venta: { total: 80 } })], 2026)
     assert.equal(s.meses[4].total, -80)
     assert.equal(s.mejorMes, null, 'sin ninguna venta positiva no hay “mejor mes”')
+  })
+})
+
+describe('margenDeDocumento — la utilidad bruta de lo vendido', () => {
+  const venta = (items: { id: string; cantidad: number; precioVenta: number }[], extra: Partial<DocDeVenta> = {}): DocDeVenta => ({
+    tipoDoc: 'NV',
+    estado: 'pagado',
+    fecha: '2026-03-14T15:30:00.000Z',
+    venta: { total: 0, items },
+    ...extra,
+  })
+
+  const costos = new Map([
+    ['exo', { costo: 6, afectacion: '20' }], // exonerado: el precio ES el neto
+    ['gra', { costo: 100, afectacion: '10' }], // gravado: el IGV no es plata del negocio
+  ])
+
+  it('con un exonerado: ingreso = precio, y el margen es lo que queda sobre el costo', () => {
+    const r = margenDeDocumento(venta([{ id: 'exo', cantidad: 2, precioVenta: 10 }]), costos)
+    assert.equal(r.ingreso, 20)
+    assert.equal(r.costo, 12, '2 × 6')
+    assert.equal(r.margen, 8)
+    assert.equal(r.itemsSinCosto, 0)
+  })
+
+  it('con un gravado mide sobre el NETO (el IGV cobrado no es del negocio)', () => {
+    // 118 con IGV y costo neto 100 ⇒ el negocio no gana nada. Si se midiera sobre el precio con IGV
+    // daría 18 de margen “falso”.
+    const r = margenDeDocumento(venta([{ id: 'gra', cantidad: 1, precioVenta: 118 }]), costos)
+    assert.equal(r.ingreso, 100)
+    assert.equal(r.margen, 0)
+  })
+
+  it('un ítem sin producto en el catálogo (Embalaje y Otros) no tiene costo: se informa', () => {
+    const r = margenDeDocumento(venta([{ id: 'manual', cantidad: 1, precioVenta: 50 }]), costos)
+    assert.equal(r.margen, 50, 'cuenta como ingreso con costo 0')
+    assert.equal(r.itemsSinCosto, 1, 'y queda marcado: infla el margen')
+  })
+
+  it('un producto CON costo 0 también se marca (vale S/ 0 ⇒ margen del 100%)', () => {
+    // 📌 El caso real de producción: productos sin costo cargado (WAFER NIK). Inflan el margen igual
+    // que un ítem manual, así que el aviso tiene que salir por los dos.
+    const sinCosto = new Map([['pobre', { costo: 0, afectacion: '20' }]])
+    const r = margenDeDocumento(venta([{ id: 'pobre', cantidad: 3, precioVenta: 10 }]), sinCosto)
+    assert.equal(r.margen, 30, 'se vende todo como ganancia')
+    assert.equal(r.itemsSinCosto, 1)
+  })
+
+  it('una nota de crédito resta el ingreso Y el costo (la mercadería vuelve al stock)', () => {
+    const r = margenDeDocumento(venta([{ id: 'exo', cantidad: 2, precioVenta: 10 }], { tipoDoc: 'NC' }), costos)
+    assert.equal(r.ingreso, -20)
+    assert.equal(r.costo, -12)
+    assert.equal(r.margen, -8)
+  })
+
+  it('sin el mapa de costos el margen no se puede calcular: da 0 y no miente con un número', () => {
+    const r = margenDeDocumento(venta([{ id: 'exo', cantidad: 2, precioVenta: 10 }]))
+    assert.equal(r.ingreso, 20)
+    assert.equal(r.costo, 0)
+    assert.equal(r.itemsSinCosto, 1)
+  })
+
+  it('una línea sin cantidad no aporta nada', () => {
+    const r = margenDeDocumento(venta([{ id: 'exo', cantidad: 0, precioVenta: 10 }]), costos)
+    assert.equal(r.ingreso, 0)
+    assert.equal(r.margen, 0)
+  })
+})
+
+describe('mapaDeCostos — el costo sale de costoDeProducto (regla única)', () => {
+  it('usa el promedio ponderado, y el último costo como respaldo', () => {
+    const mapa = mapaDeCostos([
+      { id: 'conPromedio', costoPromedio: 3.1667, precioCompra: 9 },
+      { id: 'sinPromedio', precioCompra: 2.5 },
+      { id: 'soloCostoViejo', costo: 1.75 },
+    ])
+    assert.equal(mapa.get('conPromedio')?.costo, 3.1667, 'el promedio manda sobre el último costo')
+    assert.equal(mapa.get('sinPromedio')?.costo, 2.5)
+    assert.equal(mapa.get('soloCostoViejo')?.costo, 1.75)
+  })
+
+  it('respeta la afectación del producto y no rompe con basura', () => {
+    const mapa = mapaDeCostos([{ id: 'a', precioCompra: 1, tipoAfectacion: '10' }])
+    assert.equal(mapa.get('a')?.afectacion, '10')
+    assert.equal(mapaDeCostos(null).size, 0)
+  })
+})
+
+describe('serieMensual — el margen por mes', () => {
+  const conItems = (fecha: string, items: { id: string; cantidad: number; precioVenta: number }[], tipoDoc = 'NV'): DocDeVenta => ({
+    tipoDoc,
+    estado: 'pagado',
+    fecha,
+    venta: { total: 0, items },
+  })
+  const costos = new Map([['p', { costo: 6, afectacion: '20' }]])
+
+  it('acumula ingreso, costo y margen por mes, y el margen del año', () => {
+    const s = serieMensual(
+      [
+        conItems('2026-01-10T10:00:00.000Z', [{ id: 'p', cantidad: 10, precioVenta: 10 }]), // 100 / 60 / 40
+        conItems('2026-03-10T10:00:00.000Z', [{ id: 'p', cantidad: 5, precioVenta: 10 }]), // 50 / 30 / 20
+      ],
+      2026,
+      { costos },
+    )
+    assert.equal(s.meses[0].ingreso, 100)
+    assert.equal(s.meses[0].costo, 60)
+    assert.equal(s.meses[0].margen, 40)
+    assert.equal(s.meses[2].margen, 20)
+    assert.equal(s.ingreso, 150)
+    assert.equal(s.costo, 90)
+    assert.equal(s.margen, 60)
+    assert.equal(s.margenPct, 40, '60 sobre 150 = 40%')
+    assert.equal(s.maxMargen, 40, 'la escala de las barras de utilidad')
+  })
+
+  it('suma los ítems sin costo del año (para poder avisar que el margen está inflado)', () => {
+    const s = serieMensual(
+      [
+        conItems('2026-01-10T10:00:00.000Z', [{ id: 'p', cantidad: 1, precioVenta: 10 }]),
+        conItems('2026-02-10T10:00:00.000Z', [{ id: 'fantasma', cantidad: 1, precioVenta: 99 }]),
+      ],
+      2026,
+      { costos },
+    )
+    assert.equal(s.itemsSinCosto, 1)
+  })
+
+  it('sin costos pasados, el margen queda en 0 (no se inventa una utilidad)', () => {
+    const s = serieMensual([conItems('2026-01-10T10:00:00.000Z', [{ id: 'p', cantidad: 10, precioVenta: 10 }])], 2026)
+    assert.equal(s.margen, 0)
+    assert.equal(s.ingreso, 100, 'el ingreso sí se puede calcular siempre')
   })
 })
 

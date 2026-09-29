@@ -11,6 +11,31 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 53 — La utilidad del mes y el punto de equilibrio)
+
+**Objective**: dos pedidos del usuario, encadenados — *«sería mejor la utilidad del mes»* (el gráfico de ·52 mostraba **ventas**, no **utilidad**) y *«¿cómo puedo saber el punto de equilibrio del negocio? o dame una mejor explicación»*. Se le preguntó y **decidió las tres cosas**: utilidad = **margen bruto** (no caja, no las dos); punto de equilibrio = *«calcúlalo así»* (**fijos = los Egresos del mes sin la categoría «Compras»**, **margen = el de los últimos 3 meses**); y el gráfico sigue con **barras como el resto del dashboard** (sin librería nueva).
+
+**Important Details**
+- 🔑 **El margen no es un cálculo nuevo**: es la **misma base** de Análisis — `margenDePrecio()` (`lib/precio-venta.ts`, mide sobre el **neto**, porque el IGV cobrado no es del negocio) contra **`costoDeProducto()`** (`lib/valorizacion.ts`, el promedio ponderado). Todo vive en **`lib/ventas-mensuales.ts`**: `mapaDeCostos(productos)`, `margenDeDocumento(doc, costos)` y `margenDelPeriodo(docs, costos)`; **el gráfico y Análisis no pueden dar distinto**.
+- 📌 **Un test cazó una mentira silenciosa**: sin mapa de costos, `margenDeDocumento` devolvía **100%** (ingreso − 0). Ahora, sin costos, devuelve **margen 0** y cuenta **todos** los items en `itemsSinCosto`, así el número **avisa** en vez de inflar. Un producto con `costo <= 0` también cuenta como sin costo. Y el margen del **año** es la **suma de los márgenes mensuales**, no `ingreso − costo` (daría distinto).
+- 🔑 **El punto de equilibrio es una regla, no una división suelta** (`lib/punto-equilibrio.ts`, puro, 13 tests): `puntoDeEquilibrio({ costosFijos, vendido, margen, dias = 26 })` ⇒ **equilibrio = fijos ÷ margen** (margen como fracción), `falta`, `avancePct` (tope 100), `porDia` y `alcanzado`. ⚠️ **Con margen ≤ 0 devuelve todo `null`**: no hay número imposible ni «vendé infinito» — la pantalla lo dice.
+- 🔑 **Por qué «Compras» NO es costo fijo** (`CATEGORIAS_VARIABLES = ['compras']`): es **mercadería**, y su costo **ya está restado en el margen**; contarla como fija la restaría dos veces y pediría vender de más. La pantalla lo muestra aparte (*«+ S/ … de mercadería, que no es fijo»*) para que no parezca un olvido.
+- **`components/dashboard/VentasAnioWidget.tsx`** pasó de «Ventas por mes» a **«Margen por mes»**: las 12 barras son **margen**, escaladas por `maxMargen`; la cabecera dice **«Margen del año»** y **`margenPct% de S/ … vendidos`**; el tooltip lleva margen/vendido/costo/comprobantes y el pie comprobantes, meses con ventas y costo de lo vendido; **aviso ámbar** si hay items sin costo.
+- **`components/dashboard/PuntoEquilibrioWidget.tsx`** (nuevo, autocontenido): dos consultas (`obtenerEgresosPorFecha` del mes + `obtenerVentasPorRango` de los últimos 3 meses) y muestra **fijos**, **margen %**, **equilibrio**, **≈ por día**, **vendido este mes**, **«Faltan…»** o **«✅ Mes cubierto»**, barra de avance y los avisos (sin fijos / margen ≤ 0 / items sin costo / mercadería excluida / *«referencia, no un número de SUNAT»*).
+- Los dos se montan en **Dashboard Gerencial** (`pages/Dashboard.tsx`), antes de «Ventas por Hora». Baseline de lint intacto (**80/0**): el año actual con inicializador perezoso y los datos con su año en el estado (nada de `new Date()` en render ni `setState` sincrónico en el efecto).
+
+**Lo que se midió (emulador fresco, arnés `run-utilidad.mjs`) — TODO OK 22/22, 0 errores de consola**
+- Con ventas por S/ 350.00 y costo S/ 210.00 el año deja **S/ 140.00 (40,0 %)** — y el número **coincide con Análisis** (misma regla).
+- Egresos del mes **S/ 3.800,00**, de los cuales **S/ 800,00 son «Compras»** ⇒ los fijos quedan en **S/ 3.000,00**, y la tarjeta lo dice explícitamente.
+- Con margen **40,0 %** el equilibrio da **S/ 7.500,00** y **≈ S/ 288,46 por día** (26 días); con **S/ 150,00** vendidos en el mes, **faltan S/ 7.350,00** y la barra va al **2 %**.
+- En la segunda fase (productos **sin costo**) el aviso **«N sin costo»** se dispara **en las dos tarjetas** y el margen deja de mentir (0 en vez de 100 %).
+
+**Work State**: Completed. `npm test` **630/630** (+24 de `punto-equilibrio` y del margen en `ventas-mensuales`), `tsc` ✓, lint **80/0**, `build` ✓ (`index-C8U-w81z.js`, verificado sin `demo-key`/`demo-appadm`). Manual **2.21** con **§11.11 «Margen por mes (la utilidad del año)»** y **§11.12 «Punto de equilibrio»** (el PDF quedó pendiente: `docs/` no se despliega). `AGENTS.md` se recortó (64.608 bytes) para no volver a truncarse.
+
+**Next Move**: (1) **desplegar** (hosting) cuando el usuario diga «procede»; (2) ⚠️ **la precisión depende del inventario**: un producto **sin costo** vale S/ 0, da margen 100 % y **baja el punto de equilibrio a un número inalcanzable** — cargar los costos es lo que hace útil la pantalla; (3) si quiere seguir, el escalón siguiente es el **mismo gráfico con ventas vs gastos** (o el mismo mes del año pasado).
+
+**Relevant Files**: `src/lib/punto-equilibrio.ts` + `src/lib/punto-equilibrio.test.ts` (nuevos), `src/components/dashboard/PuntoEquilibrioWidget.tsx` (nuevo), `src/lib/ventas-mensuales.ts` + `src/lib/ventas-mensuales.test.ts` (margen), `src/components/dashboard/VentasAnioWidget.tsx`, `src/pages/Dashboard.tsx`, `package.json`, `docs/manual-usuario.html`, `AGENTS.md`, `HISTORIAL-SESIONES.md`.
+
 ### (2026-09 · 52 — El gráfico de ventas por mes del Dashboard Gerencial)
 
 **Objective**: pedido del usuario —*«me gustaría en el dashboard gerencial que se tenga un gráfico mensual o sea de todos los meses y que se elija el año, ¿se puede hacer?»*—. Se le contestó que sí y con dos decisiones: **una sola serie** (ventas por mes) y **barras como el resto del dashboard** (sin librería nueva).

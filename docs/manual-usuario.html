@@ -974,14 +974,32 @@
     <p>Todos los reportes se pueden filtrar por tipo de comprobante (NV, Boleta, Factura, NC, ND) y por mes. Usa los filtros para obtener datos precisos.</p>
   </div>
 
-  <h3>11.11 Ventas por mes (el gráfico del año)</h3>
-  <p>En el <strong>Dashboard Gerencial</strong> (menú <em>Administración</em>), debajo de las tarjetas del día, está la tarjeta <strong>«Ventas por mes»</strong>: <strong>los 12 meses del año</strong> elegido, con un <strong>selector de año</strong> para cambiar de ejercicio sin salir de la pantalla.</p>
+  <h3>11.11 Margen por mes (la utilidad del año)</h3>
+  <p>En el <strong>Dashboard Gerencial</strong> (menú <em>Administración</em>), debajo de las tarjetas del día, está la tarjeta <strong>«Margen por mes»</strong>: <strong>los 12 meses del año</strong> elegido, con un <strong>selector de año</strong> para cambiar de ejercicio sin salir de la pantalla.</p>
+  <p>Cada barra es <strong>lo que dejó el mes</strong> = lo vendido <strong>menos el costo de la mercadería vendida</strong> (a costo promedio). No es «lo que entró en caja»: todavía no se descontaron los gastos (para eso está el punto de equilibrio de <em>11.12</em>).</p>
   <ul style="list-style:none; padding:0; margin: 8px 0;">
-    <li style="padding:3px 0; font-size:13px; color:#475569;">• Cada barra es un mes: pasa el mouse por encima y ves <strong>el total y cuántos comprobantes</strong> hubo. El <strong>mejor mes</strong> se resalta y aparece abajo con su monto.</li>
-    <li style="padding:3px 0; font-size:13px; color:#475569;">• Arriba a la derecha, el <strong>total del año</strong>; abajo, cuántos comprobantes y cuántos meses con ventas tuvo el año.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Pasa el mouse por una barra y ves <strong>margen, ventas y costo</strong> del mes, más cuántos comprobantes hubo. El <strong>mejor mes</strong> se resalta y aparece abajo con su monto.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Arriba a la derecha, el <strong>margen del año</strong> y qué porcentaje representa de lo vendido; abajo, el <strong>costo de lo vendido</strong> del año.</li>
     <li style="padding:3px 0; font-size:13px; color:#475569;">• El selector ofrece <strong>desde el año de tu primer comprobante</strong> hasta el año actual (si nunca vendiste, los últimos 5).</li>
-    <li style="padding:3px 0; font-size:13px; color:#475569;">• Los números salen de los <strong>mismos comprobantes que los reportes</strong>: no cuentan los pedidos sin cobrar, las ventas anuladas ni las boletas consolidadas, y una <strong>nota de crédito resta</strong> del mes. Un mes sin ventas queda en cero, no desaparece.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• Los números salen de los <strong>mismos comprobantes que los reportes</strong> y del <strong>mismo costo</strong> que Análisis: no cuentan los pedidos sin cobrar, las ventas anuladas ni las boletas consolidadas, y una <strong>nota de crédito resta</strong> (devuelve la plata <em>y</em> la mercadería). Un mes sin ventas queda en cero, no desaparece.</li>
+    <li style="padding:3px 0; font-size:13px; color:#e11d48;">⚠️ Si un producto vendido <strong>no tiene costo cargado</strong>, la app lo trata como S/ 0 y ese mes muestra <strong>100% de margen</strong>: la tarjeta te avisa con el número de líneas sin costo. Cargá los costos en <em>Inventario</em> para que este gráfico sea real.</li>
   </ul>
+
+  <h3>11.12 Punto de equilibrio (¿cuánto tengo que vender para no perder?)</h3>
+  <p>Debajo del gráfico está la tarjeta <strong>«Punto de equilibrio»</strong>. Contesta la pregunta más importante del mes con <strong>dos números</strong>:</p>
+  <div class="ejemplo">
+    <div class="ejemplo-label">📐 La cuenta</div>
+    <p><strong>Costos fijos ÷ margen % = punto de equilibrio</strong><br>Ejemplo: fijos <strong>S/ 3.000</strong> y margen <strong>25%</strong> ⇒ hay que vender <strong>S/ 12.000</strong> al mes (≈ <strong>S/ 462 por día</strong> en 26 días de atención).</p>
+  </div>
+  <ul style="list-style:none; padding:0; margin: 8px 0;">
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Costos fijos</strong>: los <strong>Egresos de este mes</strong> (alquiler, sueldos, servicios, impuestos…): lo que pagás aunque vendas cero.</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• <strong>Margen</strong>: el de los <strong>últimos 3 meses</strong> (un mes suelto es ruidoso y haría saltar el equilibrio de un mes al otro).</li>
+    <li style="padding:3px 0; font-size:13px; color:#475569;">• La tarjeta muestra además <strong>lo vendido este mes</strong>, <strong>cuánto falta</strong> y una barra con el avance. Si ya lo cubriste, lo dice en verde.</li>
+  </ul>
+  <div class="warning">
+    <div class="warning-label">⚠️ La mercadería NO es un costo fijo</div>
+    <p>Los egresos con la categoría <strong>«Compras»</strong> son <strong>mercadería</strong> y su costo <strong>ya está descontado en el margen</strong>: contarlos también como fijos sería <strong>pagar dos veces la misma compra</strong> y la app te pediría vender mucho más de lo necesario. Por eso la tarjeta los muestra <strong>aparte</strong> («+ S/ … de mercadería, que no es fijo») y no los suma. Otros dos avisos que da la tarjeta: si <strong>no cargaste costos fijos</strong> este mes, y si el margen es <strong>0% o negativo</strong> — con ese margen <strong>ningún</strong> nivel de venta cubre los costos, así que primero hay que revisar precios y costos.</p>
+  </div>
 </div>
 
 <!-- ============ 12. CONFIGURACIÓN ============ -->

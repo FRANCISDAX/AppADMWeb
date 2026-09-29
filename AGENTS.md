@@ -9,7 +9,7 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 ## Estado actual
 - ⚠️ **Los índices compuestos viven en `firestore.indexes.json`** y se despliegan con `npx firebase deploy --only firestore:indexes` (**ya desplegados** el 17/09: `tblEgresos: proveedorId + categoria`, `tblDocumentos: cajaId + estado + fecha`). Al agregar una consulta con igualdad + rango/orderBy, declararlo ahí **y** desplegarlo: sin eso falla con *"The query requires an index"* (bloque ·5 del historial). ⚠️ El proyecto tiene **1 índice creado a mano en la consola que no está en el archivo**: por eso **nunca** `--force` (lo borraría).
 - **Ventas pendientes → pedidos**: el vendedor manda la venta a caja y el cajero la cobra desde el panel del PDV; y **el pedido del link se carga pegando el WhatsApp** en ese mismo panel. Los invariantes están en **Pedidos**.
-- **Verde**: `npm test` **605/605**, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 warnings (baseline: no subirlo)**, `npm run build` ✓.
+- **Verde**: `npm test` **630/630**, `npx tsc -b` ✓, `npm run lint` 0 errores / **80 warnings (baseline: no subirlo)**, `npm run build` ✓.
 - **Envío automático a SUNAT** (opción A, 24/09/2026): el comprobante electrónico se manda **solo** desde la app web (plazo **3 días** para todo lo que va a SUNAT, configurable) y **el botón manual sigue igual**. Los invariantes están en **Fiscal (SUNAT)**.
 - **Producción real**: ~93 turnos, ~234 documentos, 40 productos **todos exonerados (`'20'`)** (la región está exenta de IGV).
 - **Decisiones del usuario (16/09)** sobre el cierre: conciliación por billetera **opcional**, **conteo ciego** apagado por defecto y **firmas** en los PDF de caja (detalle en **Caja**).
@@ -21,8 +21,7 @@ React + TypeScript SPA (point-of-sale / inventory admin) backed by Firebase (Aut
 Reglas que ya costaron un bug o que salieron de una decisión explícita del usuario. **No "arreglarlas" por iniciativa propia.**
 
 ### Caja y arqueo
-- **El arqueo cuadra el efectivo, y nada más**: `efectivoEsperado = montoInicial + totalEfectivo − gastosEfectivo − vueltoTransferencia`. Las transferencias **no entran** (ni ahí, ni en `totalNeto = totalVentas − totalGastos`, ni en la diferencia). Cambiar `totalTransferencia` de un turno **no puede** mover el esperado, el contado ni la diferencia: en el arqueo la transferencia es **informativa**.
-- 🔑 **Esa fórmula vive en UN solo lugar: `efectivoEsperadoDe()` (`lib/arqueo.ts`).** Estaba escrita a mano en **6** sitios y **dos** de ellos **sin restar `vueltoTransferencia`** (el modal de cierre y `analizarCierre`): el cajero comparaba contra un número distinto al que el sistema guardaba. **No volver a escribirla a mano** (la usan `turnos.ts` ×2, `reportes.ts`, `egresos.ts`, `compras.ts`, `CierreCaja.tsx` y `auditoria-caja.ts`). Verificado: **92/92 turnos cerrados** dan idéntico al `efectivoEsperado` guardado.
+- **El arqueo cuadra el efectivo, y nada más**: `efectivoEsperado = montoInicial + totalEfectivo − gastosEfectivo − vueltoTransferencia`. Las transferencias **no entran** (ni ahí, ni en `totalNeto = totalVentas − totalGastos`, ni en la diferencia): cambiar `totalTransferencia` **no puede** mover el esperado, el contado ni la diferencia — en el arqueo es **informativa**. 🔑 **Esa fórmula vive en UN solo lugar: `efectivoEsperadoDe()` (`lib/arqueo.ts`)** — estaba escrita a mano en **6** sitios y **dos** sin restar `vueltoTransferencia` (el modal de cierre y `analizarCierre`), así que el cajero comparaba contra otro número. **No volver a escribirla a mano** (la usan `turnos.ts` ×2, `reportes.ts`, `egresos.ts`, `compras.ts`, `CierreCaja.tsx` y `auditoria-caja.ts`). Verificado: **92/92 turnos cerrados** dan idéntico al guardado.
 - ⚠️ **El consolidado "Caja del día" suma SOLO turnos cerrados.** Un turno abierto tiene esperado pero **todavía no tiene contado**, así que incluirlo inventa una diferencia. Ahora `montoInicialTotal` / `efectivoEsperadoTotal` / `efectivoContadoTotal` se acumulan solo si `estado === 'cerrado'`, y el rótulo avisa cuántos quedaron abiertos.
 - **`tipo` = bolsillo, `medio` = detalle.** Se guarda `{ tipo: 'efectivo' | 'transferencia', medio: 'efectivo' | 'yape' | 'plin' | 'transferencia' | 'tarjeta', monto, operacion? }`. `tipo` es lo que ya entienden el arqueo, los reportes, las anulaciones, el cobro y la RN: **poner `tipo: 'yape'` rompe ~8 lugares en silencio**.
 - ⚠️ **`bolsilloDe()` devuelve `'credito'` para `'credito'`, `'mixto'` y cualquier valor desconocido** — **nunca cae a efectivo**. Un medio desconocido que cayera a efectivo **infla el cajón** y produce un faltante fantasma (fue un bug real, ver bloque ·10). Reparto de una venta: **`bolsillosDeVenta()`** (`lib/pagos.ts`) como **regla única**, usada por el alta **y** la anulación.
@@ -86,10 +85,10 @@ Reglas que ya costaron un bug o que salieron de una decisión explícita del usu
 - 🔑 **El REGISTRO DE COMPRAS (SUNAT · RCE) vive en `lib/registro-compras.ts`** (puro y testeado), con las reglas del **Anexo 8.4 de la RS 040-2022/SUNAT**: **una fila por comprobante del proveedor** (las líneas se suman en su comprobante), **CAR de 27 dígitos** = RUC 11 + tipo 2 + serie 4 + número 10 (Tabla 7), tipos de comprobante de la **Tabla 11** (`01/03/04/07/08/12/87/88/00`), tipo de doc de identidad de la **Tabla 1** (`6` RUC / `1` DNI), **notas de crédito en negativo** y **DG vs DGNG** (con o sin derecho a crédito fiscal). Se ve en **Reportes → Registro SIRE → Compras** (pestañas Ventas | Compras) y se exporta pipe-delimited como el de ventas. ⚠️ **El `traeIgv` es un dato del PAPEL, no del producto**: se marca al cargar la compra (`metadata.traeIgv` + `igvConCredito`, que se guardan **con la compra** para que el registro no cambie si mañana se cambia la config) — una compra en Lima trae IGV para un producto que acá se vende exonerado. ⚠️ El **tipo/serie/número** del proveedor se capturan en el modal de compra: sin ellos la fila se muestra **avisada**, nunca se inventa el dato. 🔑 **Las compras VIEJAS tienen el comprobante en la NOTA** (texto libre, `FF02-553`): `comprobanteDeNota` lo lee **solo cuando faltan los campos nuevos**, con el tipo de la letra de la serie (`F`/`B`), y la fila queda marcada **«de la nota»** — una compra nueva no depende de la nota. 🔑 **El documento del proveedor es SOLO el RUC/DNI** (`documentoDeProveedor`: si trae letras no es un documento — el slug del nombre daba un **CAR inventado** sin aviso) y se lee en **los dos campos que existen**: `proveedorId` (web) **o `proveedorDoc`** (la RN, que ya escribe los dos). ⚠️ `obtenerComprasDelMes` lee **un solo rango de fechas** y filtra `tipoMovimiento` en JS (con las dos condiciones haría falta un **índice compuesto**). ⚠️ **Falta portarlo a la RN.**
 
 ### Comprobantes: dos formatos, un solo cálculo
-- 🔑 **El comprobante tiene DOS formatos y ninguna regla duplicada**: el **ticket de 72 mm** para la ticketera (`construirHTMLComprobante` + `abrirPDFComprobante`, `lib/pdf.ts`) y el **A4** para correo/WhatsApp (`lib/comprobante-a4.ts`). Los números salen **siempre** de **`lib/comprobante-comun.ts`** (puro y testeado) y **la ticketera no se toca** al agregar algo al A4: un test-guarda lee `lib/pdf.ts` y falla si cambia el `@page` de 72 mm o si `calcularTotales` se duplica ahí. ⚠️ jsPDF (A4) usa WinAnsi: **sin emojis ni comillas tipográficas** (todo pasa por `limpiarTextoA4()`), y **ningún dato de la tabla se dibuja sin medir el ancho de su columna**. El porqué y los bugs del A4, en el historial.
+- 🔑 **El comprobante tiene DOS formatos y ninguna regla duplicada**: el **ticket de 72 mm** para la ticketera (`construirHTMLComprobante` + `abrirPDFComprobante`, `lib/pdf.ts`) y el **A4** para correo/WhatsApp (`lib/comprobante-a4.ts`). Los números salen **siempre** de **`lib/comprobante-comun.ts`** (puro y testeado) y **la ticketera no se toca** al agregar algo al A4: un test-guarda lee `lib/pdf.ts` y falla si cambia el `@page` de 72 mm o si `calcularTotales` se duplica ahí. ⚠️ jsPDF (A4) usa WinAnsi: **sin emojis ni comillas tipográficas** (todo pasa por `limpiarTextoA4()`), y **ningún dato de la tabla se dibuja sin medir el ancho de su columna**.
 
 ### PDV: el catálogo se dibuja por páginas
-- 🔑 **El catálogo del PDV NO se pinta entero: se dibuja de a `PAGE_CATALOGO` (60) tarjetas** (`Pdv.tsx`: `visibles` + `paginados = lista.slice(0, visibles)`, `InfiniteScroll` + *Ver más* + *«Mostrando X de Y»*). Con **2.000 SKU** el DOM baja de **32.415 a 1.384 nodos** y una tecla de búsqueda de **211-216 ms a 23-46 ms**. ⚠️ **Lo que se pagina es el DIBUJO, no la consulta**: `useProductos()` sigue trayendo el catálogo completo (onSnapshot) y el filtro es en memoria, porque **buscar tiene que encontrar cualquier producto, no solo los de la primera página**. No cambiar la suscripción por un `limit()`/paginación de Firestore: rompería la búsqueda y el stock en vivo.
+- 🔑 **El catálogo del PDV NO se pinta entero: se dibuja de a `PAGE_CATALOGO` (60) tarjetas** (`Pdv.tsx`: `visibles` + `paginados = lista.slice(0, visibles)`, `InfiniteScroll` + *Ver más* + *«Mostrando X de Y»*). Con **2.000 SKU** el DOM baja de **32.415 a 1.384 nodos** y una tecla de búsqueda de **211-216 ms a 23-46 ms**. ⚠️ **Lo que se pagina es el DIBUJO, no la consulta**: `useProductos()` trae el catálogo completo (onSnapshot) y el filtro es en memoria, porque **buscar tiene que encontrar cualquier producto, no solo los de la primera página**. No cambiar la suscripción por un `limit()`: rompería la búsqueda y el stock en vivo.
 - ⚠️ **El reset de la página va en el EVENTO, no en un efecto** (el `onChange` del buscador y los chips hacen `setVisibles(PAGE_CATALOGO)`): sincronizarlo con un `useEffect` sube el baseline de lint.
 - 📌 **Medido el 21/09/2026 (build de producción, 2.000 productos)**: el catálogo llega en **6,2-6,6 s** y el heap baja a **11-29 MB** (antes 41-43 MB). En el build de **desarrollo** los números son ~2× peores ⇒ **medir siempre contra el build de producción**.
 
@@ -107,7 +106,7 @@ Reglas que ya costaron un bug o que salieron de una decisión explícita del usu
 
 ### Firestore
 - **Igualdad + rango/orderBy ⇒ índice compuesto** declarado en `firestore.indexes.json` y desplegado con `npx firebase deploy --only firestore:indexes`. ⚠️ **Nunca `firebase deploy --force`** (borra índices que no estén declarados ahí).
-- 🔑 **`undefined` NO es un valor válido: Firestore lo RECHAZA al escribir** (*"Function transaction.set() called with invalid data. Unsupported field value: undefined"*) y **TypeScript no avisa** (un campo opcional `string | undefined` compila perfecto). Fue un bug real: **enviar una venta a caja fallaba siempre** (`descuentoGlobalTipo: undefined`, `envio: undefined`). **Reglas**: (a) los opcionales que pueden faltar van con **spread condicional** (`...(x ? { campo: x } : {})`) o en **`null`** (`?? null`); (b) **en el borde de escritura**, envolver el payload en **`limpiarUndefined()`** (`lib/limpio.ts`, puro y testeado) — es la red de seguridad: borra los `undefined` en profundidad, descarta los sueltos dentro de arrays y **respeta `null`, `Date`, `Timestamp`, `deleteField()` e `increment()`** (son instancias de clase). Ya se usa en `ventas.ts` (alta, pedido, cobro, anulación), en `Inventario.tsx` y en **`services/sunat.ts`**: ahí el `updateDoc` del bloque `sunat` fallaba **aunque SUNAT ya hubiera aceptado el comprobante**, porque el CDR **no siempre trae** `cdr_code`/`cdr_desc`/`hash` (van por `datosCdr()` con `?? null`) y el `actualizar()` del `catch` va en su propio `try`, para que un fallo al guardar el error no tape el error real. Para diagnosticar antes de escribir: `rutaConUndefined(payload)`. 📌 **Caso real (28/09/2026)**: en **Egresos/Gastos**, con el proveedor escrito a mano no cargado, `proveedorId: undefined` hacía fallar **toda** la transacción (ni el gasto ni el total del turno se guardaban); ahora la pantalla manda `''`, el servicio limpia el payload (`services/egresos.ts`, 🛡️ `lib/egresos-escritura.test.ts`) y ese error se traduce con **`mensajeDeDatoInvalido()`**.
+- 🔑 **`undefined` NO es un valor válido: Firestore lo RECHAZA al escribir** (*"Function transaction.set() called with invalid data. Unsupported field value: undefined"*) y **TypeScript no avisa** (un campo opcional `string | undefined` compila perfecto). Fue un bug real: **enviar una venta a caja fallaba siempre** (`descuentoGlobalTipo: undefined`, `envio: undefined`). **Reglas**: (a) los opcionales que pueden faltar van con **spread condicional** (`...(x ? { campo: x } : {})`) o en **`null`** (`?? null`); (b) **en el borde de escritura**, envolver el payload en **`limpiarUndefined()`** (`lib/limpio.ts`, puro y testeado) — es la red de seguridad: borra los `undefined` en profundidad, descarta los sueltos dentro de arrays y **respeta `null`, `Date`, `Timestamp`, `deleteField()` e `increment()`** (son instancias de clase). Ya se usa en `ventas.ts` (alta, pedido, cobro, anulación), en `Inventario.tsx` y en **`services/sunat.ts`**: ahí el `updateDoc` del bloque `sunat` fallaba **aunque SUNAT ya hubiera aceptado el comprobante**, porque el CDR **no siempre trae** `cdr_code`/`cdr_desc`/`hash` (van por `datosCdr()` con `?? null`). Para diagnosticar antes de escribir: `rutaConUndefined(payload)`. 📌 **Caso real (28/09/2026)**: en **Egresos/Gastos**, con el proveedor escrito a mano no cargado, `proveedorId: undefined` hacía fallar **toda** la transacción (ni el gasto ni el total del turno se guardaban); ahora la pantalla manda `''`, el servicio limpia el payload (`services/egresos.ts`, 🛡️ `lib/egresos-escritura.test.ts`) y ese error se traduce con **`mensajeDeDatoInvalido()`**.
 - `orderBy` **descarta** los documentos a los que les falta el campo: si puede faltar, ordenar en JS.
 - **Borrados y actualizaciones masivas, por lotes** (`writeBatch`, 500) devolviendo **lo que realmente se hizo** (nunca 0 por un fallo parcial).
 - Nunca `undefined` como valor de campo (spread condicional) ni `!` en lecturas.
@@ -126,7 +125,7 @@ Reglas que ya costaron un bug o que salieron de una decisión explícita del usu
 
 ### Reportes y datos
 - **Un cobro de crédito y una nota NO son ventas** (`esVentaReal`); la NC **resta** del total.
-- 🔑 **Qué es una venta para los reportes tiene UNA implementación: `lib/ventas-mensuales.ts`** (`esDocumentoDeVenta()`, `signoDoc()`: **la NC resta**), antes copiada en 4 lugares; de ahí sale el **gráfico «Ventas por mes»** del Dashboard Gerencial (`VentasAnioWidget.tsx`, selector de año, 1 consulta por año sin índice). 🛡️ `lib/ventas-mensuales.test.ts` + arnés 22/22.
+- 🔑 **Qué es una venta y cuánto deja tiene UNA implementación: `lib/ventas-mensuales.ts`** (`esDocumentoDeVenta()`, `signoDoc()`: **la NC resta**; `margenDeDocumento()`: `margenDePrecio` sobre la base neta + `costoDeProducto`, la misma regla que Análisis), antes copiada en 4 lugares. De ahí salen el **margen por mes** del Dashboard Gerencial (`VentasAnioWidget.tsx`, selector de año, 1 consulta por año sin índice) y el **punto de equilibrio** (`PuntoEquilibrioWidget.tsx`): **fijos ÷ margen** (`lib/punto-equilibrio.ts`), donde los **fijos son los Egresos del mes SIN la categoría «Compras»** (esa es mercadería y su costo ya está en el margen: contarla dos veces pediría vender de más), el margen es el de los **últimos 3 meses** y **con margen ≤ 0 devuelve `null`**, no un número imposible. ⚠️ Una línea **sin costo** da **margen 100%** e infla todo: se avisa (`itemsSinCosto`). 🛡️ `lib/ventas-mensuales.test.ts` + `lib/punto-equilibrio.test.ts` + `run-utilidad.mjs` (22/22).
 - 🔑 **En Facturación, el alcance por usuario tiene que verse en pantalla** (23/09/2026): sin `verTodo` la consulta filtra **`usuarioId == tu uid`**, así que **cada uno ve sus propios documentos** — es una **función** (decisión del usuario), no un defecto ⇒ la pantalla lo dice: **«Tus notas de venta del mes» / «Todas…»** y el Registro SUNAT **«Tus documentos del mes» / «Todos…»** (mismo rótulo que la pestaña Pedidos). 📌 **El reclamo que lo motivó**: *«solo me sale desde el 6 a la fecha»* — los primeros días había vendido el **admin** y del 6 en adelante el **cajero**, y se miraba **con el cajero**: no faltaba ninguna venta. ⚠️ La lista va de **25 en 25** y la cabecera dice **`N doc · esta página S/ X`**: ese importe es de la página, no del mes. 🛡️ Guarda: `lib/alcance-reportes.test.ts`.
 - Los reportes por **categoría** son **histórico** (leen `items[].categoria` guardado). No se "arreglan" por iniciativa propia.
 - **`limiteCredito = 0` significa SIN LÍMITE** (no "cero permitido": interpretarlo así rompería toda venta a crédito).
@@ -152,11 +151,11 @@ Reglas que ya costaron un bug o que salieron de una decisión explícita del usu
 
 ### Alertas proactivas (`lib/alertas.ts`, **solo web**)
 - 🔑 **Una regla, una implementación** (24/09/2026): `evaluarAlertas()` (puro y testeado) corre las reglas —puente de Yape caído/sin datos, turno de otro día sin cerrar, stock agotado (crítico) / bajo el mínimo (aviso), avisos de Yape sin usar o con estado raro, diferencia de caja, anulaciones del día y descuentos **sobre el bruto**— las ordena por severidad y **las pantallas solo dibujan eso**; `services/alertas.ts` **solo lee** lo que ya leía otra pantalla. ⚠️ **Una alerta INFORMA, no bloquea** (ni cobrar, ni cerrar, ni vender) y **`0` = regla apagada** (una config sin los campos nuevos evalúa igual las útiles).
-- ⚠️ **No gritar de más**: un turno abierto **normal** es información, no una alarma, y un aviso de Yape sin usar es **aviso, no urgencia**. El **id de cada alerta es ESTABLE** —es lo que hace que «posponer» sirva— y se guarda **por usuario** en `tblAlertasVistas`; lo que nombra personas pide `verTodo`. 🛡️ `lib/alertas.test.ts`.
+- ⚠️ **No gritar de más**: un turno abierto **normal** es información, no una alarma, y un aviso de Yape sin usar es **aviso, no urgencia**. El **id de cada alerta es ESTABLE** y se guarda **por usuario** en `tblAlertasVistas`; lo que nombra personas pide `verTodo`. 🛡️ `lib/alertas.test.ts`.
 
 ## Historial de sesiones
 
-El detalle de cada sesión está en **`HISTORIAL-SESIONES.md`** (más reciente primero; el último bloque es **·52, el gráfico de ventas por mes**; al final, el **apéndice con la referencia de funciones y la tabla de colecciones**).
+El detalle de cada sesión está en **`HISTORIAL-SESIONES.md`** (más reciente primero; el último bloque es **·53, la utilidad y el punto de equilibrio**; al final, el **apéndice con la referencia de funciones y la tabla de colecciones**); para colecciones manda `src/constants/colecciones.ts`.
 
 
 ⚠️ **Por qué está separado**: `AGENTS.md` se carga con un presupuesto (~64 KB) y **se trunca** si se pasa; acá queda solo lo que **gobierna** — al cerrar una sesión el bloque va al historial.
@@ -181,59 +180,28 @@ El detalle de cada sesión está en **`HISTORIAL-SESIONES.md`** (más reciente p
 ### Pruebas de carga (emulador local, nunca producción)
 - 🔑 **Toda prueba de volumen o concurrencia va contra el EMULADOR, jamás contra el proyecto real**: `firebase.json` → `emulators.firestore` (8080) y proyecto `demo-`, que no existe en la nube ⇒ `npx firebase emulators:start --only firestore --project demo-appadm`. ⚠️ **El script lleva candado** (aborta si el emulador no es local o el proyecto no empieza con `demo-`): escribe **miles** de documentos y un error de dedo contra producción sería destructivo.
 - ⚠️ **Los tiempos del emulador NO son los de producción**: sirven para juzgar **corrección bajo concurrencia**, no latencias.
-- 📌 **Medido (emulador, 2.000 SKU y 2-3 cajas)**: cada venta escribe **10 documentos**; stock **sin sobreventa** (*"Stock insuficiente"* al resto); **doble cobro del mismo pedido: 1 exitoso y 1 rechazado**; numeración **sin huecos ni duplicados**. **La serie por caja es lo que hace escalar**: con **una sola serie compartida**, 2 simultáneas ya tardan ~3,5 s y a las 16 empiezan los `ABORTED`.
+- 📌 **Medido (emulador, 2.000 SKU, 2-3 cajas)**: cada venta escribe **10 documentos**; stock **sin sobreventa** (*"Stock insuficiente"* al resto); **doble cobro del mismo pedido: 1 exitoso y 1 rechazado**; numeración **sin huecos ni duplicados**; hasta **16 ventas simultáneas** sin fallos (rompe a las **32**); **7,7 ventas/s** en ráfaga; y con **3 cajas/3 series/3 turnos: 72/72 cobros y 360/360 ventas, los 3 turnos al céntimo** ⇒ **la serie por caja es lo que hace escalar** y **un turno por cajón es el modelo que cierra**. Lo flojo era **contención** (el contador `pedido` y el mismo producto vendido por las 3 cajas: `ABORTED`, **nunca sobreventa**) ⇒ ✅ corregido con `ejecutarTransaccion()`. ⚠️ **El documento del TURNO tiene su propio techo**: guarda **`ventasDelTurno` completo y lo reescribe en cada venta** ⇒ **~917 bytes por venta** ⇒ el 1 MiB de Firestore llegaría a **~1.600 ventas en un mismo turno**: **partir el día en turnos**.
 - ⚠️ **Sesión única**: cada persona necesita **su cuenta** (el modal *Sesión en otro dispositivo* bloquea el cobro).
-- 📌 **Medido, 21/09/2026 (emulador)**: hasta **16 ventas simultáneas sin fallos**, rompe a las **32**; **7,7 ventas/s** en ráfaga; con **3 cajas, 3 series y 3 turnos: 72/72 cobros y 360/360 ventas de jornada, los 3 turnos al céntimo** ⇒ **un turno por cajón es el modelo que cierra**. Lo flojo era **contención** (el contador `pedido` y el mismo producto vendido por las 3 cajas: `ABORTED`, **nunca sobreventa**) ⇒ ✅ corregido con `ejecutarTransaccion()`.
-- 📌 **El documento del TURNO tiene su propio techo (medido)**: guarda **`ventasDelTurno` completo y lo reescribe en cada venta** ⇒ **~917 bytes por venta** ⇒ el 1 MiB de Firestore llegaría a **~1.600 ventas en un mismo turno**: **partir el día en turnos** antes que dejar un turno de 800+ ventas.
 - 💳 **Plan de Firebase**: lo primero que se rompe son las **lecturas** (cada dispositivo cuenta el **catálogo completo**), según el **consumo diario**, no las cajas. ⚠️ **Pasarse CORTA el servicio hasta la medianoche** ⇒ **Blaze va antes de necesitarlo** (**6 cajas** = obligatorio); <US$1/mes con 3 cajas y al crecer toca **pre-agregar los reportes** (`tblResumenDiario`).
-
-
-
 
 ### Documentos del producto (`docs/`)
 
-`docs/manual-usuario.html` (manual de usuario, con PDF) y `docs/resumen-app.html` (resumen comercial). Los PDF se regeneran **sin abrir el navegador a mano** con Chrome headless:
+`docs/manual-usuario.html` (manual, con PDF) y `docs/resumen-app.html` (resumen comercial). Los PDF se regeneran **sin abrir el navegador a mano**:
 `& "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new --disable-gpu --no-pdf-header-footer --print-to-pdf="<ruta ABSOLUTA del pdf>" "file:///<ruta ABSOLUTA del html>"`
 
 ⚠️ **Actualizarlos NO requiere deploy** (`docs/` no está en `public/`): alcanza con el commit. Si cambia de fondo, subir la versión en portada y footer. **Los PDF están versionados en el repo a pedido del usuario** (17/09).
 
-- 🔑 **La configuración recomendada vive en los dos documentos**: en el **manual**, la **sección 17 «Configuración Recomendada»** y el **Anexo A** (equipo, periféricos, red y **A.7 sin internet**); en el **resumen**, la homónima. ⚠️ **Las dos salen del bloque de pruebas de carga de arriba**: si una medición cambia hay que actualizar los dos HTML **y regenerar los PDF**. Versiones: manual **2.21**, resumen **1.9**. ⚠️ **El app es `AppADM`** (**JorFel** = la empresa que lo usa, no el producto).
+- 🔑 **La configuración recomendada vive en los dos documentos**: en el **manual**, la **sección 17 «Configuración Recomendada»** y el **Anexo A** (equipo, red y **A.7 sin internet**); en el **resumen**, la homónima. ⚠️ **Las dos salen del bloque de pruebas de carga de arriba**: si una medición cambia, actualizar los dos HTML **y regenerar los PDF**. Versiones: manual **2.21**, resumen **1.9**. ⚠️ **El app es `AppADM`** (**JorFel** = la empresa que lo usa, no el producto).
 - ⚠️ **El PDF del resumen también necesita `@page { size: A4 }`**: sin eso Chrome usa **Letter** (216×279 mm) y sale distinto al manual. Verificado: los dos PDF dan `MediaBox [0 0 594.96 841.92]` = 210×297 mm.
 
-No test framework is configured. No CI workflows exist.
+## Dev, configuración y build
 
-## Path alias
-
-`@` → `src/` (configured in `tsconfig.app.json`, `vite.config.ts` resolve alias). Always use `@/...` imports.
-
-## Env vars
-
-Copy `.env.example` → `.env.local`. Required: `VITE_FIREBASE_*` keys. Optional: `VITE_APIS_PERU_TOKEN`, `VITE_SUNAT_API_BASE` for SUNAT DNI/RUC lookup.
-
-## Key architecture
-
-- **Entry**: `src/main.tsx` → `AuthProvider` → `PermisosProvider` → `NotificationsProvider` → `App` (Shell)
-- **Navigation**: `src/App.tsx` holds `seccion` state — no react-router. Pages are in `src/pages/`.
-- **Firebase init**: `src/lib/firebase.ts` — uses `browserLocalPersistence` (auth persists across tabs). Firestore offline persistence: `persistentLocalCache` + `persistentMultipleTabManager`.
-- **Permissions**: Role-based (ADMIN / GERENTE / CAJERO / VENDEDOR / ALMACEN / PERSONALIZADO). Defaults in `src/constants/permisos.ts`. Live-synced from Firestore `tblUsuarios/{uid}.permisos`.
-- **Single-session enforcement**: `src/context/auth.tsx` writes `activeSession.deviceId` to Firestore; different device triggers logout for non-admin users.
-- **Firestore collections**: All prefixed `tbl` — see `src/constants/colecciones.ts` for exact names.
-- **Services layer**: `src/services/*.ts` — one file per domain (ventas, inventario, clientes, etc.). All talk to Firestore directly.
-- **UI components**: shadcn/ui (`src/components/ui/`). Use `cn()` from `@/lib/utils` for class merging.
-- **Dark mode**: Class-based (`darkMode: ['class']`). Toggle via `useTheme` hook. Theme stored in `localStorage('appadm-theme')`.
-- **Offline indicator**: Banner in `App.tsx` header + content area when offline.
-- **App Check**: REMOVED — was causing CSP violations.
-
-## Dev proxy
-
-`/api-sunat` → `https://api.apis.net.pe` (rewrites path). Used for DNI/RUC lookups without CORS issues. See `vite.config.ts:18`.
-
-## Build notes
-
-- Firebase SDK is chunked separately (`manualChunks` in `vite.config.ts`). `firebase: ^12.18.0`.
-- `chunkSizeWarningLimit` is 600 KB.
-- `tsconfig.json` uses project references: `tsconfig.app.json` (src) and `tsconfig.node.json` (vite config only).
-- Strict TS: `noUnusedLocals`, `noUnusedParameters`, `erasableSyntaxOnly` are enabled.
+- **Alias**: `@` → `src/` (`tsconfig.app.json` + `vite.config.ts`): **siempre** importar con `@/…`. **Env**: copiar `.env.example` → `.env.local`; requiere `VITE_FIREBASE_*` y acepta `VITE_APIS_PERU_TOKEN` / `VITE_SUNAT_API_BASE` (consulta de DNI/RUC). El proxy de dev `/api-sunat` → `https://api.apis.net.pe` evita el CORS (`vite.config.ts:18`).
+- **Entrada**: `src/main.tsx` → `AuthProvider` → `PermisosProvider` → `NotificationsProvider` → `App` (Shell). **Sin router**: la navegación es el estado `seccion` de `src/App.tsx`; las páginas están en `src/pages/`.
+- **Firebase** (`src/lib/firebase.ts`): `browserLocalPersistence` (la sesión sobrevive entre pestañas) + `persistentLocalCache` con `persistentMultipleTabManager`. **App Check: ELIMINADO** (rompía el CSP).
+- **Permisos**: por rol (ADMIN / GERENTE / CAJERO / VENDEDOR / ALMACEN / PERSONALIZADO), defaults en `src/constants/permisos.ts`, en vivo desde `tblUsuarios/{uid}.permisos`. **Sesión única**: `src/context/auth.tsx` escribe `activeSession.deviceId`; otro dispositivo desloguea a los que no son admin.
+- **UI**: shadcn/ui (`src/components/ui/`) y `cn()` de `@/lib/utils`; **dark mode** por clase (hook `useTheme`, `localStorage('appadm-theme')`).
+- **Build**: el SDK de Firebase va en su chunk propio (`manualChunks`); `tsconfig.json` con project references (src / config de vite) y strict (`noUnusedLocals`, `noUnusedParameters`, `erasableSyntaxOnly`).
 
 ## Conventions
 
@@ -282,13 +250,8 @@ All code changes and new features MUST follow these practices. No exceptions.
 
 ## Service Worker (`public/sw.js`)
 
-- Version: `jorfel-static-v6` / `jorfel-v6`
-- Cache-first for CSS, images, fonts (NOT scripts)
-- Scripts (JS): stale-while-revalidate (avoids Vite modulepreload conflicts)
-- Network-first for Firebase/API calls
-- `fonts.gstatic.com` excluded from SW caching (browser handles font preloading)
-- CSP in `firebase.json`: `default-src 'self'`, `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com`, `worker-src 'self' blob:`, `connect-src` includes `https://fonts.gstatic.com`
-- `meta name="mobile-web-app-capable"` (NOT `apple-mobile-web-app-capable`, deprecated)
+- Versión: `jorfel-static-v6` / `jorfel-v6`. **Cache-first** para CSS, imágenes y fuentes (**no** scripts); los scripts van **stale-while-revalidate** (si no, choca con el modulepreload de Vite); **network-first** para Firebase/API; `fonts.gstatic.com` fuera del caché (lo precarga el navegador).
+- CSP en `firebase.json`: `default-src 'self'`, `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com`, `worker-src 'self' blob:`, `connect-src` incluye `https://fonts.gstatic.com`. `meta name="mobile-web-app-capable"` (**no** el `apple-mobile-web-app-capable`, deprecado).
 
 ## Referencia
 
