@@ -117,24 +117,33 @@ En este orden:
    y **qué se revisa** (cierres, anulaciones, cambios de precio, altas de usuario).
 7. ⏳ **PENDIENTE — Plan de incidentes**: quién avisa, a quién y en cuánto tiempo (esto va en el contrato).
 
-### 4 bis. Respaldos (hecho el 29/09/2026)
+### 4 bis. Respaldos (hecho el 29/09/2026; **por cliente** desde el mismo día)
 
 🔑 **Dónde vive**: `C:\Users\aaval\appadm-backup\` — **fuera de los repos y fuera de OneDrive**
 (las fotos del catálogo en base64 hacen que un respaldo pese ~11 MB comprimido; en OneDrive serían
-~330 MB sincronizando todo el tiempo).
+~330 MB sincronizando todo el tiempo). Hay un **`LEEME.md`** ahí mismo con el uso y el alta de clientes.
 
-- **`respaldar.mjs`** — **solo lectura**: exporta **todas** las colecciones (y sus subcolecciones, si
-  algún día hubiera) a `datos/<sello>/<coleccion>.jsonl.gz`, con los tipos de Firestore marcados
-  (`{ "__tipo": "timestamp", … }`), un **manifiesto** con el conteo y el **sha256** de cada archivo, y
-  las **cuentas de Auth** (`auth.json`, con las contraseñas cifradas) vía la CLI de Firebase. Borra los
-  respaldos de más de **30 días**. Tarda ~90 segundos y **1.413 documentos en 25 colecciones** (medido).
-- **`restaurar.mjs`** — el único que escribe: **sin `--confirmar` no toca nada** (simula y muestra qué
-  escribiría). Tiene `--coleccion` para restaurar una sola, y `--probar-tipos`: una prueba **de solo
-  lectura** que toma documentos reales, los serializa, los revive y los compara ⇒ **92 documentos en
-  las 25 colecciones, 0 problemas** (esa es la prueba de que una restauración no deforma fechas ni mapas).
+- 🔑 **`clientes.json`** es la lista de empresas: `id`, `nombre`, `proyecto` y la ruta de su **llave de
+  servicio**. **Agregar un cliente es agregar una línea** (ver el paso 8 de la receta del punto 5).
+- **`respaldar.mjs`** — **solo lectura**: recorre **todos** los clientes activos (o uno con
+  `--cliente`) y por cada uno exporta todas las colecciones a `datos/<cliente>/<sello>/<coleccion>.jsonl.gz`
+  con los tipos de Firestore marcados (`{ "__tipo": "timestamp", … }`), un **manifiesto** con el conteo y
+  el **sha256** de cada archivo, y las **cuentas de Auth** (`auth.json`, con las contraseñas cifradas)
+  vía la CLI de Firebase. Retención de **30 días por cliente**. Tarda ~45 s por cliente.
+  - 🔑 **Un cliente que falla no frena a los demás**, y al final da el **resumen** (`X de N OK`) y
+    **termina con error** (verificado: con un cliente de prueba roto, el sano se respaldó igual y el
+    proceso salió con código 1). Un cliente **sin respaldo** no puede pasar desapercibido.
+  - ⚠️ **Avisa si una llave vive en OneDrive** (hoy pasa con la de JorFel): lo repite en cada corrida
+    hasta que se mueva.
+- **`restaurar.mjs`** — el único que escribe: **sin `--confirmar` no toca nada**. Antes de escribir
+  imprime **el cliente y el proyecto destino** (para no restaurar en la base equivocada). Tiene
+  `--coleccion` para restaurar una sola, `--ultimo` para el respaldo más nuevo, y `--probar-tipos`: una
+  prueba **de solo lectura** que toma documentos reales, los serializa, los revive y los compara ⇒
+  **92 documentos en las 25 colecciones, 0 diferencias** (medido).
 - **Cuándo corre**: tarea programada de Windows **«AppADM respaldo diario»**, todos los días a las
-  **23:30** (verificado corriéndola a mano: dejó el respaldo completo y su registro). También se puede
-  correr a mano con doble clic en **`respaldar.cmd`**.
+  **23:30**, sin parámetros ⇒ **todos los clientes** (no hay que crear una tarea por cliente; verificado
+  corriéndola con el script nuevo: dejó el respaldo de JorFel completo y su registro). También hay
+  **`respaldar.cmd`** para hacerlo a mano con doble clic.
 - ⚠️ **Lo que este respaldo NO cubre**: si la PC está apagada a las 23:30, ese día no hay respaldo; y
   vive en el mismo local que los datos. Cuando el negocio pase al plan **Blaze**, hay que activar los
   **respaldos administrados de Firestore** (en la nube, con retención propia) y dejar este como copia
@@ -202,10 +211,16 @@ npx firebase deploy --only hosting --project appadm-acme
 # y después: el index.html servido tiene que apuntar al mismo index-<hash>.js que dist
 ```
 
-**8. Respaldo de ese cliente** ⚠️ **pendiente de parametrizar**: hoy `C:\Users\aaval\appadm-backup\`
-apunta a **un solo proyecto** (el tuyo). Antes del **segundo** cliente hay que hacerlo por proyecto
-(un `config.<cliente>.json` y su tarea), o el respaldo de los demás no existe. *(Es el único punto de
-esta receta que todavía no está resuelto.)*
+**8. Respaldo de ese cliente** ✅ **RESUELTO (29/09/2026)**: la herramienta ya es **por cliente**.
+En `C:\Users\aaval\appadm-backup\clientes.json` se agrega una línea con su `id`, su `proyecto` y la ruta
+de su **llave de servicio** (consola de Firebase → *Cuentas de servicio → Generar nueva clave privada*;
+guardala en `llaves\`, **no** en OneDrive). La tarea de Windows **ya los recorre a todos**: no hay que
+crear una tarea por cliente. Verificá el alta con:
+```powershell
+node respaldar.mjs --cliente acme        # debe terminar con «RESPALDO OK» y el conteo de documentos
+```
+⚠️ Si un cliente falla, **los demás se respaldan igual**, pero el proceso termina con **error** y el
+resumen dice cuál falló: un cliente sin respaldo no puede pasar desapercibido.
 
 **9. Capacitación y cierre**: manual **2.22** + resumen **1.9**, y **una venta real completa** de punta
 a punta (cobro, comprobante, cierre de caja) antes de dejarlos solos.
