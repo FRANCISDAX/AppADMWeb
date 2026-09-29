@@ -7,6 +7,7 @@ import { useNotifications } from '@/components/notifications'
 import { Button } from '@/components/ui/button'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
+import { signoDoc } from '@/lib/ventas-mensuales'
 import { cn } from '@/lib/utils'
 import {
   CABECERA_EXPORT_COMPRAS,
@@ -67,7 +68,8 @@ type DocCalculado = Doc & {
 }
 
 function calcularDoc(d: Doc): DocCalculado {
-  const signo = d.tipoDoc === 'NC' ? -1 : 1
+  // La regla del signo vive en `lib/ventas-mensuales.ts` (la NC resta): una sola implementación.
+  const signo = signoDoc(d)
   const items = d.venta?.items || []
   let baseGravada = 0
   let baseExonerada = 0

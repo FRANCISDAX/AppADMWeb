@@ -6,6 +6,7 @@ import { COL } from '@/constants/colecciones'
 import { cn } from '@/lib/utils'
 import { ModalDetalleVenta } from '@/components/ModalDetalleVenta'
 import { PanelAlertas } from '@/components/PanelAlertas'
+import { VentasAnioWidget } from '@/components/dashboard/VentasAnioWidget'
 
 const fmt = (n: number) => 'S/ ' + n.toFixed(2)
 
@@ -202,6 +203,10 @@ export function Dashboard({ onNavigate }: { onNavigate?: (seccion: string) => vo
           <div className="text-xs text-muted-foreground">{topProductos[0]?.cantidad || 0} uds</div>
         </div>
       </div>
+
+      {/* La mirada larga: los 12 meses del año elegido. Va antes de “Ventas por Hora” porque
+          responde la pregunta del gerente (“¿cómo viene el año?”) y no la del turno. */}
+      <VentasAnioWidget />
 
       {/* Ventas por hora */}
       <div className="overflow-hidden rounded-xl border bg-card shadow-card">

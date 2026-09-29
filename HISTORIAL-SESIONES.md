@@ -11,6 +11,31 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 52 — El gráfico de ventas por mes del Dashboard Gerencial)
+
+**Objective**: pedido del usuario —*«me gustaría en el dashboard gerencial que se tenga un gráfico mensual o sea de todos los meses y que se elija el año, ¿se puede hacer?»*—. Se le contestó que sí y con dos decisiones: **una sola serie** (ventas por mes) y **barras como el resto del dashboard** (sin librería nueva).
+
+**Lo que ya existía y se reusó** (no se inventó nada): el **Dashboard Operaciones** ya tenía `VentasMesWidget` (barras **diarias** + selector de **mes**), la consulta `obtenerVentasPorRango` (rango de `fecha`, **sin índice compuesto**) y el estilo de barras del dashboard. Lo pedido es el mismo gráfico con el **otro eje** (12 meses) y **selector de año**.
+
+- 🔑 **`lib/ventas-mensuales.ts`** (puro, 21 tests): `serieMensual(docs, anio)` devuelve **siempre los 12 meses** (un mes sin ventas es una barra en cero, no un hueco), con total, comprobantes, total del año, **mejor mes** y la escala (`max`, nunca 0). `aniosParaSelector(primerAnio, anioActual)` arma el selector **desde el primer comprobante hasta hoy** (si nunca hubo ventas: los últimos 5, así nunca queda vacío).
+- 🔑 **La regla de “qué es una venta” quedó con UNA implementación**: `esDocumentoDeVenta()` (no anulada, no consolidada, tipo NV/BOLETA/FACTURA/NC/ND) y **`signoDoc()`** (**la NC resta**) vivían copiadas en **4** lugares (`obtenerVentasPorRango`, el filtro del dashboard, `VentasPorEmpleado`, `ReporteSire`). Ahora viven en el módulo puro, `reportes.ts` las **re-exporta** y las tres pantallas las importan de ahí ⇒ **el gráfico no puede contradecir a los reportes**.
+- **`components/dashboard/VentasAnioWidget.tsx`** (autocontenido: carga su propio año) montado en el **Dashboard Gerencial** arriba de «Ventas por Hora»: tarjeta con el **total del año**, el **selector**, las 12 barras (tooltip con monto y comprobantes, el mejor mes resaltado) y el pie con comprobantes/meses con ventas. **Una sola consulta por año** (`obtenerVentasPorRango`, sin filtro de usuario: es un dashboard gerencial).
+- `primerAnioDeVentas()` (`services/reportes.ts`): una lectura (`orderBy('fecha')` + `limit(1)`) para saber desde qué año ofrecer; con respaldo `año actual − 4`.
+- ⚠️ **Dos trampas de lint/render que se evitaron**: nada de `new Date()` en el render (el año actual se guarda con inicializador perezoso) ni de `setState` sincrónico en el efecto — los datos se guardan **con su año** (`{ anio, docs }`), así mientras llega el año nuevo se ve «Cargando…» en lugar de las barras viejas con la etiqueta nueva. Baseline intacto: **80/0**.
+
+**Lo que se midió (emulador fresco, arnés `run-grafico-mensual.mjs`) — TODO OK 22/22, 0 errores de consola**
+- Sembrados 8 comprobantes en dos años: el gráfico dibuja **los 12 meses** con sus etiquetas.
+- **La nota de crédito resta**: marzo tenía una boleta de 300 y una NC de 100 ⇒ el mes vale **200** y el año **S/ 350.00**. No entraron un pedido `PENDIENTE` (999), un anulado (888) ni una consolidada (777).
+- **Las alturas escalan**: enero (150) al **75%**, marzo (200) al **100%** (la más alta), febrero (sin ventas) en **0** — y cada barra explica su mes en el tooltip.
+- **El selector arranca en el año actual y ofrece el año del primer comprobante**; al elegir el año anterior el gráfico **recarga** (S/ 500.00, 1 comprobante, mejor mes Dic, la única barra con altura).
+- 📌 **Trampa del arnés**: `innerText` devuelve el texto **ya transformado por CSS** (`.uppercase`), así que un rótulo se lee en MAYÚSCULAS — el chequeo necesita regex con `i` (costó dos corridas rojas con el gráfico perfecto).
+
+**Work State**: Completed. `npm test` **605/605** (+21), `tsc` ✓, lint **80/0**, `build` ✓. Manual **2.21** con la sección nueva **11.11 «Ventas por mes (el gráfico del año)»** (no se regeneró el PDF: `docs/` no se despliega, queda para el próximo cambio de fondo).
+
+**Next Move**: (1) **desplegar** (hosting) cuando el usuario diga «procede»; (2) si el gráfico se usa, el siguiente escalón natural es **ventas vs gastos** (o utilidad) en el mismo gráfico — ya se le ofreció y eligió una sola serie por ahora.
+
+**Relevant Files**: `src/lib/ventas-mensuales.ts` + `src/lib/ventas-mensuales.test.ts` (nuevos), `src/components/dashboard/VentasAnioWidget.tsx` (nuevo), `src/pages/Dashboard.tsx`, `src/services/reportes.ts` (`primerAnioDeVentas`, re-export de `signoDoc`), `src/pages/DashboardOperaciones.tsx`, `src/pages/VentasPorEmpleado.tsx`, `src/pages/ReporteSire.tsx`, `package.json`, `docs/manual-usuario.html`, `AGENTS.md`.
+
 ### (2026-09 · 51 — El gasto que no se podía guardar (`undefined` en Egresos))
 
 **Objective**: el usuario reportó, **trabajando en producción**, que al cargar una compra de bolsas en **Gastos/Egresos** el guardado fallaba: *«Function transaction.set called invalid data proveedorId in document»*.

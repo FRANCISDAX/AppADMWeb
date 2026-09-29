@@ -9,7 +9,7 @@ import { useProductos } from '@/hooks/use-productos'
 import { CATEGORIA_SIN_ASIGNAR } from '@/lib/categorias'
 import { useDashboardWidgets } from '@/hooks/use-dashboard-widgets'
 import { buscarTurnoAbierto, type Turno } from '@/services/turnos'
-import { signoDoc } from '@/services/reportes'
+import { signoDoc, esDocumentoDeVenta } from '@/lib/ventas-mensuales'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { estadoVencimiento } from '@/lib/ui-utils'
@@ -118,17 +118,14 @@ export function DashboardOperaciones({ onNavigate }: { onNavigate: (seccion: str
 
   const verTodo = tienePermiso('verTodo')
   const ventasHoy = React.useMemo(
-    () => docsHoy.filter((d) => (verTodo || !user?.uid || d.usuarioId === user.uid) && d.estado !== 'anulada' && !d.consolidado && (d.tipoDoc === 'NV' || d.tipoDoc === 'BOLETA' || d.tipoDoc === 'FACTURA' || d.tipoDoc === 'NC' || d.tipoDoc === 'ND')),
+    () => docsHoy.filter((d) => (verTodo || !user?.uid || d.usuarioId === user.uid) && esDocumentoDeVenta(d)),
     [docsHoy, verTodo, user?.uid]
   )
   const totalVentasHoy = React.useMemo(() => ventasHoy.reduce((s, d) => s + signoDoc(d) * (d.venta?.total || 0), 0), [ventasHoy])
   const numTransacciones = ventasHoy.length
   const ticketPromedio = numTransacciones > 0 ? totalVentasHoy / numTransacciones : 0
 
-  const ventas = React.useMemo(
-    () => docs.filter((d) => d.estado !== 'anulada' && !d.consolidado && (d.tipoDoc === 'NV' || d.tipoDoc === 'BOLETA' || d.tipoDoc === 'FACTURA' || d.tipoDoc === 'NC' || d.tipoDoc === 'ND')),
-    [docs]
-  )
+  const ventas = React.useMemo(() => docs.filter(esDocumentoDeVenta), [docs])
   const totalVentasMes = React.useMemo(() => ventas.reduce((s, d) => s + signoDoc(d) * (d.venta?.total || 0), 0), [ventas])
 
   const docsSunatHoy = React.useMemo(() => docsHoy.filter((d) => d.tipoDoc !== 'NV'), [docsHoy])

@@ -7,6 +7,7 @@ import { useNotifications } from '@/components/notifications'
 import { Button } from '@/components/ui/button'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
+import { signoDoc } from '@/lib/ventas-mensuales'
 import { cn } from '@/lib/utils'
 
 const fmt = (n: number) => 'S/ ' + (n ?? 0).toFixed(2)
@@ -55,10 +56,6 @@ type EmpleadoVentas = {
   efectivo: number
   transferencia: number
   credito: number
-}
-
-function signoDoc(d: Doc): number {
-  return d.tipoDoc === 'NC' ? -1 : 1
 }
 
 function descargarCsv(rows: string[], nombre: string) {

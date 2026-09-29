@@ -1,8 +1,15 @@
-import { collection, doc, getDoc, getDocs, orderBy, query, updateDoc, where, type QueryConstraint } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, updateDoc, where, type QueryConstraint } from 'firebase/firestore'
 import { ejecutarTransaccion } from '@/services/transacciones'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { desglosarTurno, efectivoEsperadoDe, sumarDesgloses, type DesgloseTurno } from '@/lib/arqueo'
+// 🔑 **Qué es una “venta” para los reportes vive en un solo lugar**: `lib/ventas-mensuales.ts`
+// (no anulada, no consolidada, tipo NV/BOLETA/FACTURA/NC/ND, y **la NC resta**). Estaba escrito a
+// mano acá y en tres pantallas más; el gráfico mensual del Dashboard usa la MISMA función, así no
+// puede contradecir a Reportes.
+import { esDocumentoDeVenta, signoDoc } from '@/lib/ventas-mensuales'
+
+export { signoDoc }
 
 // Una "venta" contable para reportes es un comprobante real (NV/BOLETA/FACTURA), NO anulado,
 // y NO un cobro de crédito ni una nota de crédito/débito (esos no son ventas nuevas).
@@ -368,11 +375,28 @@ export async function obtenerVentasPorRango(inicio: Date, fin: Date, usuarioFilt
   const snap = await getDocs(q)
   return snap.docs
     .map((s) => ({ id: s.id, ...(s.data() as any) }))
-    .filter((d) => d.estado !== 'anulada' && !d.consolidado && (d.tipoDoc === 'NV' || d.tipoDoc === 'BOLETA' || d.tipoDoc === 'FACTURA' || d.tipoDoc === 'NC' || d.tipoDoc === 'ND'))
+    .filter(esDocumentoDeVenta)
 }
 
-// Signo de un doc para los totales: las notas de crédito restan, el resto suma.
-export const signoDoc = (d: any) => (d?.tipoDoc === 'NC' ? -1 : 1)
+/**
+ * **El año del comprobante más viejo**, para armar el selector del gráfico mensual del Dashboard.
+ *
+ * Una sola lectura (`orderBy('fecha')` + `limit(1)`: un campo, sin índice). Si no hay nada —o la
+ * consulta falla— cae a `año actual − 4`, así el selector **nunca queda vacío**.
+ */
+export async function primerAnioDeVentas(): Promise<number> {
+  const anioActual = new Date().getFullYear()
+  try {
+    const snap = await getDocs(query(collection(db, COL.DOCUMENTOS), orderBy('fecha', 'asc'), limit(1)))
+    const anio = Number(new Date(String(snap.docs[0]?.data()?.fecha ?? '')).getFullYear())
+    return Number.isFinite(anio) && anio > 2000 && anio <= anioActual ? anio : anioActual - 4
+  } catch (e) {
+    console.warn('⚠️ No se pudo leer el primer año de ventas: se ofrecen los últimos 5', e)
+    return anioActual - 4
+  }
+}
+
+// Signo de un doc para los totales: lo define `signoDoc` (re-exportado arriba, `lib/ventas-mensuales.ts`).
 
 // ─── ANULAR COMPRA ───
 
