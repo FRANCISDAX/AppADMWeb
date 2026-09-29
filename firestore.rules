@@ -40,7 +40,6 @@ service cloud.firestore {
     function activo() { return hayFicha() && ficha().get('activo', true) == true; }
     function rol() { return activo() ? ficha().get('rol', '') : ''; }
     function permisos() { return activo() ? ficha().get('permisos', {}) : {}; }
-    function esRol(roles) { return activo() && rol() in roles; }
 
     /**
      * **¿Puede hacer X?** `clave` es la clave de permiso de la app y `porDefecto` la lista de roles
