@@ -186,7 +186,7 @@ El detalle de cada sesión está en **`HISTORIAL-SESIONES.md`** (más reciente p
 
 ### Documentos del producto (`docs/`)
 
-`docs/manual-usuario.html` (manual, con PDF) y `docs/resumen-app.html` (resumen comercial). Los PDF se regeneran **sin abrir el navegador a mano**:
+`docs/manual-usuario.html` (manual, con PDF), `docs/resumen-app.html` (resumen comercial) y **`docs/PLAN-COMERCIALIZACION.md`** (plan interno para **vender** el app a otros negocios: multi-cliente, seguridad, alta de cliente y papeles; **no se publica**). Los PDF se regeneran **sin abrir el navegador a mano**:
 `& "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new --disable-gpu --no-pdf-header-footer --print-to-pdf="<ruta ABSOLUTA del pdf>" "file:///<ruta ABSOLUTA del html>"`
 
 ⚠️ **Actualizarlos NO requiere deploy** (`docs/` no está en `public/`): alcanza con el commit. Si cambia de fondo, subir la versión en portada y footer. **Los PDF están versionados en el repo a pedido del usuario** (17/09).
