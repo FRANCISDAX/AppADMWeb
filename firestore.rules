@@ -1,24 +1,283 @@
 rules_version = '2';
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+//  Reglas de Firestore — appadm-web (POS) · AppAdm (app móvil) · puente de Yape
+//
+//  ⚠️ **PENDIENTE DE DESPLEGAR**. Este archivo se prueba con el arnés `run-reglas.mjs` contra el
+//     EMULADOR. Se publica con `npx firebase deploy --only firestore:rules` y **solo** cuando el
+//     usuario diga «procede» (ojo: `--only hosting` NO toca las reglas).
+//
+//  **Qué cambia respecto de las reglas viejas** (`allow read, write: if signedIn()`):
+//   1. 🔴 **Se cierra la escalada de privilegios.** Como los permisos se leen EN VIVO de
+//      `tblUsuarios/{uid}.permisos` (`context/permisos.tsx`), con la regla vieja cualquier usuario
+//      con sesión podía escribir su propia ficha y darse `verTodo`/ADMIN. Ahora solo un ADMIN escribe
+//      fichas, y uno puede tocar de la suya **solamente** `activeSession` y `dashboardWidgets`.
+//   2. **La configuración, los usuarios y las cajas** quedan cerrados a quien no es ADMIN.
+//   3. 🔑 **Los avisos de Yape solo los crea el PUENTE** (o un ADMIN, para el aviso de PRUEBA): un
+//      aviso significa «el negocio recibió plata». El POS solo avanza el estado.
+//   4. **El catálogo público y las pantallas de cliente quedan solo-lectura para el mundo**, y una
+//      colección desconocida queda **cerrada** (antes cualquier colección nueva nacía abierta).
+//
+//  **Cómo se decide** (espejo de `src/constants/permisos.ts`):
+//   · El permiso explícito de la ficha manda: `true` permite, `false` niega.
+//   · Si la clave **no está guardada**, vale el **default del rol** — es exactamente lo que hace la
+//     app (`context/permisos.tsx:104-111`), así una ficha vieja sin la clave nueva sigue funcionando.
+//   · ⚠️ Cada evaluación hace **una lectura** de `tblUsuarios/{uid}` (Firestore la cachea dentro de la
+//     misma request): es el costo de decidir con permisos de verdad.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    // Acceso autenticado para toda la base: la app (RN) y la web validan permisos en la UI.
-    // No restringe por rol en el servidor para no romper flujos de la app móvil
-    // (CAJERO lee productos, login consulta por email, migración de usuarios).
-    match /{document=**} {
-      allow read, write: if signedIn();
+
+    // ── Identidad y permisos ───────────────────────────────────────────────────────────────────
+    function firmado() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+
+    /** 🔑 **La cuenta del PUENTE de Yape** (`appadm-yape-puente`): es la única que crea avisos. */
+    function esPuente() { return firmado() && uid() == '4MSsHrMPBENIbuf0dRjwaemtjbF3'; }
+
+    function hayFicha() { return firmado() && exists(/databases/$(database)/documents/tblUsuarios/$(uid())); }
+    function ficha() { return get(/databases/$(database)/documents/tblUsuarios/$(uid())).data; }
+    function activo() { return hayFicha() && ficha().get('activo', true) == true; }
+    function rol() { return activo() ? ficha().get('rol', '') : ''; }
+    function permisos() { return activo() ? ficha().get('permisos', {}) : {}; }
+    function esRol(roles) { return activo() && rol() in roles; }
+
+    /**
+     * **¿Puede hacer X?** `clave` es la clave de permiso de la app y `porDefecto` la lista de roles
+     * que lo tienen por defecto (los mismos de `PERMISOS_POR_ROL`).
+     */
+    function puede(clave, porDefecto) {
+      return activo() && (
+        permisos().get(clave, null) == true ||
+        (!permisos().keys().hasAny([clave]) && rol() in porDefecto)
+      );
     }
-    // Sesiones de pantalla del cliente: el cliente lee sin auth, el PDV escribe con auth.
-    match /tblDisplaySessions/{sessionId} {
-      allow read: if true;
-      allow write: if signedIn();
+
+    // Atajos, con los defaults reales de `constants/permisos.ts`.
+    function vende() { return puede('ventas', ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR']); }
+    function notaDeVenta() { return puede('notasVenta', ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR']); }
+    function aCaja() { return puede('enviarACaja', ['ADMIN', 'GERENTE', 'VENDEDOR']); }
+    function cobraPedido() { return puede('cobrarVenta', ['ADMIN', 'GERENTE', 'CAJERO']); }
+    function cobraCredito() { return puede('cobrarCredito', ['ADMIN', 'GERENTE', 'CAJERO']); }
+    function anula() { return puede('anularVenta', ['ADMIN', 'GERENTE']); }
+    function consolidado() { return puede('consolidado', ['ADMIN', 'GERENTE']); }
+    function tocaInventario() { return puede('ajustarStock', ['ADMIN', 'GERENTE', 'CAJERO', 'ALMACEN']); }
+    function editaProducto() { return puede('editarProducto', ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR', 'ALMACEN']); }
+    function creaProducto() { return puede('crearProducto', ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR', 'ALMACEN']); }
+    function borraProducto() { return puede('eliminarProducto', ['ADMIN', 'ALMACEN']); }
+    function compra() { return puede('compras', ['ADMIN', 'GERENTE', 'ALMACEN']); }
+    function tocaProveedores() { return puede('proveedores', ['ADMIN', 'ALMACEN']); }
+    function gasto() { return puede('egresos', ['ADMIN', 'GERENTE', 'CAJERO']); }
+    function turno() { return puede('turnos', ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR']); }
+    function cierraTurno() { return puede('cerrarTurno', ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR']); }
+    function rectificaTurno() { return puede('rectificarTurno', ['ADMIN']); }
+    function rectificaCaja() { return puede('rectificarCaja', ['ADMIN', 'GERENTE']); }
+
+    // ── Avisos de Yape: el estado solo avanza (ver `lib/yape.ts`) ──────────────────────────────
+    function estadoActual() { return resource.data.get('estado', ''); }
+    function estadoNuevo() { return request.resource.data.get('estado', ''); }
+    /** El ciclo real: reservar, cobrar, soltar la reserva, ignorar y anular (nunca volver a «usado»). */
+    function avanzaBien() {
+      return (estadoActual() == 'disponible' && estadoNuevo() in ['disponible', 'reservado', 'usado', 'ignorado', 'anulado']) ||
+             (estadoActual() == 'reservado' && estadoNuevo() in ['disponible', 'usado', 'ignorado', 'anulado']) ||
+             (estadoActual() == 'usado' && estadoNuevo() in ['usado', 'anulado']) ||
+             (estadoActual() == estadoNuevo());
     }
-    // Catálogo público del link de pedidos (`/pedido`): lo LEE cualquiera (el cliente no tiene sesión) y lo
-    // ESCRIBE el app con sesión (lo publica solo cuando cambia el stock o un precio). Solo este documento:
-    // adentro va el catálogo como texto (nombre, precio y stock de productos activos), nada más.
-    match /tblPublico/catalogo {
+    function cliente() { return puede('clientes', ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR']); }
+    function auditoria() { return puede('auditoria', ['ADMIN', 'GERENTE']); }
+    function configuracion() { return puede('configuracion', ['ADMIN']); }
+    function usuarios() { return puede('usuarios', ['ADMIN']); }
+
+    // ── Usuarios ───────────────────────────────────────────────────────────────────────────────
+    // La app lee **su propia** ficha para los permisos; la lista completa solo en `Usuarios`
+    // (permiso `usuarios`). El login de la app móvil consulta fichas por correo ⇒ se permite leer.
+    // ⚠️ **Pendiente**: acá la lectura sigue siendo «cualquier cuenta con sesión» (una cuenta creada
+    // con la API key y sin ficha puede leer los correos y roles del resto). Cerrarlo a «solo la mía o
+    // quien tiene `usuarios`» exige confirmar que la app móvil no consulte fichas ajenas por correo.
+    match /tblUsuarios/{usuarioId} {
+      allow read: if firmado();
+      allow create, delete: if usuarios();
+      // 🔑 El dueño de la ficha solo puede tocar dos campos: la sesión del dispositivo
+      // (`context/auth.tsx`, sesión única) y el orden de sus widgets (`services/dashboard.ts`).
+      // Cualquier otro campo —`rol`, `permisos`, `activo`— es de un ADMIN.
+      allow update: if usuarios() ||
+        (firmado() && uid() == usuarioId &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activeSession', 'dashboardWidgets']));
+    }
+
+    // ── Configuración de la empresa ────────────────────────────────────────────────────────────
+    match /tblConfiguracion/{documento} {
+      allow read: if activo();          // la leen el PDV, el puente y el publicador del catálogo
+      allow write: if configuracion();
+    }
+
+    // ── Catálogo y stock ───────────────────────────────────────────────────────────────────────
+    match /tblProductos/{productoId} {
+      allow read: if activo();
+      allow create: if creaProducto();
+      allow update: if editaProducto() || tocaInventario() || vende() || compra();
+      allow delete: if borraProducto();
+    }
+    match /tblCategorias/{id} {
+      allow read: if activo();
+      allow write: if creaProducto() || editaProducto() || configuracion();
+    }
+    // Kardex: lo escriben la venta, el cobro, la compra y los ajustes. No se reescribe.
+    // ⚠️ `delete`: la **app móvil** anula una compra borrando sus movimientos
+    // (`helper/FirebaseHelper.js:361,434`), así que hay que dejarlo. Queda en manos de quien tiene
+    // `compras`, `ajustarStock` o la rectificación de caja; si se quiere cerrar del todo, hay que
+    // cambiar la app móvil para que compense con un movimiento nuevo en vez de borrar.
+    match /tblMovimientos/{id} {
+      allow read: if activo();
+      allow create: if vende() || cobraPedido() || tocaInventario() || compra() || notaDeVenta();
+      allow update: if tocaInventario() || rectificaCaja();
+      allow delete: if compra() || tocaInventario() || rectificaCaja();
+    }
+    match /tblHistorialPrecios/{id} {
+      allow read: if activo();
+      allow create: if compra() || editaProducto();
+      allow update, delete: if false;
+    }
+    match /tblPromocionesVolumen/{id} {
+      allow read: if activo();
+      allow write: if configuracion();
+    }
+
+    // ── Ventas, comprobantes y correlativos ────────────────────────────────────────────────────
+    match /tblDocumentos/{documentoId} {
+      allow read: if activo();          // ventas, pedidos, reportes y estado de cuenta
+      allow create: if vende() || notaDeVenta() || aCaja();
+      // Actualizar cubre: cobrar un pedido, anular, consolidar, mandar a SUNAT y cobrar un crédito.
+      allow update: if vende() || cobraPedido() || cobraCredito() || anula() || consolidado();
+      // Un documento no se borra: se anula o se cancela (queda el rastro).
+      allow delete: if false;
+    }
+    // Los correlativos son la numeración fiscal: los tocan solo los flujos que emiten.
+    match /tblContadores/{contadorId} {
+      allow read: if activo();
+      allow write: if vende() || cobraPedido() || compra() || notaDeVenta() || aCaja();
+    }
+
+    // ── Caja ───────────────────────────────────────────────────────────────────────────────────
+    match /tblTurnos/{turnoId} {
+      allow read: if activo();
+      allow create: if turno() || gasto();          // abrir el turno (y sumarle un gasto)
+      allow update: if turno() || gasto() || rectificaTurno() || rectificaCaja();
+      allow delete: if false;                       // `tblTurnos` es registro de caja: no se borra
+    }
+    match /tblCierresCaja/{id} {
+      allow read: if activo();
+      allow create: if cierraTurno();
+      allow update: if rectificaTurno() || rectificaCaja();
+      allow delete: if false;
+    }
+    match /tblEgresos/{id} {
+      allow read: if activo();
+      allow create, update: if gasto();
+      allow delete: if gasto() || auditoria();
+    }
+    match /tblCajas/{id} {
+      allow read: if activo();
+      allow write: if configuracion();
+    }
+
+    // ── Terceros ───────────────────────────────────────────────────────────────────────────────
+    match /tblClientes/{clienteId} {
+      allow read: if activo();           // el PDV busca clientes al cobrar
+      allow create, update: if cliente();
+      allow delete: if cliente();
+    }
+    match /tblProveedores/{id} {
+      allow read: if activo();           // el alta de un gasto elige proveedor
+      allow write: if tocaProveedores();
+    }
+
+    // ── Colecciones que usa **solo la app móvil** (auditadas en `AppAdm`, 29/09/2026) ────────────
+    // 🔑 **`Proveedor` NO lleva el prefijo `tbl`** y es la colección que la app móvil usa para los
+    // proveedores (`constants/Colecciones.js:15`, `services/inventario.js:224`): si no está en las
+    // reglas, la app móvil deja de guardar proveedores al cargar una compra.
+    match /Proveedor/{id} {
+      allow read: if activo();
+      allow write: if tocaProveedores() || compra();
+    }
+    // Intenciones de voz (`services/voiceIntents.js`): configuración de la app, sin plata de por
+    // medio. Se deja escribir a cualquier cuenta con ficha para no romper la pantalla de la app móvil.
+    match /tblVoiceIntents/{id} {
+      allow read: if activo();
+      allow write: if activo();
+    }
+    // Ficha vieja (`tblPerfil`): la app móvil la lee por correo en cada login
+    // (`helper/FirebaseHelper.js:57`). Solo lectura: nadie la escribe desde que existe `tblUsuarios`.
+    match /tblPerfil/{id} {
+      allow read: if firmado();
+      allow write: if false;
+    }
+    // **Modo Prueba** de la app móvil (`*_test`): datos descartables, incluido el botón
+    // «Limpiar datos de prueba» (borra la colección entera, `app/(drawer)/configuracion.jsx:274-287`).
+    // ⚠️ Se dejan abiertas a cualquier cuenta con ficha **a propósito**: no son plata y cerrarlas
+    // rompería el modo prueba; si un día se quiere, se restringen a quien tiene `configuracion`.
+    match /tblDocumentos_test/{id} { allow read, write: if activo(); }
+    match /tblMovimientos_test/{id} { allow read, write: if activo(); }
+    match /tblTurnos_test/{id} { allow read, write: if activo(); }
+    match /tblContadores_test/{id} { allow read, write: if activo(); }
+    match /tblClientes_test/{id} { allow read, write: if activo(); }
+    match /tblConfiguracion_test/{id} { allow read, write: if activo(); }
+
+    // ── Avisos de pago de Yape (es plata) ──────────────────────────────────────────────────────
+    // 🔑 **Un aviso significa «el negocio recibió plata»**: lo crea el PUENTE, y desde el app el
+    // único que puede crearlo es un ADMIN, y **solo como aviso de PRUEBA**.
+    match /tblPagosYape/{avisoId} {
+      allow read: if activo();
+      allow create: if esPuente() || (configuracion() && request.resource.data.get('origen', '') == 'prueba');
+      // ⚠️ **El estado solo avanza** (`lib/yape.ts`): reservar, cobrar, soltar, ignorar y anular. La
+      // regla está escrita a mano para que un **reenvío de la notificación no devuelva a «disponible»
+      // un yape ya cobrado** — eso sería cobrar dos veces la misma plata.
+      allow update: if (esPuente() && estadoActual() == 'disponible' && estadoNuevo() == 'disponible') ||
+                       ((vende() || cobraPedido()) && avanzaBien()) ||
+                       configuracion();
+      // Borrar: solo avisos de PRUEBA (es lo que hace `borrarAvisosDePrueba`).
+      allow delete: if (vende() || configuracion()) && resource.data.get('origen', '') == 'prueba';
+    }
+    // El latido del puente: lo escribe SOLO el puente (el web solo lo lee).
+    match /tblPuenteYape/{id} {
+      allow read: if activo();
+      allow write: if esPuente();
+    }
+
+    // ── Alertas proactivas: cada uno pospone las suyas ─────────────────────────────────────────
+    match /tblAlertasVistas/{usuarioId} {
+      allow read, write: if firmado() && uid() == usuarioId;
+    }
+
+    // ── Diagnóstico y auditoría ────────────────────────────────────────────────────────────────
+    match /tblErrores/{id} {
+      allow read: if auditoria();
+      allow create: if firmado();         // cualquier pantalla puede reportar un error
+      allow update, delete: if false;
+    }
+    match /tblAuditLog/{id} {
+      allow read: if auditoria();
+      allow create: if firmado();         // `logActividad` es best-effort desde muchos flujos
+      allow delete: if auditoria();       // `limpiarLogs` (retención)
+      allow update: if false;             // una bitácora no se reescribe
+    }
+
+    // ── Público (sin sesión) ───────────────────────────────────────────────────────────────────
+    // El catálogo del link de pedidos y las pantallas de cliente se leen SIN cuenta; **escribirlos
+    // requiere sesión**. Nada más de la base es público.
+    match /tblPublico/{documento} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if firmado();
+    }
+    match /tblDisplaySessions/{sesionId} {
+      allow read: if true;
+      allow write: if firmado();
+    }
+
+    // ── Todo lo demás: cerrado ─────────────────────────────────────────────────────────────────
+    // ⚠️ Una colección nueva **no nace abierta**: si aparece una, se le agrega su regla acá.
+    match /{documento=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -11,6 +11,36 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-09 · 54 — Las reglas de Firestore por rol (para poder vender el app))
+
+**Objective**: el usuario preguntó si hacía falta «disclaimer, garantías, contratos de privacidad». La respuesta honesta fue que **el papel es lo último**: al decir que **iba a vender el app a otros negocios**, se revisó el código y aparecieron agujeros que, vendiendo, son un reclamo esperando. Pidió el **plan escrito** ⇒ nació `docs/PLAN-COMERCIALIZACION.md`, y después mandó **arrancar la fase 1: la seguridad**.
+
+**Lo que se encontró (verificado en el código, no supuesto)**
+- 🔴 **`firestore.rules` era `allow read, write: if signedIn()` para toda la base** y los permisos se leen **en vivo** de `tblUsuarios/{uid}.permisos` ⇒ **cualquier usuario con sesión podía escribir su propia ficha y darse `verTodo`/ADMIN**.
+- 🔴 **La app móvil tiene una autoescalada peor**: `services/usuarios.js:189-204` (`migrarUsuario`) **crea la ficha con `rol:'ADMIN'` y todos los permisos** para cualquier cuenta autenticada que no tenga ficha, y se dispara sola en el login (`app/(login)/index.jsx:116-122`). Como la API key es pública y el alta por correo/contraseña está abierta (sin App Check), **cualquiera podía crearse una cuenta y entrar como ADMIN**.
+- 🔴 **El puente de Yape puede cobrar dos veces la misma plata**: escribe el aviso con `set` **sin merge** (`Puente.kt:168`), así que un reenvío de la notificación —o el replay del SDK al volver la red, hasta 24 h después— **reescribe el documento y lo devuelve a `estado: 'disponible'`** aunque el POS ya lo haya marcado `usado`.
+- ⚠️ **Sin respaldo automático de Firestore** ni monitoreo.
+- Se auditaron **los tres clientes** (web, app móvil y puente) para escribir reglas que **no los rompan**: la app móvil usa una colección que **no lleva el prefijo `tbl`** (`Proveedor`), más `tblPerfil`, `tblVoiceIntents` y seis colecciones `_test`; el puente es **una cuenta común de email/contraseña** cuyo uid no está en el repo ⇒ se **midió en producción** (solo lectura): `puente-yape@adm.com`.
+
+**Las reglas nuevas (`firestore.rules`, probadas, sin desplegar)**
+- 🔑 **Una sola forma de decidir, espejo de `src/constants/permisos.ts`**: el permiso explícito de la ficha manda (`true`/`false`) y, si la clave **no está guardada**, vale el **default del rol** — exactamente lo que hace `context/permisos.tsx:104-111`, así una ficha vieja sin la clave nueva sigue funcionando. `puede(clave, rolesPorDefecto)` es el único lugar donde se decide.
+- **Se cierra la escalada**: la ficha solo la escribe un ADMIN (`usuarios()`); el dueño puede tocar **solo** `activeSession` y `dashboardWidgets` (`affectedKeys().hasOnly([...])`: es lo que escriben `context/auth.tsx` y `services/dashboard.ts`). Configuración, usuarios y cajas quedan de ADMIN.
+- 🔑 **Los avisos de Yape solo los crea el PUENTE** (o un ADMIN, **y solo como aviso de PRUEBA**). Y el **estado solo avanza** (`avanzaBien()`, el ciclo de `lib/yape.ts`: reservar, cobrar, soltar la reserva, ignorar, anular) ⇒ **un reenvío no puede devolver a «disponible» un yape ya cobrado**.
+- **Lo público queda solo-lectura** (catálogo del link y pantallas de cliente), **una cuenta sin ficha no lee nada** (`activo()` en vez de `firmado()`) y **una colección nueva nace cerrada** (`match /{documento=**} { allow read, write: if false }`): antes cualquier colección nueva nacía abierta.
+- **Lo que se dejó abierto a propósito, y por qué**: `tblMovimientos` permite `delete` a quien compra/ajusta (la app móvil anula una compra **borrando** sus movimientos, `helper/FirebaseHelper.js:361,434`); las `*_test` y `tblVoiceIntents` quedan abiertas a cualquier cuenta con ficha (Modo Prueba: datos descartables, y su botón de limpieza borra la colección entera). `tblUsuarios` sigue siendo **legible** por cualquier cuenta con sesión (⚠️ **pendiente**: cerrarlo exige confirmar que la app móvil no consulte fichas ajenas por correo — lo hace en `services/usuarios.js:57,147,191`).
+
+**Lo que se midió**
+- 🔑 **Arnés nuevo `run-reglas.mjs` (fuera del repo): 64/64 casos en verde.** Habla con el emulador por **REST con el token real de cada cuenta** (el Admin SDK saltea las reglas, así que no sirve para probarlas) y crea las cuentas con **uid fijo**, incluido el **uid real del puente**. Cubre la escalada (darse permisos, cambiarse el rol, crear usuarios, borrar fichas), los accesos de afuera (sin sesión y sin ficha), la configuración, el inventario, la caja, los avisos de Yape (incluido el reenvío malicioso), el latido del puente, las alertas, la auditoría y las colecciones de la app móvil.
+- 📌 **Dos casos fallaron en la primera corrida y eran hallazgos, no ruido**: el puente podía resetear un aviso `usado` (su ficha tiene `ventas: true`, y la regla lo dejaba pasar como cajero) y la regla no contemplaba el ciclo real (`usado → anulado` al anular la venta **tiene** que poder). Las dos se corrigieron en la regla, no en la prueba.
+- 📌 **Un error de sintaxis propio** (un `match` que quedó dentro de un comentario al editar) hizo fallar la compilación: el emulador lo dijo (`L282:1 Unexpected '}'`) y se corrigió antes de seguir.
+- **Antes de desplegar se verificó que nadie quede afuera** (solo lectura contra producción): las **6 cuentas** reales tienen ficha y están **activas** ⇒ 0 problemas; y `Proveedor` y `tblVoiceIntents` **tienen datos** ⇒ sin esas reglas, la app móvil hubiera dejado de guardar proveedores.
+
+**Work State**: Completed la parte de reglas. `firestore.rules` **escrito y probado, NO desplegado** (desplegar reglas es otro comando y otro permiso). La app no se tocó: `npm test` sigue en **639/639**.
+
+**Next Move**: (1) **desplegar las reglas** cuando el usuario diga «procede»; (2) ⚠️ **arreglar la app móvil**: `migrarUsuario` no puede seguir creando ADMIN —con las reglas nuevas **falla y esa cuenta queda sin ficha** (o sea, sin acceso): el alta de usuarios tiene que hacerse desde el web—; (3) ⚠️ **arreglar el puente**: que no reescriba el `estado` del aviso (merge sin `estado`, o no escribir si el documento ya existe) para que el freno no dependa solo de la regla; (4) completar la fase 1: **App Check**, **respaldos automáticos** y llaves fuera de OneDrive; (5) después, la fase 2 (multi-cliente).
+
+**Relevant Files**: `firestore.rules` (reescrito), `docs/PLAN-COMERCIALIZACION.md` (nuevo), `AGENTS.md`, `HISTORIAL-SESIONES.md`; arnés `run-reglas.mjs` y los diagnósticos `chk-puente-prod.mjs` / `chk-reglas-prod.mjs` (fuera del repo, solo lectura).
+
 ### (2026-09 · 53 — La utilidad del mes y el punto de equilibrio)
 
 **Objective**: dos pedidos del usuario, encadenados — *«sería mejor la utilidad del mes»* (el gráfico de ·52 mostraba **ventas**, no **utilidad**) y *«¿cómo puedo saber el punto de equilibrio del negocio? o dame una mejor explicación»*. Se le preguntó y **decidió las tres cosas**: utilidad = **margen bruto** (no caja, no las dos); punto de equilibrio = *«calcúlalo así»* (**fijos = los Egresos del mes sin la categoría «Compras»**, **margen = el de los últimos 3 meses**); y el gráfico sigue con **barras como el resto del dashboard** (sin librería nueva).
