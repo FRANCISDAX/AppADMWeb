@@ -27,40 +27,70 @@ Verificado en el código el 29/09/2026:
 - ⚠️ **Las claves de Firebase van fijas en la compilación** (`VITE_FIREBASE_*` en `.env.local`): hoy
   **un cliente = una compilación y un despliegue**. Eso condiciona todo el punto 3.
 
-## 2. Decisión 1 — ¿de quién es el proyecto de Firebase del cliente?
+## 2. Decisión 1 — ¿de quién es el proyecto de Firebase del cliente? ✅ DECIDIDO (29/09/2026)
 
-| | **A) Del cliente** (recomendada) | **B) Tuyo, como servicio** |
+> **El usuario decidió**: el app se va a vender a **varias empresas**, cada una con **su propia cuenta de
+> Firebase (su propio proyecto)**, y los proyectos **cuelgan de una única cuenta principal** (por ahora
+> **su cuenta de Google**, sin organización de Google Cloud). La configuración **será manual** por el
+> momento; automatizarla queda para después (ver **3 bis**).
+
+⚠️ **Consecuencia que hay que asumir a cambio del aislamiento**: los datos de todas las empresas quedan
+**bajo tu cuenta** ⇒ sos vos el que los **custodia** (la opción B de la tabla de abajo). Eso cambia el
+peso del **anexo de tratamiento de datos** del contrato (punto 7.3) y hace que **el respaldo sea tu
+obligación con cada cliente**, no la de él.
+
+| | **A) Del cliente** (no es lo elegido) | **B) Tuya, un proyecto por cliente** ✅ |
 |---|---|---|
-| Quién paga Firebase | El cliente (su tarjeta, su plan) | Vos |
-| De quién son los datos | Del cliente: vos sos **encargado** | Los tenés vos: más responsabilidad |
-| Costo fijo tuyo | Casi cero | Crece con cada cliente |
-| Si el cliente se va | Se lleva todo, no hay rehenes | Hay que exportar y borrar |
-| Riesgo tuyo | Menor (no custodias sus datos) | Mayor (filtración, respaldo, disponibilidad) |
-| Ingreso | Licencia + soporte | Suscripción (más margen, más trabajo) |
+| Aislamiento entre empresas | Total | **Total** (un proyecto = una base) |
+| Quién paga Firebase | El cliente | **Vos** (una cuenta de facturación; la cuota gratuita es **por proyecto**) |
+| De quién son los datos | Del cliente | Del cliente, **bajo tu custodia** |
+| Acceso del cliente | Total, es suyo | Se le puede dar **IAM sobre su proyecto** (sin organización también se puede) |
+| Respaldo | Obligación de él | **Tu obligación, por cada cliente** |
+| Si el cliente se va | Se lleva todo | Hay que **exportar y borrar** lo que quedó en su proyecto |
 
-**Recomendación**: empezar por **A** (el cliente es dueño de su proyecto). Te saca de encima la
-custodia de datos de terceros y hace que el respaldo sea una obligación de él —aunque el alta y el
-acompañamiento los hacés vos—. Si algún día querés vender como servicio llave en mano, B se puede
-ofrecer como plan premium.
+**Recomendaciones con este modelo** (ninguna bloquea la venta, pero conviene hacerlas antes del 3.º cliente):
+1. 🔑 **No cuelgues los proyectos de tu cuenta personal**: usá una **cuenta de Google del negocio**
+   (o de Workspace). Si no, el día que esa cuenta falle —o quieras sumar a alguien— quedás atado a una
+   persona. Sin organización se pierde la auditoría centralizada y las políticas comunes, no el control.
+2. **Una cuenta de facturación** con **etiquetas por proyecto** (`cliente: acme`) para saber cuánto
+   consume cada uno y **no vender a pérdida**.
+3. **Ofrecé el acceso al proyecto**: darle al cliente permiso sobre **su** proyecto es un argumento de
+   venta fuerte (*«tus datos están en tu base y podés entrar»*) y, además, deja claro que **vos también
+   podés entrar** — mejor decirlo que ocultarlo.
+4. **Baja del cliente**: exportación completa, entrega, y **borrado del proyecto** (con constancia).
+   Ese procedimiento tiene que estar en el contrato (punto 7).
 
 ## 3. Decisión 2 — cómo llega la app a cada cliente (aislamiento)
 
-- **Hoy**: no hay aislamiento posible. Compartir un proyecto entre dos negocios con las reglas
-  actuales significa que **el cajero de una bodega ve las ventas, costos, márgenes y clientes de la
-  otra**. Con las reglas arregladas (punto 4) seguiría siendo un modelo frágil: una regla mal escrita
-  y se ve todo.
-- 🔑 **Fase 1 (recomendada): un proyecto de Firebase por cliente + configuración dinámica.**
-  El app deja de leer las claves de la compilación y las pide a un archivo publicado
-  (`/config/<negocio>.json`) según el **subdominio** desde el que entra. Resultado: **un solo código,
-  un solo despliegue y bases separadas de verdad**.
-  - A favor: aislamiento real, cero refactor de datos, alta de cliente sin tocar código.
-  - En contra: hay que publicar y mantener ese archivo por cliente; y definir qué pasa si el archivo
-    no existe (el app tiene que decir *«este negocio no está configurado»*, no arrancar en blanco).
-- **Fase 2 (solo si pasás de ~10-15 clientes o querés autoservicio): `empresaId` en todo + reglas por
-  inquilino.** Alcance real: toca **todos** los servicios y consultas (ventas, caja, stock, kardex,
-  egresos, reportes, contadores, catálogo público), los **índices compuestos** y las reglas. Es un
-  refactor grande y riesgoso: **no hacerlo antes de tener clientes que lo justifiquen**.
-- ⚠️ **Lo que no hay que hacer nunca**: dos negocios en un mismo proyecto con las reglas de hoy.
+- **Hoy**: no hay aislamiento posible dentro de un mismo proyecto. Compartir un proyecto entre dos
+  negocios significaría que **el cajero de una bodega ve las ventas, costos, márgenes y clientes de la
+  otra**. Con las reglas nuevas (punto 4) igual sería un modelo frágil: una regla mal escrita y se ve todo.
+- 🔑 **Lo elegido: un proyecto de Firebase por cliente** ⇒ el aislamiento es **total y por construcción**
+  (bases separadas). El app no cambia: sigue hablando con *un* proyecto, el suyo.
+- **Fase 2 opcional (solo si algún día querés autoservicio o miles de clientes): `empresaId` en todo +
+  reglas por inquilino**, para tener varios negocios en una sola base. Alcance real: toca **todos** los
+  servicios y consultas (ventas, caja, stock, kardex, egresos, reportes, contadores, catálogo público),
+  los **índices compuestos** y las reglas. **No hacerlo**: con un proyecto por cliente no hace falta.
+- ⚠️ **Lo que no hay que hacer nunca**: dos negocios en un mismo proyecto.
+
+### 3 bis. Configuración manual (por ahora) y la trampa que ya nos pasó
+
+> **Decisión del usuario (29/09/2026)**: la configuración se hace **a mano** por ahora; automatizarla
+> (configuración dinámica por subdominio) queda para más adelante.
+
+Como las claves van **fijas en la compilación** (`.env.local`), hoy **cada cliente es una compilación y
+un despliegue** con **sus** claves. Es válido para los primeros clientes; lo que hay que evitar es el
+error clásico de este flujo: **publicarle a un cliente la compilación de otro**.
+
+📌 **Ya pasó una vez** (22/09/2026, bloque ·28 del historial): se publicó un `dist` con la configuración
+de **prueba** (`demo-key`/`demo-appadm`) y nadie podía iniciar sesión. Por eso el chequeo previo al
+despliegue **ya no alcanza con «que no sea la de prueba»**: tiene que ser **«que sea la de ESTE
+cliente»** (ver el paso 7 de la receta del punto 5).
+
+**Cuando moleste hacerlo a mano** (a partir del 3.º-5.º cliente, o cuando un despliegue tenga que
+alcanzar a todos), el camino es la **configuración dinámica**: un solo código y un solo despliegue, con
+**un subdominio por cliente** que le dice a la app a qué base conectarse (lee su config antes de
+arrancar). Se mitiga el riesgo de «un despliegue para todos» probando primero en un **cliente piloto**.
 
 ## 4. Cerrar la seguridad (bloqueante: sin esto no se vende)
 
@@ -111,22 +141,77 @@ En este orden:
   extra. **Un respaldo que nadie probó no es un respaldo**: la prueba es `--probar-tipos` y, antes de
   vender, una **restauración de verdad** en un proyecto de prueba.
 
-## 5. Alta de un cliente nuevo (checklist operativa)
+## 5. Alta de un cliente nuevo — receta manual (paso a paso)
 
-1. **Firebase** del cliente: proyecto, plan **Blaze** (obligatorio: sin él, pasarse de cuota **corta el
-   servicio hasta la medianoche**), ubicación de la base, hosting, dominio o subdominio.
-2. **Identidad**: razón social, RUC, dirección, logo, mensaje legal; régimen tributario y
-   **región exonerada** si corresponde.
-3. **Usuarios y roles** (una cuenta por persona: la sesión es única) y **cajas con sus series**.
-4. **Catálogo**: importación por Excel, **costos** (sin costos el margen y el punto de equilibrio
-   mienten), unidades y presentaciones, afectación por producto (exonerado/gravado).
-5. **Hardware**: ticketera de 72 mm, lector, PC o celular (PWA).
-6. **Cobros**: Yape (puente en el celular del negocio, con su propia cuenta) y/o tarjeta.
-7. **SUNAT**: certificado, API, envío automático y plazos; el **emisor es el cliente**.
-8. **Impuesto a las ventas (%)** y demás parámetros de la pestaña Empresa (punto de equilibrio).
-9. **Capacitación** con el manual 2.22 + resumen 1.9, y **una venta real completa** de punta a punta
-   (cobro, comprobante, cierre de caja) antes de dejarlos solos.
-10. **Salida ordenada**: exportación completa de sus datos y borrado, si algún día se va.
+> Elegiste hacerlo a mano por ahora. Esta es la receta con los **comandos exactos**, para que no dependa
+> de la memoria ni se olvide el paso que siempre se olvida (el respaldo). Lo que dice *(consola)* no se
+> puede hacer por comando: se hace en la consola de Firebase en un minuto.
+
+**0. Antes de empezar**: el nombre corto del cliente y su `projectId` (global, único, en minúsculas:
+`appadm-acme`). Anotá en un papel el RUC, la razón social, la dirección y si es **región exonerada**.
+
+**1. Proyecto y plan** *(consola)*: crear el proyecto → **activar el plan Blaze**. Sin Blaze, pasarse de
+la cuota **corta el servicio hasta la medianoche**.
+```powershell
+firebase projects:list                       # confirmar que estás en la cuenta del negocio
+firebase projects:create appadm-acme --display-name "ACME"
+```
+
+**2. Base de datos, login y hosting** *(consola los dos primeros)*:
+- **Firestore**: crear la base en **modo producción** (región `southamerica-east1` o `us-central1`).
+- **Authentication → Email/Password: habilitar**. Y **cerrar el alta libre** (la app crea los usuarios:
+  así nadie más puede registrarse solo).
+- **Hosting**: se usa el sitio por defecto del proyecto (`appadm-acme.web.app`).
+```powershell
+firebase apps:create WEB "AppADM" --project appadm-acme
+firebase apps:sdkconfig WEB --project appadm-acme      # ← de acá salen las claves de .env.local
+```
+
+**3. Las claves del cliente en el repo** (esto es lo que hace que el build sea *de ese* cliente):
+```powershell
+Copy-Item .env.local "$env:TEMP\env.local.<cliente>.bak"   # guardar el anterior
+# pegar en .env.local las 5 claves VITE_FIREBASE_* del cliente + su VITE_SUNAT_API_BASE
+```
+
+**4. Reglas, índices y catálogo público**:
+```powershell
+npx firebase deploy --only firestore:rules,firestore:indexes --project appadm-acme
+```
+Las reglas son las mismas para todos (`firestore.rules` del repo), con **un solo ajuste por cliente**:
+el `esPuente()` de los avisos de Yape lleva el **uid del puente de ESE cliente** (se llena cuando se crea
+su cuenta del puente; hasta entonces, los avisos de Yape solo puede crearlos un ADMIN).
+
+**5. El primer ADMIN** (sin esto nadie puede entrar: la pantalla *Usuarios* la usa un ADMIN):
+- *(consola)* **Authentication → Users → Add user**: correo y contraseña del dueño.
+- *(consola)* **Firestore → Crear documento**: colección `tblUsuarios`, **id = el uid** de esa cuenta,
+  con `email`, `nombre`, `rol: "ADMIN"`, `activo: true` y `permisos: {}`. ⚠️ **`permisos` vacío es lo
+  correcto**: la app (y las reglas) completan con los permisos por defecto del rol.
+
+**6. Configuración de la empresa** (adentro del app, con ese usuario): razón social, RUC, dirección,
+logo, **régimen**, **región exonerada**, **series** y **cajas**, y el **impuesto a las ventas (%)**.
+Después: **catálogo** (Excel), **costos** (sin costos el margen y el punto de equilibrio mienten),
+ticketera de 72 mm, **SUNAT** (certificado y API: el **emisor es el cliente**) y **Yape** (puente en el
+celular del negocio, con **su propia cuenta**).
+
+**7. Publicar y verificar que el build es de ESTE cliente** 🔑 — el paso que evita el accidente del 22/09:
+```powershell
+npm run build
+Select-String -Path dist\assets\*.js -Pattern 'demo-key|demo-appadm'          # no debe devolver NADA
+Select-String -Path dist\assets\*.js -Pattern 'appadm-acme' -List             # DEBE devolver el proyecto del cliente
+npx firebase deploy --only hosting --project appadm-acme
+# y después: el index.html servido tiene que apuntar al mismo index-<hash>.js que dist
+```
+
+**8. Respaldo de ese cliente** ⚠️ **pendiente de parametrizar**: hoy `C:\Users\aaval\appadm-backup\`
+apunta a **un solo proyecto** (el tuyo). Antes del **segundo** cliente hay que hacerlo por proyecto
+(un `config.<cliente>.json` y su tarea), o el respaldo de los demás no existe. *(Es el único punto de
+esta receta que todavía no está resuelto.)*
+
+**9. Capacitación y cierre**: manual **2.22** + resumen **1.9**, y **una venta real completa** de punta
+a punta (cobro, comprobante, cierre de caja) antes de dejarlos solos.
+
+**10. Salida ordenada** (si algún día se va): exportar todo, entregarlo y **borrar el proyecto**, dejando
+constancia. Va en el contrato (punto 7).
 
 ## 6. Lo que hay que sostener después (operación)
 
