@@ -249,7 +249,11 @@ constancia. Va en el contrato (punto 7).
 > seguridad de un cliente). Queda `01-bis-contrato-licencia-negociado.md` como **alternativa** para un
 > cliente que exija un contrato firmado con su nombre. El **`00-LEEME.md`** dice qué llenar, por qué el
 > documento es genérico y las **6 preguntas** que tiene que cerrar el abogado.
-> ⚠️ **No es asesoría legal**: son borradores.
+> ⚠️ **No es asesoría legal**: son borradores. ✅ **La aceptación dentro del app está implementada**
+> (29/09/2026): el ADMIN acepta los Términos en su primer ingreso y queda la constancia en
+> `tblAceptaciones` (versión, huella del texto, quién y **fecha/hora del servidor**), verificada en el
+> navegador con el arnés `run-terminos.mjs` (18/18). ⚠️ **Al desplegar, las reglas van ANTES o junto con
+> el hosting**: la colección nueva la crea la regla, y sin ella la aceptación no se puede registrar.
 
 En el contrato tienen que estar, sí o sí:
 

@@ -248,6 +248,19 @@ service cloud.firestore {
       allow read, write: if firmado() && uid() == usuarioId;
     }
 
+    // ── Términos y Condiciones: la constancia de aceptación ────────────────────────────────────
+    // 🔑 **Es una prueba, no un dato editable**: se CREA una sola vez (una por usuario y versión, con
+    // id determinista) y **no se puede modificar ni borrar**. La crea quien gestiona usuarios —el ADMIN,
+    // que es el que representa al negocio, igual que la pantalla que la pide— y siempre **a su nombre**.
+    // Cada uno lee la suya; la lista completa la ve el ADMIN, que es quien necesita saber quién aceptó.
+    // ⚠️ La hora la pone el **servidor** (`serverTimestamp()` en la pantalla), no el equipo.
+    match /tblAceptaciones/{aceptacionId} {
+      allow get: if activo() && (resource.data.get('uid', '') == uid() || usuarios());
+      allow list: if usuarios();
+      allow create: if usuarios() && request.resource.data.get('uid', '') == uid();
+      allow update, delete: if false;
+    }
+
     // ── Diagnóstico y auditoría ────────────────────────────────────────────────────────────────
     match /tblErrores/{id} {
       allow read: if auditoria();

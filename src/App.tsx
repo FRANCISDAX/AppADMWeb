@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { LoadingSquare } from '@/components/loading-square'
 import { CommandPalette } from '@/components/command-palette'
+import { AceptacionTerminos } from '@/components/AceptacionTerminos'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Login } from '@/pages/Login'
 
@@ -94,6 +95,10 @@ function Shell() {
   // tener el app abierto (una venta cambia el stock y el link lo refleja), sin depender de que alguien entre a
   // Configuración. Está limitado a una publicación cada 5 min para no escribir la base en cada venta.
   usePublicarCatalogo()
+  // 🔑 **Aceptación de los Términos y Condiciones** (`components/AceptacionTerminos.tsx`), montada en el
+  // Shell: al **ADMIN** (el que representa al negocio) le aparece una vez, en su primer ingreso, y queda
+  // registrado quién aceptó, qué versión y cuándo (hora del servidor). **No bloquea a nadie más**: una
+  // venta nunca se frena por esto.
   const [seccion, setSeccion] = React.useState<string | null>(null)
   const [abiertas, setAbiertas] = React.useState<Record<string, boolean>>({ Operación: true, Reportes: true })
   const [toast, setToast] = React.useState<string | null>(null)
@@ -480,6 +485,9 @@ function Shell() {
       </div>
 
       <CommandPalette onNavigate={setSeccion} tienePermiso={tienePermiso} />
+
+      {/* Términos y Condiciones: solo al ADMIN, una vez (ver `components/AceptacionTerminos.tsx`) */}
+      <AceptacionTerminos />
     </div>
   )
 }

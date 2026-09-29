@@ -29,9 +29,20 @@ lugar con el nombre):
    **Anexo B**: en un contrato de adhesión tienen que estar **destacadas** y **inicialadas** por el
    cliente. `[CONFIRMAR]` con el abogado, pero esa es la práctica que las hace exigibles.
 
-**Alternativa sin papel (recomendada más adelante)**: que el app muestre los Términos en el primer
-ingreso del ADMIN y **registre la aceptación** (versión, fecha, hora y cuenta). Reemplaza la carilla y
-deja mejor prueba que un papel. Hoy **no** está implementado: se puede agregar.
+**✅ La aceptación dentro del app YA ESTÁ (29/09/2026)**: al **ADMIN** —el que representa al negocio— le
+aparece la pantalla de Términos en su **primer ingreso**; marca «he leído y acepto» y el sistema registra
+en `tblAceptaciones` **quién** (uid, correo, rol), **qué versión**, **la huella del texto**, la **fecha y
+hora del servidor** y el navegador. Después no vuelve a aparecer (una vez por usuario y versión), y a los
+demás roles **no** les aparece: una venta nunca se bloquea por esto.
+
+- ⚠️ **La constancia no se puede editar ni borrar** (la regla de Firestore lo impone): es una prueba.
+- ⚠️ **Si cambiás los Términos, subí `VERSION_TERMINOS`** en `src/lib/terminos.ts` **y** el número en el
+  documento legal: con la versión nueva, el ADMIN vuelve a aceptar y **queda la constancia vieja** como
+  estaba (que es lo que hay que poder demostrar).
+- 📄 El texto que se muestra en el app son las **10 cláusulas** (espejo del documento). Si cambia el
+  documento legal, revisá que el texto del app diga lo mismo: hay un test que fija la cláusula 7.
+- Los tres documentos que se entregan (Términos, Anexo B y la Constancia) siguen existiendo en papel:
+  el app **reemplaza la carilla**, no el documento que el cliente quiera leer con su abogado.
 
 ⚠️ **La versión importa**: cada vez que cambies los Términos, subí la versión (`v1.0 — fecha`) y anotá
 qué cambió: la Constancia y (si se implementa) el registro del app tienen que decir **qué versión** se
