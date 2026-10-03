@@ -105,9 +105,19 @@ export function logsToCSV(logs: AuditLog[]): string {
 
 /**
  * Dispara descarga de un archivo TXT/CSV en el navegador.
+ *
+ * ⚠️ **El BOM va por defecto pero no siempre**: sirve para que **Excel** abra un CSV con acentos, pero
+ * deja **inválido un JSON** (los parseadores estrictos lo rechazan — pasó con la exportación de datos,
+ * 03/10/2026). Para JSON va `bom: false`.
  */
-export function descargarArchivo(contenido: string, nombreArchivo: string, mimeType = 'text/csv;charset=utf-8;'): void {
-  const blob = new Blob(['\uFEFF' + contenido], { type: mimeType })
+export function descargarArchivo(
+  contenido: string,
+  nombreArchivo: string,
+  mimeType = 'text/csv;charset=utf-8;',
+  opciones: { bom?: boolean } = {},
+): void {
+  const bom = opciones.bom !== false
+  const blob = new Blob([bom ? '\uFEFF' + contenido : contenido], { type: mimeType })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url

@@ -237,7 +237,9 @@ resumen dice cuál falló: un cliente sin respaldo no puede pasar desapercibido.
 a punta (cobro, comprobante, cierre de caja) antes de dejarlos solos.
 
 **10. Salida ordenada** (si algún día se va): exportar todo, entregarlo y **borrar el proyecto**, dejando
-constancia. Va en el contrato (punto 7).
+constancia. Va en el contrato (punto 7). ✅ **Ya hay botón**: **Facturación → Mis Datos** (ADMIN y GERENTE)
+baja un **Excel con una hoja por colección** y un **JSON completo**; el script `exportar.mjs` sirve además
+para sacar los datos **de una fecha pasada** o cuando el cliente ya no tiene acceso al app (ver **4 bis**).
 
 ## 6. Lo que hay que sostener después (operación)
 
