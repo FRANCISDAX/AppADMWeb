@@ -139,7 +139,18 @@ En este orden:
   imprime **el cliente y el proyecto destino** (para no restaurar en la base equivocada). Tiene
   `--coleccion` para restaurar una sola, `--ultimo` para el respaldo más nuevo, y `--probar-tipos`: una
   prueba **de solo lectura** que toma documentos reales, los serializa, los revive y los compara ⇒
-  **92 documentos en las 25 colecciones, 0 diferencias** (medido).
+  **93 documentos en las 26 colecciones, 0 diferencias** (medido).
+- 🔑 **`exportar.mjs`** (03/10/2026) — saca un respaldo a **Excel/CSV + JSON por colección** (26
+  colecciones, 1.488 registros ⇒ **1,1 MB** de CSV y 13 MB de JSON, medido). **Solo lee y no usa llaves**,
+  así que se puede correr en cualquier equipo sin riesgo. Sirve para dos cosas: mirar un dato viejo sin
+  pelearse con el formato interno, y 🔑 **cumplir la entrega del contrato** («toda la información en
+  formato abierto» al terminar) sin trabajo manual. El CSV omite fotos y XML largos para que Excel lo abra;
+  el JSON va completo, y hay un `indice.csv` + `LEEME.txt` para adjuntar.
+- ⚠️ **Hallazgo del exportador (03/10/2026)**: los **XML/CDR de SUNAT** (`sunat_archivos`) son **binario** y
+  el respaldo los guardaba como **mapa de números** ⇒ la copia pesaba **11 MB en vez de 6,6 MB** y, al
+  restaurar, el archivo volvía como objeto. **Corregido**, y `restaurar.mjs`/`exportar.mjs` **reconstruyen
+  también las copias viejas**. 📌 Lo destapó el exportador, **no** la prueba de ida y vuelta: esa comparaba
+  las claves de un objeto con las de un binario y las daba por iguales (corregido también).
 - **Cuándo corre**: tarea programada de Windows **«AppADM respaldo diario»**, todos los días a las
   **23:30**, sin parámetros ⇒ **todos los clientes** (no hay que crear una tarea por cliente; verificado
   corriéndola con el script nuevo: dejó el respaldo de JorFel completo y su registro). También hay
