@@ -21,6 +21,7 @@ import { buscarTurnoAbierto } from '@/services/turnos'
 import { generarConsolidado } from '@/services/consolidado'
 import { ListaPaginada } from '@/components/ListaPaginada'
 import { ExportarDatos } from '@/components/ExportarDatos'
+import { EstadoRespaldo } from '@/components/EstadoRespaldo'
 import { DescargarArchivosSunat } from '@/components/DescargarArchivosSunat'
 import { ReporteAvisosYape } from '@/components/ReporteAvisosYape'
 import { PaginadorControles } from '@/components/PaginadorControles'
@@ -556,7 +557,11 @@ export function Reportes() {
       </div>
 
       {tab === 'datos' ? (
-        <ExportarDatos />
+        <div className="space-y-3">
+          {/* El estado del respaldo va arriba: es lo primero que se quiere saber («¿está corriendo?»). */}
+          <EstadoRespaldo />
+          <ExportarDatos />
+        </div>
       ) : tab === 'nv' ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">

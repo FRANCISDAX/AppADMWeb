@@ -150,8 +150,7 @@ export function ExportarDatos() {
         </div>
       </div>
 
-      <label className="mb-3 flex cursor-pointer items-start gap-2 text-xs">
-        <input
+      <label className="mb-3 flex cursor-pointer items-start gap-2 text-xs">        <input
           type="checkbox"
           checked={conFotos}
           onChange={(e) => setConFotos(e.target.checked)}

@@ -15,6 +15,14 @@ if (!firebaseConfig.apiKey) {
 }
 
 export const app = initializeApp(firebaseConfig)
+
+/**
+ * El `projectId` del proyecto de este cliente. La herramienta de respaldo deja su **latido** en
+ * `tblRespaldoEstado/<projectId>` y esta app lo lee sabiendo su propio proyecto (ver `EstadoRespaldo`).
+ * ⚠️ Con un proyecto por cliente, esto es lo que permite que el mismo código sirva para todos.
+ */
+export const PROYECTO_FIREBASE = String(firebaseConfig.projectId || '')
+
 export const auth = getAuth(app)
 void setPersistence(auth, browserLocalPersistence).catch((e) => {
   console.error('❌ Error al configurar persistencia de sesión:', e)
