@@ -233,11 +233,12 @@ node respaldar.mjs --cliente acme        # debe terminar con «RESPALDO OK» y e
 ⚠️ Si un cliente falla, **los demás se respaldan igual**, pero el proceso termina con **error** y el
 resumen dice cuál falló: un cliente sin respaldo no puede pasar desapercibido.
 
-**9. Capacitación y cierre**: manual **2.22** + resumen **1.9**, y **una venta real completa** de punta
+**9. Capacitación y cierre**: manual **2.27** + resumen **1.9**, y **una venta real completa** de punta
 a punta (cobro, comprobante, cierre de caja) antes de dejarlos solos.
 
 **10. Salida ordenada** (si algún día se va): exportar todo, entregarlo y **borrar el proyecto**, dejando
-constancia. Va en el contrato (punto 7). ✅ **Ya hay botón**: **Facturación → Mis Datos** (ADMIN y GERENTE)
+constancia. Va en el contrato (punto 7). ✅ **Ya hay botón**: **Auditoría General → Mis Datos** (ADMIN y
+GERENTE; se movió ahí el 04/10/2026, junto a la tarjeta del respaldo)
 baja un **Excel con una hoja por colección** y un **JSON completo**; el script `exportar.mjs` sirve además
 para sacar los datos **de una fecha pasada** o cuando el cliente ya no tiene acceso al app (ver **4 bis**).
 

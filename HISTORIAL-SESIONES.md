@@ -11,6 +11,33 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-10 · 55 — «Mis Datos» se muda a Auditoría, y el latido del respaldo cambia de permiso)
+
+**Objective**: el usuario pidió *«cambiale a auditoria las copias de datos o sea Mis Datos»*: la exportación de datos y la tarjeta del respaldo —que estaban en **Facturación → Mis Datos**— pasan a **Auditoría General → Mis Datos**, como tercera pestaña de esa pantalla.
+
+**Important Details**
+- 🔑 **La pestaña es la misma tarjeta, en otro lado**: `pages/Auditoria.tsx` ahora tiene tres pestañas (`actividad | errores | datos`, con `DatabaseBackup`); en `datos` monta `EstadoRespaldo` (el aviso del respaldo) **arriba** de `ExportarDatos`. En `pages/Reportes.tsx` se sacó todo lo relacionado (pestaña, rama de render, `puedeExportarDatos`, el `rol` y los imports): una sola puerta, no dos.
+- 🔑 **El permiso que lo gobierna cambió**: `tblRespaldoEstado` pasó de `puede('reportes', …)` a **`puede('auditoria', ['ADMIN', 'GERENTE'])`** (`firestore.rules`), con `allow write: if false` como estaba. Alcanza a quien tenga **`auditoria`** (ADMIN y GERENTE por defecto, y asignable a mano por usuario). ⚠️ **Ojo con el caso que lo prueba**: el **CAJERO** tiene `reportes: true` **y** `auditoria: false` ⇒ si alguien devuelve la regla a `reportes`, esa línea del arnés deja de avisar.
+- 🛡️ **Tres test-guardas nuevos** (para que no quede huérfana ni duplicada): `lib/respaldo-estado.test.ts` exige que `Auditoria.tsx` monte `EstadoRespaldo` + `ExportarDatos` y tenga la pestaña «Mis Datos»; `lib/exportacion.test.ts` exige lo mismo y que `Reportes.tsx` **ya no** la mencione.
+- 📌 **Trampa del arnés, no del app (1)**: el menú lateral agrupa en un **acordeón** y el grupo «Administración» arranca **cerrado** ⇒ `clickTexto('Auditoría General')` no encontraba nada (parecía que la pestaña no existía). Además, con el grupo cerrado el `div` envoltorio tiene **el mismo texto** que el botón y `querySelectorAll` lo devuelve **primero**: el click se lo comía el `div` y el acordeón no se abría. Los dos arneses ahora clickean **el último** coincidente (el más profundo) = el botón.
+- 📌 **Trampa del arnés, no del app (2)**: al entrar con una cuenta no-admin salía el modal **«Sesión en otro dispositivo»** (el perfil de Chrome del arnés se estrena en cada corrida y la base guarda el `deviceId` de la anterior). Ese modal es **`fixed inset-0 z-[80]`** y **se come los clics de verdad** (`page.click`): «Preparar la exportación» quedaba sin apretar y parecía que la exportación no funcionaba. Se arregló limpiando `activeSession` antes de entrar y cerrando el modal con su propio botón **«Continuar aquí»** (los clics por DOM no se ven afectados). ⚠️ **El modal es comportamiento correcto del app** (sesión única), no un defecto.
+
+**Lo que se midió**
+- `npm test` **715/715** (+3), `npx tsc -b` ✓, `npm run lint` **80 warnings / 0 errores** (baseline igual), `npm run build` ✓ y `dist` verificado (sin `demo-key|demo-appadm`, con la `AIza` real, `index-N35GztYB.js`).
+- 🔑 **`run-reglas.mjs` (emulador): 77/77** — se agregaron dos casos: un usuario **PERSONALIZADO con `auditoria: true`** sí lee el latido (el permiso es asignable) y uno **sin ese permiso** no; y el del CAJERO se reescribió para decir **por qué** prueba lo que prueba.
+- 🔑 **`run-exportar.mjs` (emulador + Chrome real): 33/33.** El ADMIN exporta **29 registros en 24 colecciones** (omite 2: `tblAlertasVistas` y `sunat_archivos`); el **GERENTE** omite **3** (`tblAceptaciones` se suma: su `list` es de ADMIN) y el aviso *«no se pudieron exportar»* aparece igual. En ambos, el Excel baja de verdad (una hoja por colección, la foto como nota), el JSON completo baja sin BOM y queda el registro `exportar_datos` en `tblAuditLog`. El CAJERO no ve la pestaña **ni el menú** (control positivo: el grupo se abre y solo le muestra su Dashboard).
+- 🔑 **`run-respaldo-ui.mjs`: 20/20, 0 errores de consola.** Los cuatro estados del latido (al día, atención a las 50 h, crítico a las 70 h, falló, sin datos) siguen cambiando **solos** en la pantalla nueva.
+- `.env.local` restaurado y verificado: `495D84C4C4A8533F99B61ABADA26A695B2DB16E84EC8466ED9BE3D3CF7AC6632`; emulador y `npm run dev` apagados por dueño de puerto; `firestore-debug.log` borrado.
+- 📄 **Documentos al día**: `docs/manual-usuario.html` (**2.27**) con la ruta nueva en «Mis Datos», la tarjeta del respaldo y una línea en **14.1** sobre las tres pestañas; **PDF regenerado** (56 páginas, `MediaBox 594.96×841.92` = A4, `CreationDate` de esta corrida); `docs/PLAN-COMERCIALIZACION.md` (pasos 9 y 10) y `AGENTS.md` (2 invariantes + contadores de los arneses, recortado para no pasar el presupuesto: **65.196 bytes**).
+
+**Work State**: **código, tests y documentos listos; NADA desplegado.** El deploy es en dos pasos y necesita el «procede» del usuario: **primero reglas** (`npx firebase deploy --only firestore:rules`, por la regla nueva de `tblRespaldoEstado`) y **después hosting** (`npx firebase deploy --only hosting`). Si se publicara solo el hosting, el GERENTE vería la pantalla pero la tarjeta del respaldo le daría **permiso denegado**.
+
+**Next Move**: desplegar reglas y hosting, y confirmar en producción que el menú **Administración → Auditoría General → Mis Datos** abre con la tarjeta y la exportación (y que un CAJERO no lo ve).
+
+**Relevant Files**: `src/pages/Auditoria.tsx`, `src/pages/Reportes.tsx`, `firestore.rules`, `src/lib/respaldo-estado.test.ts`, `src/lib/exportacion.test.ts`, `docs/manual-usuario.html` (+ PDF), `docs/PLAN-COMERCIALIZACION.md`, `AGENTS.md`, y fuera del repo `run-reglas.mjs` / `run-exportar.mjs` / `run-respaldo-ui.mjs`.
+
+---
+
 ### (2026-09 · 54 — Las reglas de Firestore por rol (para poder vender el app))
 
 **Objective**: el usuario preguntó si hacía falta «disclaimer, garantías, contratos de privacidad». La respuesta honesta fue que **el papel es lo último**: al decir que **iba a vender el app a otros negocios**, se revisó el código y aparecieron agujeros que, vendiendo, son un reclamo esperando. Pidió el **plan escrito** ⇒ nació `docs/PLAN-COMERCIALIZACION.md`, y después mandó **arrancar la fase 1: la seguridad**.

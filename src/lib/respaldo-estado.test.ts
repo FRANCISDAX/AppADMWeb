@@ -103,10 +103,19 @@ describe('🛡️ el latido viaja del respaldo al app', () => {
   const tarjeta = readFileSync(join(aca, '..', 'components', 'EstadoRespaldo.tsx'), 'utf8')
   const herramienta = readFileSync('C:/Users/aaval/appadm-backup/respaldar.mjs', 'utf8')
   const reglas = readFileSync(join(aca, '..', '..', 'firestore.rules'), 'utf8')
+  const auditoria = readFileSync(join(aca, '..', 'pages', 'Auditoria.tsx'), 'utf8')
 
   it('la tarjeta usa la regla pura', () => {
     assert.match(tarjeta, /estadoDelRespaldo\(/)
     assert.match(tarjeta, /tblRespaldoEstado/)
+  })
+
+  it('🔑 la tarjeta y la exportación viven en Auditoría (no quedan huérfanas)', () => {
+    // Decisión del usuario (04/10/2026): «Mis Datos» se movió de Facturación a **Auditoría**. Este test
+    // falla si alguien mueve el archivo y se olvida de montarlo en algún lado.
+    assert.match(auditoria, /EstadoRespaldo/)
+    assert.match(auditoria, /ExportarDatos/)
+    assert.match(auditoria, /label: 'Mis Datos'/)
   })
 
   it('la herramienta de respaldo deja el latido, con el id = el proyecto', () => {
@@ -115,6 +124,14 @@ describe('🛡️ el latido viaja del respaldo al app', () => {
     assert.match(herramienta, /avisarLatido\(cliente/)
     // ⚠️ Un fallo del latido NO puede tumbar el respaldo.
     assert.match(herramienta, /no se pudo avisar el latido/)
+  })
+
+  it('🔑 el latido informa lo que copió (el «0 colecciones» que se coló una vez)', () => {
+    // 📌 La primera versión escribía «0 colecciones · 0 MB» porque no se pasaban esos datos a la función.
+    const llamada = herramienta.slice(herramienta.indexOf('await avisarLatido(cliente, {'), herramienta.indexOf('await avisarLatido(cliente, {') + 400)
+    assert.match(llamada, /colecciones: r\.colecciones/)
+    assert.match(llamada, /tamanoMB: r\.tamanoMB/)
+    assert.match(llamada, /documentos: r\.documentos/)
   })
 
   it('la regla deja leerlo y NO deja escribirlo desde el app', () => {

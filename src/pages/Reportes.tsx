@@ -1,4 +1,4 @@
-import { ClipboardList, CloudUpload, Database, Download, FileDown, FileText, Loader2, Printer, Receipt, Send, Share2, Smartphone, Trash2, Wallet } from 'lucide-react'
+import { ClipboardList, CloudUpload, Download, FileDown, FileText, Loader2, Printer, Receipt, Send, Share2, Smartphone, Trash2, Wallet } from 'lucide-react'
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import * as React from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -20,8 +20,6 @@ import { crearNotaCreditoDebito } from '@/services/notas'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { generarConsolidado } from '@/services/consolidado'
 import { ListaPaginada } from '@/components/ListaPaginada'
-import { ExportarDatos } from '@/components/ExportarDatos'
-import { EstadoRespaldo } from '@/components/EstadoRespaldo'
 import { DescargarArchivosSunat } from '@/components/DescargarArchivosSunat'
 import { ReporteAvisosYape } from '@/components/ReporteAvisosYape'
 import { PaginadorControles } from '@/components/PaginadorControles'
@@ -86,15 +84,13 @@ function mesDeHoy() {
 
 export function Reportes() {
   const { config: cfg } = useConfiguracion()
-  const { tienePermiso, rol, nombre: nombreUsuario, serieBoleta, serieBoletaNC, serieBoletaND, serieFacturaNC, serieFacturaND } = usePermisos()
+  const { tienePermiso, nombre: nombreUsuario, serieBoleta, serieBoletaNC, serieBoletaND, serieFacturaNC, serieFacturaND } = usePermisos()
   const { user } = useAuth()
   const { toast, confirm } = useNotifications()
   // Scope por usuario: si no tiene 'verTodo', solo ve sus propios documentos.
   const verTodo = tienePermiso('verTodo')
   const miUid = verTodo ? '' : (user?.uid || '')
-  const [tab, setTab] = React.useState<'nv' | 'consolidado' | 'sunat' | 'pedidos' | 'yape' | 'datos'>('nv')
-  /** La exportación de datos es de ADMIN y GERENTE: a los demás **no se les muestra la pestaña**. */
-  const puedeExportarDatos = rol === 'ADMIN' || rol === 'GERENTE'
+  const [tab, setTab] = React.useState<'nv' | 'consolidado' | 'sunat' | 'pedidos' | 'yape'>('nv')
   const [filtroTipo, setFiltroTipo] = React.useState<'BOLETA' | 'FACTURA' | 'NC' | 'ND'>('BOLETA')
   const [mes, setMes] = React.useState(mesDeHoy())
   const [notaDoc, setNotaDoc] = React.useState<Doc | null>(null)
@@ -545,24 +541,14 @@ export function Reportes() {
           { id: 'yape', label: 'Yape', icon: Smartphone },
           { id: 'consolidado', label: 'Consolidado de Boletas', icon: Receipt },
           { id: 'sunat', label: 'Registro SUNAT', icon: CloudUpload },
-          // 🔑 **Mis Datos**: la exportación de todo el negocio. La ven **ADMIN y GERENTE** (decisión del
-          // usuario, 03/10/2026): es lo que hace creíble que los datos son del cliente. Va acá y no en
-          // Configuración **a propósito**: el GERENTE no tiene el permiso `configuracion` y no vería el botón.
-          { id: 'datos', label: 'Mis Datos', icon: Database },
-        ] as const).filter((t) => t.id !== 'datos' || puedeExportarDatos).map((t) => (
+        ] as const).map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} className={cn('flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-bold transition-colors cursor-pointer', tab === t.id ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground')}>
             <t.icon className="h-4 w-4" /> {t.label}
           </button>
         ))}
       </div>
 
-      {tab === 'datos' ? (
-        <div className="space-y-3">
-          {/* El estado del respaldo va arriba: es lo primero que se quiere saber («¿está corriendo?»). */}
-          <EstadoRespaldo />
-          <ExportarDatos />
-        </div>
-      ) : tab === 'nv' ? (
+      {tab === 'nv' ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             {/* ⚠️ **Tiene que decir DE QUIÉN son los documentos que se ven.** Sin `verTodo`, la consulta

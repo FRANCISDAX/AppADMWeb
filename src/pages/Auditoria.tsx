@@ -1,10 +1,12 @@
-import { AlertTriangle, Download, History, Loader2, Search, Shield, Trash2 } from 'lucide-react'
+import { AlertTriangle, DatabaseBackup, Download, History, Loader2, Search, Shield, Trash2 } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useNotifications } from '@/components/notifications'
 import { usePermisos } from '@/context/permisos'
 import { ErroresPanel } from '@/components/auditoria/ErroresPanel'
+import { EstadoRespaldo } from '@/components/EstadoRespaldo'
+import { ExportarDatos } from '@/components/ExportarDatos'
 import { obtenerLogs, limpiarLogs, logsToCSV, descargarArchivo, type AuditLog } from '@/lib/audit'
 import { cn } from '@/lib/utils'
 
@@ -82,7 +84,7 @@ export default function Auditoria() {
   const [filtroAccion, setFiltroAccion] = React.useState('')
   const [filtroModulo, setFiltroModulo] = React.useState('')
   const [busqueda, setBusqueda] = React.useState('')
-  const [vista, setVista] = React.useState<'actividad' | 'errores'>('actividad')
+  const [vista, setVista] = React.useState<'actividad' | 'errores' | 'datos'>('actividad')
 
   const cargar = React.useCallback(async () => {
     setCargando(true)
@@ -176,7 +178,7 @@ export default function Auditoria() {
 
       {/* Actividad (lo que hacen los usuarios) vs Errores (lo que falla) */}
       <div className="flex gap-1.5 rounded-xl bg-muted p-1">
-        {([{ id: 'actividad', label: 'Actividad', icon: History }, { id: 'errores', label: 'Errores', icon: AlertTriangle }] as const).map((t) => (
+        {([{ id: 'actividad', label: 'Actividad', icon: History }, { id: 'errores', label: 'Errores', icon: AlertTriangle }, { id: 'datos', label: 'Mis Datos', icon: DatabaseBackup }] as const).map((t) => (
           <button
             key={t.id}
             onClick={() => setVista(t.id)}
@@ -190,7 +192,15 @@ export default function Auditoria() {
         ))}
       </div>
 
-      {vista === 'errores' ? (
+      {vista === 'datos' ? (
+        // 🔑 **Mis Datos** (decisión del usuario, 04/10/2026): la exportación de datos y el estado del
+        // respaldo viven en **Auditoría**, no en Facturación — es donde se mira todo lo que tiene que ver
+        // con la custodia de la información (qué se hizo y adónde está).
+        <div className="space-y-3">
+          <EstadoRespaldo />
+          <ExportarDatos />
+        </div>
+      ) : vista === 'errores' ? (
         <ErroresPanel />
       ) : (
         <>

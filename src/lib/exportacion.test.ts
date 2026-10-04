@@ -185,4 +185,13 @@ describe('🛡️ el script de respaldos usa esta misma regla', () => {
     assert.ok(!/function aCSV/.test(script), 'el script no puede definir su propio aCSV')
     assert.ok(!/function filasDe/.test(script), 'el script no puede definir su propio filasDe')
   })
+
+  it('🔑 la pantalla se abre desde Auditoría → Mis Datos (no desde Facturación)', () => {
+    // Decisión del usuario (04/10/2026): la exportación vive en **Auditoría**, junto al estado del
+    // respaldo. Y **ya no** está en Facturación: este test falla si alguien la deja en los dos lados.
+    const auditoria = readFileSync(new URL('../pages/Auditoria.tsx', import.meta.url), 'utf8')
+    const reportes = readFileSync(new URL('../pages/Reportes.tsx', import.meta.url), 'utf8')
+    assert.match(auditoria, /ExportarDatos/)
+    assert.ok(!/ExportarDatos/.test(reportes), 'la exportación ya no va en Facturación (Reportes.tsx)')
+  })
 })

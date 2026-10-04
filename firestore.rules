@@ -265,9 +265,10 @@ service cloud.firestore {
     // 🔑 Lo escribe **la herramienta de respaldo** con la cuenta de servicio (que saltea estas reglas) y
     // solo dice **cuándo corrió, cuánto copió y si salió bien**: una línea, sin información sensible.
     // El app lo lee para **avisar si el respaldo dejó de correr** (el 01/10/2026 no hubo copia y nadie se
-    // enteró). Lo ven quienes ven reportes (ADMIN y GERENTE); **nadie lo escribe desde el app**.
+    // enteró) y se muestra en **Auditoría → Mis Datos**. Lo ven quienes ven la auditoría (ADMIN y
+    // GERENTE) y **nadie lo escribe desde el app**.
     match /tblRespaldoEstado/{proyecto} {
-      allow read: if puede('reportes', ['ADMIN', 'GERENTE']);
+      allow read: if puede('auditoria', ['ADMIN', 'GERENTE']);
       allow write: if false;
     }
 
