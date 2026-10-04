@@ -11,6 +11,36 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-10 · 56 — El SIRE sumaba el descuento (boleta 78) y el IGV de un gravado)
+
+**Objective**: el usuario avisó *«hay un detalle en el reporte SIRE en las ventas, cuando hay descuento le suma al total — revisa la boleta 78»*. Diagnóstico primero (solo lectura contra producción), arreglo después, avisado y aprobado por él.
+
+**Lo que se midió en producción (solo lectura, cuenta de servicio)**
+- 🔑 **`2026-10_BOLETA-B001-000078`** (04/10/2026, **aceptada por SUNAT**, consolidada de `PED-000033` y `PED-000034`): ítems a precio de lista `6 × 0.60 = 3.60` + `3.00` + `5.00` = **11.60**, `descuentoTotal = 0.60` (venía del pedido: 6 huevos con promo) y **total cobrado 11.00**. El XML guardado adentro del comprobante (base64) declara `PayableAmount 11.00` con las líneas ya netas (`6 × 0.57 = 3.42`, `2.83`, `4.75`).
+- 📌 **El registro decía 11.60**: `ReporteSire.tsx` calculaba las bases sumando `items[].subtotal` —el **precio de lista**— y **nunca restaba** `descuentoDeVenta`. Era el único lugar del sistema que hacía esa cuenta a mano (el PDF, el XML, el margen y el punto de equilibrio usan la regla compartida).
+- 📌 **Alcance medido en toda la base**: **8 documentos y S/ 4.50** (7 boletas de septiembre + la 78 de octubre): `B001-62` (7.60 vs 7.00), `B001-64` (11.50 vs 11.00), `B001-66` (4.10 vs 3.70), `B001-67` (11.20 vs 10.00), `B001-70` (6.90 vs 6.50), `B001-73` (3.40 vs 3.00), `B001-74` (4.90 vs 4.50).
+- 🔴 **Dos cosas más que aparecieron y NO son del SIRE** (quedan para el contador): **`B001-57`** — SUNAT tiene **9.56** y se cobró **9.20**: la línea de *INCA KOLA PIRAÑITA* salió **gravada** (ítem sin `tipoAfectacion`, el bug del 18/09) y el comprobante le sumó el IGV **encima**; **`B001-61`** — SUNAT tiene **4.00** y se cobró **3.50**: el consolidado declaró los ítems a precio de lista (5 × 0.60) mientras las NV se cobraron a 0.50/0.50/0.60 y el descuento **no quedó** en `descuentoTotal`. Total: **S/ 0.86 declarados por encima de lo cobrado**.
+- 📌 También se midió lo que **no** era un problema: las **80** ventas tienen `fecha` como **string ISO** (no Timestamp), así que la fecha del registro y del CSV está bien; y **2 documentos** (las dos primeras boletas, `B001-000001` y `B001-000006`, de agosto) están `aceptado` pero **sin XML guardado** (son de antes de que el app guardara el XML).
+
+**El arreglo (aprobado por el usuario: «que el SIRE declare lo mismo que el comprobante»)**
+- 🔑 **Módulo nuevo `src/lib/sire-ventas.ts`** (puro): `calcularFilaSire()` valora cada línea con **`itemsParaSunat(items, descuentoDeVenta(venta))`** —la misma regla que arma el XML—, toma la afectación con **`afectacionGuardada()`**, **separa** el IGV del precio en los gravados (`precioSinIgv()`, porque el precio es final al público) y aplica el signo con `signoDoc()` (la NC resta). `totalesSire()` suma el período y cuenta los documentos **sin detalle de ítems**.
+- ⚠️ **El IGV ya no se recarga encima**: el código viejo hacía `base = precio` y `igv = base × 18%` ⇒ habría declarado **13.92 por una venta de 11.80**. Ahora la base es el valor sin IGV y el IGV es la diferencia.
+- 🔑 **`ReporteSire.tsx` ya no calcula nada**: usa el módulo (`docsCalc` y `totales`), y la leyenda de la pantalla explica de dónde salen los importes; si algún comprobante viejo viniera **sin ítems**, avisa en ámbar que se declara su total **sin inventar IGV**.
+- 🛡️ **`src/lib/sire-ventas.test.ts` (16 tests nuevos)**: el caso real de la boleta 78 (y que **no** dé 11.60), el reparto del descuento, `descuento_total` en snake_case, el gravado (base 10.00 + IGV 1.80, y que **no** dé 13.92), un descuento que no toca al exonerado, la NC en negativo, la ND, el documento sin ítems y el total del período. **Y dos test-guardas** que leen los archivos: el módulo tiene que usar las reglas compartidas y **no** contener `0.18` ni `it.subtotal`; la pantalla tiene que importar el módulo y **no** volver a sumar subtotales.
+
+**Verificación**
+- 🔑 **Contra los 78 XML aceptados de producción, con el módulo real** (importado con `file:///…/sire-ventas.ts`): **coincide exacto en 76**. Los 2 restantes son justamente `B001-57` y `B001-61` (los comprobantes que declararon más de lo cobrado). Octubre pasa de **S/ 14.60 a S/ 14.00** = lo cobrado y lo declarado; septiembre de 258.70 a 254.80 (cobrado 254.60).
+- 🔑 **Arnés nuevo `run-sire.mjs` (emulador + Chrome real): 9/9.** Siembra la boleta 78 real, una boleta gravada y una NC, y verifica **en la pantalla**: la fila de `B001-000078` dice **S/ 11.00** (y **no** 11.60), la base gravada **S/ 10.00** con IGV **S/ 1.80**, la NC en **−13.00** y el total del período **S/ 9.80**.
+- `npm test` **731/731** (+16), `npx tsc -b` ✓, `npm run lint` **80/0** (baseline igual), `npm run build` ✓. `.env.local` restaurado (hash `495D84C4…`), emulador y dev apagados, `firestore-debug.log` borrado.
+
+**Work State**: **arreglado y verificado, sin desplegar** (esperando el «procede» del usuario). Un detalle para el contador: la columna `MontoTotalDescuentos` del CSV sale en **0.00** porque las bases ya van **netas** del descuento (el modelo del XML); si prefiere el descuento declarado aparte, es una decisión fiscal y un cambio de una línea.
+
+**Next Move**: `npx firebase deploy --only hosting` (no toca reglas). Después: revisar con el contador si las dos boletas que declararon más de lo cobrado necesitan algo.
+
+**Relevant Files**: `src/lib/sire-ventas.ts` (+ `.test.ts`), `src/pages/ReporteSire.tsx`, `package.json` (lista de tests), `AGENTS.md`; fuera del repo `run-sire.mjs` y los scripts de diagnóstico en la carpeta temporal.
+
+---
+
 ### (2026-10 · 55 — «Mis Datos» se muda a Auditoría, y el latido del respaldo cambia de permiso)
 
 **Objective**: el usuario pidió *«cambiale a auditoria las copias de datos o sea Mis Datos»*: la exportación de datos y la tarjeta del respaldo —que estaban en **Facturación → Mis Datos**— pasan a **Auditoría General → Mis Datos**, como tercera pestaña de esa pantalla.

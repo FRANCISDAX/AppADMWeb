@@ -7,7 +7,7 @@ import { useNotifications } from '@/components/notifications'
 import { Button } from '@/components/ui/button'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
-import { signoDoc } from '@/lib/ventas-mensuales'
+import { calcularFilaSire, totalesSire, type FilaSire } from '@/lib/sire-ventas'
 import { cn } from '@/lib/utils'
 import {
   CABECERA_EXPORT_COMPRAS,
@@ -57,62 +57,16 @@ type Doc = {
   sunat?: { estado?: string }
 }
 
-type DocCalculado = Doc & {
-  baseGravada: number
-  baseExonerada: number
-  baseInafecta: number
-  igv: number
-  totalCalc: number
-  tipoDocSunat: string
-  signo: number
-}
-
-function calcularDoc(d: Doc): DocCalculado {
-  // La regla del signo vive en `lib/ventas-mensuales.ts` (la NC resta): una sola implementación.
-  const signo = signoDoc(d)
-  const items = d.venta?.items || []
-  let baseGravada = 0
-  let baseExonerada = 0
-  let baseInafecta = 0
-
-  for (const it of items) {
-    const importe = Math.abs(Number(it.subtotal ?? ((it.precioVenta ?? 0) * (it.cantidad ?? 1))))
-    const af = it.tipoAfectacion || '10'
-    if (af.startsWith('10') || af.startsWith('11') || af.startsWith('12') || af.startsWith('13') || af.startsWith('14') || af.startsWith('15') || af.startsWith('16') || af.startsWith('17') || af.startsWith('18') || af.startsWith('19')) {
-      baseGravada += importe
-    } else if (af.startsWith('2')) {
-      baseExonerada += importe
-    } else if (af.startsWith('3') || af.startsWith('4')) {
-      baseInafecta += importe
-    }
-  }
-
-  // Si no hay items con tipoAfectacion, usar total directo como gravado
-  if (items.length === 0) {
-    baseGravada = Math.abs(d.venta?.total ?? 0)
-  }
-
-  const igv = Math.round(baseGravada * 0.18 * 100) / 100
-  const totalCalc = baseGravada + igv + baseExonerada + baseInafecta
-
-  // Mapear tipoDoc a código SUNAT
-  let tipoDocSunat = '03' // Boleta por defecto
-  if (d.tipoDoc === 'FACTURA') tipoDocSunat = '01'
-  else if (d.tipoDoc === 'BOLETA') tipoDocSunat = '03'
-  else if (d.tipoDoc === 'NC') tipoDocSunat = '07'
-  else if (d.tipoDoc === 'ND') tipoDocSunat = '08'
-
-  return {
-    ...d,
-    baseGravada: baseGravada * signo,
-    baseExonerada: baseExonerada * signo,
-    baseInafecta: baseInafecta * signo,
-    igv: igv * signo,
-    totalCalc: totalCalc * signo,
-    tipoDocSunat,
-    signo,
-  }
-}
+/**
+ * Un documento del registro **con sus importes ya calculados**.
+ *
+ * 🔑 La cuenta **no vive acá**: sale de `lib/sire-ventas.ts` (`calcularFilaSire`), que valora cada línea
+ * con la **misma regla del comprobante electrónico** (`itemsParaSunat` + `descuentoDeVenta`) y separa el
+ * IGV de los ítems gravados. 📌 **Bug del 04/10/2026**: esta pantalla sumaba `items[].subtotal` —el
+ * **precio de lista**— y **nunca restaba** el descuento, así que la boleta `B001-000078` (S/ 11.00
+ * cobrados y aceptados por SUNAT) figuraba como **S/ 11.60**.
+ */
+type DocCalculado = Doc & FilaSire
 
 function toCsvRows(docs: DocCalculado[]) {
   const periodo = docs[0]?.anioMes?.replace('-', '') || ''
@@ -136,7 +90,7 @@ function toCsvRows(docs: DocCalculado[]) {
       'PEN',
       d.baseGravada.toFixed(2),
       '0.00',
-      d.totalCalc.toFixed(2),
+      d.total.toFixed(2),
       d.igv.toFixed(2),
       estado,
     ].join('|')
@@ -227,7 +181,10 @@ export function ReporteSire() {
     return () => { activo = false }
   }, [añoMesTarget, miUid])
 
-  const docsCalc = React.useMemo(() => docs.map(calcularDoc), [docs])
+  const docsCalc = React.useMemo<DocCalculado[]>(
+    () => docs.map((d) => ({ ...d, ...calcularFilaSire(d) })),
+    [docs],
+  )
 
   /**
    * Las compras del mes elegido. ⚠️ **No se filtra por usuario**: un libro de compras es del negocio, no de
@@ -260,32 +217,14 @@ export function ReporteSire() {
     return docsCalc.filter((d) => d.tipoDoc === filtro && d.estado !== 'anulada')
   }, [docsCalc, filtro])
 
-  const totales = React.useMemo(() => {
-    let baseGravada = 0
-    let baseExonerada = 0
-    let baseInafecta = 0
-    let igv = 0
-    let total = 0
-    let cantidad = 0
-
-    for (const d of docsFiltrados) {
-      baseGravada += d.baseGravada
-      baseExonerada += d.baseExonerada
-      baseInafecta += d.baseInafecta
-      igv += d.igv
-      total += d.totalCalc
-      cantidad++
-    }
-
-    return { baseGravada, baseExonerada, baseInafecta, igv, total, cantidad }
-  }, [docsFiltrados])
+  const totales = React.useMemo(() => totalesSire(docsFiltrados), [docsFiltrados])
 
   const totalesPorTipo = React.useMemo(() => {
     const tipos = ['BOLETA', 'FACTURA', 'NC', 'ND']
     return tipos.map((tipo) => {
       const items = docsCalc.filter((d) => d.tipoDoc === tipo && d.estado !== 'anulada')
       const anulados = docsCalc.filter((d) => d.tipoDoc === tipo && d.estado === 'anulada')
-      const total = items.reduce((s, d) => s + d.totalCalc, 0)
+      const total = items.reduce((s, d) => s + d.total, 0)
       const igv = items.reduce((s, d) => s + d.igv, 0)
       return { tipo, cantidad: items.length, anulados: anulados.length, total, igv }
     })
@@ -469,7 +408,7 @@ export function ReporteSire() {
                       <td className="px-4 py-2 text-right num text-xs">{d.igv !== 0 ? fmt(d.igv) : '—'}</td>
                       <td className="px-4 py-2 text-right num text-xs">{d.baseExonerada !== 0 ? fmt(d.baseExonerada) : '—'}</td>
                       <td className={cn('px-4 py-2 text-right num text-xs font-bold', d.tipoDoc === 'NC' && 'text-destructive')}>
-                        {d.tipoDoc === 'NC' ? '-' : ''}{fmt(Math.abs(d.totalCalc))}
+                        {d.tipoDoc === 'NC' ? '-' : ''}{fmt(Math.abs(d.total))}
                       </td>
                       <td className="px-4 py-2 text-center">
                         {esAnulado ? (
@@ -499,6 +438,19 @@ export function ReporteSire() {
         )}
       </div>
 
+      {/* Un comprobante viejo sin detalle de ítems: se declara su total y **no se le inventa IGV**. */}
+      {totales.sinDetalle > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs dark:bg-amber-500/10">
+          <p className="font-bold text-amber-800 dark:text-amber-300">
+            {totales.sinDetalle} comprobante(s) sin detalle de ítems
+          </p>
+          <p className="mt-1 text-amber-800 dark:text-amber-300">
+            Se declara su <strong>total</strong> tal cual y <strong>sin IGV</strong>: sin las líneas no hay forma
+            de saber la afectación, y suponerla gravada declararía un impuesto que nadie cobró.
+          </p>
+        </div>
+      )}
+
       {/* Leyenda */}
       <div className="rounded-xl border bg-card p-4 text-xs text-muted-foreground shadow-card">
         <p className="font-bold mb-1">Notas:</p>
@@ -506,7 +458,12 @@ export function ReporteSire() {
           <li><strong>Base Gravada</strong>: Operaciones con IGV (código afectación 10-19)</li>
           <li><strong>Base Exonerada</strong>: Operaciones exoneradas de IGV (código 20-22)</li>
           <li><strong>Base Inafecta</strong>: Operaciones inafectas (código 30-40)</li>
-          <li><strong>IGV</strong>: 18% de la Base Gravada</li>
+          <li>
+            🔑 <strong>Los importes salen de la misma regla que el comprobante electrónico</strong>: el precio es
+            final al público y el <strong>descuento se reparte entre las líneas</strong> (es lo que se declaró a
+            SUNAT). En un ítem gravado, la base es el precio <strong>sin IGV</strong> y el IGV es la diferencia
+            que ya venía dentro.
+          </li>
           <li>El archivo CSV se exporta en formato pipe-delimited para carga en SUNAT SIRE</li>
           <li>Las Notas de Crédito se restan de los totales (signo negativo)</li>
         </ul>
