@@ -21,6 +21,7 @@ import { buscarTurnoAbierto } from '@/services/turnos'
 import { generarConsolidado } from '@/services/consolidado'
 import { ListaPaginada } from '@/components/ListaPaginada'
 import { ExportarDatos } from '@/components/ExportarDatos'
+import { DescargarArchivosSunat } from '@/components/DescargarArchivosSunat'
 import { ReporteAvisosYape } from '@/components/ReporteAvisosYape'
 import { PaginadorControles } from '@/components/PaginadorControles'
 import { COL } from '@/constants/colecciones'
@@ -48,7 +49,10 @@ type Doc = {
   createdAt?: string
   estado?: string
   venta?: { total?: number; cliente_nombre?: string; cliente_dni?: string; tipoPago?: string; items?: any[]; fecha?: string; referencia?: string; cajero?: string }
-  sunat?: { estado?: string; consolidado?: boolean; cdrCode?: number; cdrDesc?: string; error?: string; hash?: string; duplicado?: boolean; documentoConsolidadoId?: string }
+  // 🔑 `xml` y `cdr` son los archivos del envío, **en base64 dentro del propio comprobante** (los baja
+  // `DescargarArchivosSunat` con el permiso `descargarXmlSunat`). Llegan solos en la lectura: no hay que
+  // pedirlos aparte ni tocar ninguna regla.
+  sunat?: { estado?: string; consolidado?: boolean; cdrCode?: number; cdrDesc?: string; error?: string; hash?: string; duplicado?: boolean; documentoConsolidadoId?: string; serie?: string; numero?: number; xml?: string; cdr?: string | null }
 }
 
 const SUNAT_ESTADO: Record<string, { variant: 'success' | 'destructive' | 'warning' | 'secondary'; label: string }> = {
@@ -478,6 +482,8 @@ export function Reportes() {
                 {enviandoId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} {enviandoId === d.id ? 'Enviando…' : d.sunat?.estado === 'aceptado' ? 'Enviado' : 'Enviar'}
               </Button>
             )}
+            {/* 🔑 Bajar el XML y el CDR del envío (permiso `descargarXmlSunat`): es lo que pide el contador. */}
+            <DescargarArchivosSunat doc={d} ruc={cfg?.ruc} />
             {puedeCorregir(d) && (
               <Button variant="outline" size="sm" onClick={() => abrirCorregir(d)}><Wallet className="h-3.5 w-3.5" /> Pago</Button>
             )}

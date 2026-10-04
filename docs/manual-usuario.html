@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.24 — Octubre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.25 — Octubre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -176,6 +176,11 @@
     <div class="step"><strong>Descargar el JSON</strong><p>Los mismos datos en un archivo para sistemas, <strong>completos</strong>. También podés bajar el CSV de una sola colección desde la lista.</p></div>
   </div>
   <div class="tip"><strong>Tené en cuenta:</strong> sin las fotos la exportación pesa ~1 MB; con las fotos, decenas de MB (por eso la casilla viene apagada). Cada exportación <strong>queda registrada en la auditoría</strong> con quién y cuándo —es información de todo el negocio— y las <strong>contraseñas no se exportan</strong>.</div>
+
+  <h3>Bajar el XML y el CDR de un comprobante enviado</h3>
+  <p>En <strong>Facturación → Registro SUNAT</strong>, cada comprobante ya enviado tiene dos botones: <strong>XML</strong> (el comprobante que se declaró) y <strong>CDR</strong> (la constancia de que SUNAT lo aceptó). Es lo que pide el contador cuando algo no cuadra.</p>
+  <p>El archivo baja con <strong>el nombre que usa SUNAT</strong> (<code>RUC-tipo-serie-correlativo.xml</code> y <code>…​.cdr.xml</code>), así que se reconoce sin abrirlo.</p>
+  <div class="tip"><strong>Permiso:</strong> los ve quien tenga el permiso <strong>«Descargar XML y CDR (SUNAT)»</strong>, que viene activado para ADMIN y GERENTE y se puede prender o apagar <strong>por usuario</strong> en <em>Usuarios → Editar</em>. El <strong>CDR solo existe si el comprobante fue aceptado</strong>: en uno pendiente o rechazado aparece únicamente el XML.</div>
 
   <h3>Roles del sistema</h3>
   <table>
@@ -1629,7 +1634,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.24</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.25</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

@@ -48,6 +48,14 @@ export const CLAVES_PERMISOS = {
   cancelarVentaPendiente: 'cancelarVentaPendiente',
   reportesPorVendedor: 'reportesPorVendedor',
   aplicarDescuento: 'aplicarDescuento',
+  /**
+   * 🔑 **Bajar el XML y el CDR de un comprobante ya enviado a SUNAT** (decisión del usuario, 03/10/2026).
+   * Lo tienen **ADMIN y GERENTE** por defecto y se puede **prender por usuario** en `Usuarios → Editar`.
+   * ⚠️ Es un permiso **de interfaz**: el XML/CDR viaja dentro del propio comprobante (`sunat.xml`/`sunat.cdr`),
+   * que cualquiera que lea documentos ya puede leer por API ⇒ esto controla el **botón**, no el dato
+   * (mismo criterio que `aplicarDescuento`). ⚠️ La app móvil no conoce esta clave y la ignora.
+   */
+  descargarXmlSunat: 'descargarXmlSunat',
 } as const
 
 const ALL_TRUE = Object.fromEntries(Object.values(CLAVES_PERMISOS).map((k) => [k, true]))
@@ -116,7 +124,7 @@ export const MODULOS = [
   { key: 'dashboards', label: 'Dashboards', permisos: ['dashboard', 'dashboardOperaciones'] },
   { key: 'modulos', label: 'Módulos (Tabs)', permisos: ['inventario', 'turnos', 'reportes', 'ventas'] },
   { key: 'drawer', label: 'Opciones del Menú', permisos: ['clientes', 'estadoCuenta', 'compras', 'proveedores', 'reporteTurnos', 'reporteFechas', 'arqueoCaja', 'estadisticas', 'notasVenta', 'consolidado', 'registroVentas', 'kardex', 'comandosVoz', 'configuracion', 'informacion', 'usuarios', 'egresos', 'auditoria', 'sire', 'ventasPorEmpleado', 'rotacionInventario'] },
-  { key: 'funciones', label: 'Funciones', permisos: ['crearProducto', 'editarProducto', 'eliminarProducto', 'ajustarStock', 'verCostos', 'anularVenta', 'cobrarCredito', 'imprimirTicket', 'abrirTurno', 'cerrarTurno', 'rectificarCaja', 'corregirPago', 'editarMontoInicial', 'rectificarTurno', 'enviarACaja', 'verVentasPendientes', 'cobrarVenta', 'cancelarVentaPendiente', 'reportesPorVendedor', 'aplicarDescuento'] },
+  { key: 'funciones', label: 'Funciones', permisos: ['crearProducto', 'editarProducto', 'eliminarProducto', 'ajustarStock', 'verCostos', 'anularVenta', 'cobrarCredito', 'imprimirTicket', 'abrirTurno', 'cerrarTurno', 'rectificarCaja', 'corregirPago', 'editarMontoInicial', 'rectificarTurno', 'enviarACaja', 'verVentasPendientes', 'cobrarVenta', 'cancelarVentaPendiente', 'reportesPorVendedor', 'aplicarDescuento', 'descargarXmlSunat'] },
   { key: 'accesos', label: 'Acceso Especial', permisos: ['verTodo'] },
 ]
 
@@ -169,6 +177,7 @@ export const LABELS_PERMISOS: Record<string, string> = {
   cancelarVentaPendiente: 'Cancelar Venta Pendiente',
   reportesPorVendedor: 'Reportes por Vendedor',
   aplicarDescuento: 'Aplicar descuento manual',
+  descargarXmlSunat: 'Descargar XML y CDR (SUNAT)',
 }
 
 export const ROLES = ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR', 'ALMACEN', 'PERSONALIZADO']
