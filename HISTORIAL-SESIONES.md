@@ -11,6 +11,35 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-10 · 57 — El aviso de que el turno ya tiene demasiadas ventas)
+
+**Objective**: el usuario preguntó *«el sistema app web es escalable? se tiene que pasar al modo blaze en firebase para eso?»* y después pidió el detalle de *«partir el turno cuando se acerque a ~1.000 ventas»*; al final aprobó el aviso en la app: **«que al llegar a los 400 avise que a los 500 tiene que cerrar ese turno, ¿es posible hacer eso?»** ⇒ se implementó.
+
+**Lo que se midió en producción (solo lectura, cuenta de servicio)**
+- 📌 **`tblTurnos`, 04/10/2026**: **115 turnos**, 106 con al menos una venta, en **84 días con ventas** (≈1,4 turnos por día). El turno **más grande de la historia tiene 12 ventas y pesa 6,6 KB** = **0,6 %** del límite de Firestore.
+- 🔑 **El peso real por venta es 1.036 bytes** (rango medido 306 B a 1.327 B según ítems y formas de pago) ⇒ el 1 MiB por documento llega a **~1.000 ventas en un mismo turno** (⚠️ corrige el «~1.600» que yo había estimado antes con 917 B).
+- 📌 **El negocio hace ~3 documentos de venta por día** (el mejor día: 8; 2026-08-26, 09-11, 09-13 y 09-24). A ese ritmo, un turno de 1.000 ventas son **~330 días sin cerrar la caja**.
+- 📌 **Del respaldo del 04/10 23:30**: 29 archivos, **6,58 MB** en total, y **`tblProductos.jsonl.gz` = 6,03 MB (92 %)**: el catálogo (40 productos con las fotos en base64) es casi toda la base.
+- 📌 **Firestore, cuota gratis (verificada en la página de precios)**: 1 GiB guardado, **50.000 lecturas/día**, 20.000 escrituras/día, 20.000 borrados/día, 10 GiB de salida al mes; **se resetea a la medianoche del Pacífico**. Blaze trae **la misma cuota gratis** y cobra por uso ⇒ es **quitar el corte diario**, no ganar velocidad.
+
+**El aviso en la app**
+- 🔑 **Módulo puro `src/lib/turno-limite.ts`**: `limiteDeTurno(ventas)` devuelve nivel (`ok`/`aviso`/`cerrar`/`urgente`), ventas, KB estimados (con `BYTES_POR_VENTA = 1036`, el medido) y el % del límite. Umbrales de fábrica: **400 avisa**, **500 pide cerrar**, **800 urgente**; ajustables por opciones.
+- 🔑 **`src/components/AvisoLimiteTurno.tsx`**: dibuja el aviso ámbar (aviso) o rojo (cerrar/urgente) y **no dibuja nada** si el turno está bien; el texto sale **siempre de la regla** (`limite.titulo`/`limite.detalle`), así que cambiar un umbral no deja una pantalla avisando tarde.
+- 🔑 **Montado en las dos pantallas**: **Turnos** (arriba de la tarjeta «Turno activo», leyendo `turno.ventasDelTurno.length` que ya tiene) y **PDV** (arriba del latido de Yape). En el PDV el conteo se lee **una vez al abrir** (`buscarTurnoAbierto`) y se lleva con cada cobro (`+1` tras la venta y tras el cobro de un pedido): **releer el turno en cada venta sería leer el documento más grande de la base para mostrar un aviso**.
+- ⚠️ **Informa, no bloquea**: la venta se sigue cobrando; el bloqueo real lo pone Firestore al llegar al límite del documento.
+- 🛡️ **`src/lib/turno-limite.test.ts` (14 tests)**: los umbrales aprobados, que a las 400 **no** pide cerrar y **dice cuándo sí**, que a las 500 y a las 800 el mensaje cambia, los bordes (499/501/799/801), la estimación de KB, que el techo medido (~1.000) cae en urgente, los datos que no son números, y **un test-guarda** que falla si las pantallas se arman su propio umbral.
+- 📌 **Arnés `run-aviso-turno.mjs` (18/18)** contra el emulador + Chrome: 400 ⇒ ámbar con «A las 500 ventas conviene cerrarlo y abrir otro» y «~405 KB de 1.024 KB» (borde `rgb(252, 211, 77)`); 500 ⇒ rojo «cerralo y abrí otro» (borde `rgba(220, 40, 40, 0.4)`); **12 ventas ⇒ ningún aviso** (control: la pantalla de Turnos cargó); y el **PDV muestra el mismo aviso** con 450.
+
+**Verificación**
+- ✅ `npm test` **745/745** (eran 731), `npx tsc -b` ✓, `npm run lint` **80 warnings / 0 errores** (sin subir el baseline), `npm run build` ✓, `dist` sin `demo-key`/`demo-appadm`. `.env.local` restaurado y verificado por hash `495D84C4…`, `firestore-debug.log` borrado, emulador y dev server apagados.
+
+**Next Move**
+- ⏳ **Pendiente de deploy** (hosting): el usuario no dio el «procede» todavía.
+- 🔴 Sigue en la lista del usuario: **Blaze + alerta de presupuesto** (quita el corte diario y habilita los **respaldos administrados**, que es el hueco real abierto hoy: el respaldo corre en su PC y el 01/10 no hubo copia), 2FA en la cuenta de Google, mover las llaves de servicio fuera de OneDrive, cerrar el alta libre y App Check; y el contador debe ver las **dos boletas de septiembre (S/ 0.86)** y decidir si `MontoTotalDescuentos` debe llevar el descuento en vez de 0.00.
+- ⚠️ **Cuando el volumen lo pida** (no ahora, hay ~100× de margen): dejar de copiar `ventasDelTurno` dentro del turno y guardar **solo los totales**, con las pantallas leyendo los documentos del turno. Toca el arqueo (plata) ⇒ no se hace por las dudas.
+
+**Relevant Files**: `src/lib/turno-limite.ts`, `src/lib/turno-limite.test.ts`, `src/components/AvisoLimiteTurno.tsx`, `src/pages/Turnos.tsx`, `src/pages/Pdv.tsx`, `package.json`, `AGENTS.md`, `HISTORIAL-SESIONES.md`, `C:\Users\aaval\AppData\Local\Temp\appadm-yape-test\run-aviso-turno.mjs`.
+
 ### (2026-10 · 56 — El SIRE sumaba el descuento (boleta 78) y el IGV de un gravado)
 
 **Objective**: el usuario avisó *«hay un detalle en el reporte SIRE en las ventas, cuando hay descuento le suma al total — revisa la boleta 78»*. Diagnóstico primero (solo lectura contra producción), arreglo después, avisado y aprobado por él.

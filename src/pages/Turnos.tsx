@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
 import { CierreCaja } from '@/components/CierreCaja'
+import { AvisoLimiteTurno } from '@/components/AvisoLimiteTurno'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { abrirTurno, buscarTurnoAbierto, cerrarTurno, editarMontoInicial, type Turno } from '@/services/turnos'
 import { obtenerEnviosPendientesAnteriores, actualizarEstadoEnvio, type EnvioPendiente, type EnvioEstado } from '@/services/envios'
@@ -262,6 +263,11 @@ export function Turnos() {
       ) : (
         /* ===== Turno activo ===== */
         <>
+          {/* 🔑 **El turno guarda el detalle completo de cada venta y no puede pasar de 1 MiB**: al
+              acercarse al límite la venta no se puede guardar (y con ella el cobro). El aviso sale de
+              `lib/turno-limite.ts` —una sola regla— y pide cerrar el turno y abrir otro. */}
+          <AvisoLimiteTurno ventas={(turno.ventasDelTurno ?? []).length} />
+
           <div className="rounded-2xl border bg-card p-6 shadow-card">
             <div className="mb-3 flex items-center gap-2">
               <Clock className="h-5 w-5 text-emerald-600" />

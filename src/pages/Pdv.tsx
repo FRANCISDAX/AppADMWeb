@@ -45,6 +45,7 @@ import {
   type MedioPago,
 } from '@/lib/pagos'
 import { CreditoPanel } from '@/components/CreditoPanel'
+import { AvisoLimiteTurno } from '@/components/AvisoLimiteTurno'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { registrarVenta, crearVentaPendiente, cobrarVentaPendiente, obtenerDocumento, obtenerVentasPendientes, type VentaItem } from '@/services/ventas'
 import { confirmarPagoYapeEnVenta, reservarPagoYape, soltarPagoYape } from '@/services/yape'
@@ -174,6 +175,29 @@ export function Pdv() {
   const [avisoYape, setAvisoYape] = React.useState<{ pago: PagoYape; filaId: string } | null>(null)
   /** Avisos ya resueltos (confirmados o soltados): evita repetir la transacción sobre el mismo. */
   const yapeResuelto = React.useRef<string | null>(null)
+  /**
+   * **Cuántas ventas tiene el turno abierto** (o `null` si todavía no se leyó / no hay turno).
+   *
+   * 🔑 Para qué: el turno guarda el detalle completo de cada venta y **no puede pasar de 1 MiB**, así que
+   * al acercarse al límite **falla el cobro** (`lib/turno-limite.ts` trae los umbrales y la medición real).
+   * Se lee **una vez al abrir el PDV** y después se lleva la cuenta con cada cobro: releer el turno en cada
+   * venta sería leer el documento más grande de la base para mostrar un aviso.
+   */
+  const [ventasTurno, setVentasTurno] = React.useState<number | null>(null)
+  const verTodo = tienePermiso('verTodo')
+
+  React.useEffect(() => {
+    let cancel = false
+    buscarTurnoAbierto(user?.uid, verTodo)
+      .then((t) => {
+        if (!cancel) setVentasTurno(t ? (t.ventasDelTurno ?? []).length : null)
+      })
+      .catch(() => {
+        // Sin turno (o sin permiso para verlo): no hay nada que avisar acá.
+        if (!cancel) setVentasTurno(null)
+      })
+    return () => { cancel = true }
+  }, [user?.uid, verTodo])
 
   const handleBarcodeDetectado = React.useCallback((codigo: string) => {
     const codigoLimpio = codigo.replace(/[\s-]/g, '').trim()
@@ -730,6 +754,8 @@ export function Pdv() {
         },
       })
       if (!res.success) return setToast(`❌ ${res.error || 'No se pudo cobrar el pedido'}`)
+      // El pedido cobrado entra al turno: se lleva la cuenta para el aviso del límite.
+      setVentasTurno((turnoActivo.ventasDelTurno ?? []).length + 1)
 
       const correlativo = res.correlativo || pedidoActivo.codigo
       // Se relee el documento cobrado para ofrecer la impresión, igual que una venta normal.
@@ -1108,6 +1134,8 @@ export function Pdv() {
       if (res.success) {
         const avisoCobrado = avisoActivo
         setToast(`✅ Venta ${res.correlativo ?? ''} registrada`)
+        // La venta ya está guardada dentro del turno: se lleva la cuenta para el aviso del límite.
+        setVentasTurno((n) => (n === null ? null : n + 1))
         setVentaOk({ correlativo: res.correlativo ?? '', total, vuelto: resumen.vuelto, documento: res.documento })
         setCart({})
         setPagos([])
@@ -1589,6 +1617,11 @@ export function Pdv() {
               {allItems.length} item{allItems.length !== 1 ? 's' : ''}
             </span>
           </div>
+
+          {/* 🔑 **El aviso de que el turno ya tiene demasiadas ventas**: el detalle del turno se guarda
+              completo y no puede pasar de 1 MiB, así que al acercarse al límite la venta no se guarda (y
+              con ella el cobro). Sale de `lib/turno-limite.ts` y solo se dibuja cuando hay algo que decir. */}
+          {!esVendedor && <AvisoLimiteTurno ventas={ventasTurno} className="mx-5 mt-3" />}
 
           {/* 🔑 El latido del puente va **acá y no dentro del panel de avisos**, a propósito: el panel
               se oculta cuando no hay nada que mostrar, y el caso que más importa es justamente ese
