@@ -9,6 +9,7 @@ import { lineasPersonal, personalDeVenta } from '@/lib/personal'
 // (puro y testeado) para que los dos formatos **no puedan** mostrar importes distintos del mismo
 // documento. El diseño de la ticketera sigue acá abajo, intacto.
 import { TITULOS, calcularTotales, construirQRData, generarQRDataUrl, normalizarMontosNota } from '@/lib/comprobante-comun'
+import { etiquetaIgv, porcentajeDelDocumento, tasaDePorcentaje } from '@/lib/igv'
 
 // ⚠️ Los títulos, las tasas de afectación, `calcularTotales`, `serieNota`, `construirQRData` y
 // `generarQRDataUrl` se movieron a **`lib/comprobante-comun.ts`** (arriba está el import): son las
@@ -89,7 +90,11 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   // el comprobante cuadra con lo que pagó el cliente. Sin esto la tabla de
   // totales mostraba el importe de lista y no sumaba con el TOTAL.
   const descuentoDoc = descuentoDeVenta(venta)
-  const totalesCalc = calcularTotales(itemsConDescuento(venta.items || [], descuentoDoc), { regionExonerada: config?.regionExonerada })
+  // 🔑 La tasa del documento (18% general, 10% restaurantes/hoteles): la misma que usan el XML, el A4 y el
+  // SIRE, y la que sale impresa en el título de la fila del IGV.
+  const igvPorcentaje = porcentajeDelDocumento(venta, config)
+  const tasaIgv = tasaDePorcentaje(igvPorcentaje)
+  const totalesCalc = calcularTotales(itemsConDescuento(venta.items || [], descuentoDoc), { regionExonerada: config?.regionExonerada, tasaIgv })
   const filasDescuento = descuentoDoc > 0
     ? `<tr><td class="td-r tot-l">Descuento</td><td class="td-r tot-v">- S/ ${descuentoDoc.toFixed(2)}</td></tr>`
     : ''
@@ -98,13 +103,16 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   const tieneInafectas = Math.abs(totalesCalc.opInafectas) > 0
   const hayIGV = tieneGravadas
   // Filas de totales (modelo SUNAT): exonerada/gravada + gratuita + IGV + ICBPER + moneda.
+  // 🔑 El título de la fila dice **la tasa del documento** (`I.G.V. (18%)` / `I.G.V. (10%)`), no un 18%
+  // escrito a mano: es lo que pidió el negocio y lo que evita que el papel diga una tasa y el XML otra.
+  const tituloIgv = etiquetaIgv(igvPorcentaje)
   const filasTotales = hayIGV
-    ? `<tr><td class="td-r tot-l">Op. Gravadas</td><td class="td-r tot-v">S/ ${totalesCalc.opGravadas.toFixed(2)}</td></tr><tr><td class="td-r tot-l">I.G.V.</td><td class="td-r tot-v">S/ ${totalesCalc.igv.toFixed(2)}</td></tr>`
+    ? `<tr><td class="td-r tot-l">Op. Gravadas</td><td class="td-r tot-v">S/ ${totalesCalc.opGravadas.toFixed(2)}</td></tr><tr><td class="td-r tot-l">${tituloIgv}</td><td class="td-r tot-v">S/ ${totalesCalc.igv.toFixed(2)}</td></tr>`
     : tieneExoneradas
-    ? `<tr><td class="td-r tot-l">Op. Exonerada</td><td class="td-r tot-v">S/ ${totalesCalc.opExoneradas.toFixed(2)}</td></tr><tr><td class="td-r tot-l">I.G.V.</td><td class="td-r tot-v">S/ 0.00</td></tr>`
+    ? `<tr><td class="td-r tot-l">Op. Exonerada</td><td class="td-r tot-v">S/ ${totalesCalc.opExoneradas.toFixed(2)}</td></tr><tr><td class="td-r tot-l">${tituloIgv}</td><td class="td-r tot-v">S/ 0.00</td></tr>`
     : tieneInafectas
-    ? `<tr><td class="td-r tot-l">Op. Inafecta</td><td class="td-r tot-v">S/ ${totalesCalc.opInafectas.toFixed(2)}</td></tr><tr><td class="td-r tot-l">I.G.V.</td><td class="td-r tot-v">S/ 0.00</td></tr>`
-    : `<tr><td class="td-r tot-l">Op. Gratuita</td><td class="td-r tot-v">S/ 0.00</td></tr><tr><td class="td-r tot-l">I.G.V.</td><td class="td-r tot-v">S/ 0.00</td></tr>`
+    ? `<tr><td class="td-r tot-l">Op. Inafecta</td><td class="td-r tot-v">S/ ${totalesCalc.opInafectas.toFixed(2)}</td></tr><tr><td class="td-r tot-l">${tituloIgv}</td><td class="td-r tot-v">S/ 0.00</td></tr>`
+    : `<tr><td class="td-r tot-l">Op. Gratuita</td><td class="td-r tot-v">S/ 0.00</td></tr><tr><td class="td-r tot-l">${tituloIgv}</td><td class="td-r tot-v">S/ 0.00</td></tr>`
 
   const esElectronico = tipoDoc === 'BOLETA' || tipoDoc === 'FACTURA' || tipoDoc === 'NC' || tipoDoc === 'ND'
   let qrSvg = ''

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { calcularFilaSire, totalesSire, type FilaSire } from '@/lib/sire-ventas'
+import { etiquetaIgv, porcentajeDelDocumento } from '@/lib/igv'
 import { cn } from '@/lib/utils'
 import {
   CABECERA_EXPORT_COMPRAS,
@@ -182,8 +183,10 @@ export function ReporteSire() {
   }, [añoMesTarget, miUid])
 
   const docsCalc = React.useMemo<DocCalculado[]>(
-    () => docs.map((d) => ({ ...d, ...calcularFilaSire(d) })),
-    [docs],
+    // 🔑 La tasa del IGV viaja: el registro tiene que declarar lo mismo que el comprobante (18% general,
+    // 10% restaurantes/hoteles). El documento manda; la config es el respaldo de los viejos.
+    () => docs.map((d) => ({ ...d, ...calcularFilaSire(d, config) })),
+    [docs, config],
   )
 
   /**
@@ -312,7 +315,7 @@ export function ReporteSire() {
           <div className="mt-1 text-2xl font-bold num">{fmt(totales.baseGravada)}</div>
         </div>
         <div className="rounded-xl border bg-card p-4 shadow-card">
-          <div className="text-xs text-muted-foreground">IGV (18%)</div>
+          <div className="text-xs text-muted-foreground">{etiquetaIgv(porcentajeDelDocumento(null, config))}</div>
           <div className="mt-1 text-2xl font-bold num">{fmt(totales.igv)}</div>
         </div>
         <div className="rounded-xl border bg-card p-4 shadow-card">

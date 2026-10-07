@@ -26,6 +26,7 @@ import { etiquetaPago, formaPagoLabel, textoReferenciaPago } from './pagos.ts'
 import { cantidadDe, descuentoDeVenta, importeBrutoDe, itemsConDescuento, valorUnitarioSunat } from './sunat-importes.ts'
 import { lineasPersonal, personalDeVenta } from './personal.ts'
 import { TITULOS, calcularTotales, construirQRData, generarQRDataUrl, normalizarMontosNota } from './comprobante-comun.ts'
+import { etiquetaIgv, porcentajeDelDocumento, tasaDePorcentaje } from './igv.ts'
 
 /** Documento tal como lo entrega Firestore (venta + campos que viven a nivel del documento). */
 export type DocComprobante = {
@@ -73,6 +74,8 @@ export type ModeloA4 = {
     descuento: number
     total: number
     sonLetras: string
+    /** 🔑 La tasa del documento, para el título de la fila (`I.G.V. (18%)` / `I.G.V. (10%)`). */
+    igvPorcentaje: number
   }
   pago: { formaPago: string; lineas: { etiqueta: string; monto: string }[]; recibido: number; vuelto: number; credito: boolean; cobrado: number; referencia: string }
   referencia: { documento: string; original: string; motivo: string; codigo: string } | null
@@ -135,7 +138,10 @@ export function datosComprobanteA4({ doc, correlativo, config, tipoDoc = 'NV', s
 
   const itemsFuente: any[] = Array.isArray(venta.items) ? venta.items : []
   const descuentoDoc = descuentoDeVenta(venta)
-  const totalesCalc = calcularTotales(itemsConDescuento(itemsFuente, descuentoDoc), { regionExonerada: config?.regionExonerada })
+  // 🔑 La tasa del documento (18% general, 10% restaurantes/hoteles): la misma que usa el XML y el ticket.
+  const igvPorcentaje = porcentajeDelDocumento(venta, config)
+  const tasaIgv = tasaDePorcentaje(igvPorcentaje)
+  const totalesCalc = calcularTotales(itemsConDescuento(itemsFuente, descuentoDoc), { regionExonerada: config?.regionExonerada, tasaIgv })
 
   const items: ItemA4[] = itemsFuente.map((it) => {
     const cantidad = cantidadDe(it)
@@ -146,8 +152,9 @@ export function datosComprobanteA4({ doc, correlativo, config, tipoDoc = 'NV', s
       descripcion: limpiarTextoA4(it.nombre || it.descripcion || ''),
       unidad: limpiarTextoA4(it.unidad || it.presentacionNombre || '-'),
       cantidad,
-      // 🔑 El valor unitario sin IGV sale de la **regla única** de SUNAT (solo divide en gravado).
-      valorUnitario: valorUnitarioSunat(precioUnitario, afectacion),
+      // 🔑 El valor unitario sin IGV sale de la **regla única** de SUNAT (solo divide en gravado), con la
+      // tasa del documento (18% general, 10% restaurantes/hoteles).
+      valorUnitario: valorUnitarioSunat(precioUnitario, afectacion, tasaIgv),
       precioUnitario,
       descuento: Number(it.descuento || 0),
       importe: Number(it.subtotal) > 0 ? Number(it.subtotal) : importeBrutoDe(it),
@@ -223,6 +230,7 @@ export function datosComprobanteA4({ doc, correlativo, config, tipoDoc = 'NV', s
       descuento: descuentoDoc,
       total,
       sonLetras,
+      igvPorcentaje,
     },
     pago: {
       formaPago,
@@ -458,7 +466,7 @@ export function dibujarComprobanteA4(d: JSPDFDoc, m: ModeloA4, qrDataUrl: string
   } else {
     filas.push(['Op. Gratuita', 'S/ 0.00'])
   }
-  filas.push(['I.G.V.', `S/ ${m.totales.igv.toFixed(2)}`])
+  filas.push([etiquetaIgv(m.totales.igvPorcentaje), `S/ ${m.totales.igv.toFixed(2)}`])
   filas.push(['I.C.B.P.E.R.', 'S/ 0.00'])
   filas.push(['Moneda', 'Soles'])
 

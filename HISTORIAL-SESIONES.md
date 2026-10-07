@@ -11,6 +11,41 @@ Formato de cada bloque: `Objective`, `Important Details`, `Work State`, `Next Mo
 
 Formato compacto: `Objective`, `Important Details`, `Work State`, `Next Move`, `Relevant Files`.
 
+### (2026-10 · 58 — La tasa del IGV configurable (18% general / 10% restaurantes y hoteles))
+
+**Objective**: el usuario pidió *«falta poner el importe del igv que en Perú es del 18%… en el rubro del turismo, más específico en hotelería y restaurantes, el IGV es del 10%: crea un campo dentro de configuración de empresa y que los cálculos se hagan en base a ese campo y en los PDF que salga el título de ese importe»*. Sus tres decisiones: **todo el negocio va al 10%** (un campo de empresa alcanza), **sí al cambio del backend** (`appadm-sunat`) y **arrancar por la web**.
+
+**Dónde estaba el 18% escrito a mano (mapeado antes de tocar nada)**
+- **Web**: `lib/sunat-importes.ts` (`IGV_RATE`, el que despeja la base de lo que se manda a SUNAT), `lib/comprobante-comun.ts` (`tasa: 0.18` incrustada en `obtenerInfoAfectacion`, de donde salen los **dos PDF**), `lib/precio-venta.ts` (`precioSinIgv`, `margenDePrecio` y `costoDeCompra`), `lib/registro-compras.ts` (RCE) y `lib/sunat.ts` (`opGravadas * 0.18`, dos veces).
+- 🔴 **Backend** (`appadm-sunat`): `app/xml_utils.py:61` (`IGV_RATE = Decimal("0.18")`, con el que recalcula el IGV de cada línea), `app/services/invoice_service.py:144,161` (`taxable * D("0.18")`) y el `note_service` por el mismo camino. **El XML lo arma el backend** ⇒ si el app ponía 10% y el backend seguía en 18%, el PDF diría 10% y **SUNAT recibiría 18%** (una venta de 11.00 declarada como 11.80). Ese hallazgo definió el alcance del trabajo.
+- 📌 Otro detalle medido: **los PDF no decían el porcentaje** (imprimían `I.G.V.` pelado) y solo el reporte SIRE decía «IGV (18%)» fijo.
+
+**El trabajo (web)**
+- 🔑 **`src/lib/igv.ts` (nuevo, puro)**: `IGV_PORCENTAJE_DEFECTO = 18`, `porcentajeValido()` (finita, >0, ≤30, 2 decimales; **cualquier otra cosa cae al 18%**, porque una tasa inválida declararía mal todos los comprobantes), `tasaDePorcentaje`/`porcentajeDeTasa`, **`porcentajeDelDocumento(venta, config)`** (la tasa **guardada con la venta** manda; la config es el respaldo de lo viejo) y **`etiquetaIgv()`** → `I.G.V. (18%)` / `I.G.V. (10%)`.
+- 🔑 **El campo `igvPorcentaje`** en `CONFIG_POR_DEFECTO` (18) y en **Configuración → Empresa**, con la ayuda que explica que 18 es la general y 10 la de restaurantes/hoteles (Ley 31556), que los **comprobantes ya emitidos conservan su tasa** y que vacío = 18%. Al guardar se normaliza (`porcentajeValido`).
+- 🔑 **La tasa se guarda CON cada documento**: `registrarVenta`, la consolidada y el cobro de un pedido escriben `venta.igvPorcentaje`; una **NC/ND la hereda de su original** (`porcentajeDelDocumento(ventaOriginal, config)`). Sin eso, cambiar el campo habría reimpreso los comprobantes viejos con la tasa nueva.
+- 🔑 **Los cálculos la usan**: `valorUnitarioSunat(precio, afectacion, tasa)`, `precioSinIgv`/`margenDePrecio`, `calcularTotales(items, { tasaIgv })`, `obtenerInfoAfectacion(codigo, tasaGravado)` (el IVAP `'18'`/`'19'` conserva su 4%), `calcularFilaSire(d, config)` y `lib/sunat.ts`, que manda **`tasa_igv`** en los dos payloads.
+- 🔑 **Los PDF dicen la tasa**: la fila pasa a **`I.G.V. (18%)` / `I.G.V. (10%)`** en el ticket de 72 mm **y** en el A4 (`etiquetaIgv`), y el reporte SIRE usa la misma etiqueta.
+- ⚠️ **Las COMPRAS no la siguen**: `costoDeCompra` (crédito fiscal) y el Registro de Compras siguen con el 18% del **papel del proveedor** — con la nota en el código para que nadie la "arregle" después.
+
+**El cambio del backend (`appadm-sunat`, preparado y SIN commitear: ese repo lo versiona y despliega el usuario)**
+- `app/xml_utils.py`: `tasa_valida()` (acepta `0.10` y también `10` ⇒ 10%; fuera de rango ⇒ 18%), `_porcentaje_texto()`, y la tasa como **parámetro** en `_importes_de_linea`, `_corregir_igv_lineas`, `_corregir_totales_documento` y `aplicar_importes_exactos`.
+- 🔑 **También se corrige el `<cbc:Percent>`** de las líneas gravadas (el SDK escribe 18.00 siempre): con un IGV del 10% y un Percent de 18.00, SUNAT recalcularía 1.80 sobre una base de 10.00 y rechazaría el comprobante.
+- `app/services/invoice_service.py`: `_arreglar_tax_total(..., tasa)` (usa la tasa y emite el `Percent` del gravado) y `aplicar_importes_exactos(..., payload.tasa_igv)`; `note_service.py`: igual. `app/schemas/invoice.py`: campo opcional **`tasa_igv`** (`gt=0, le=1`) en `InvoiceCreate` y `NotaCreate` ⇒ **sin el campo el backend sigue en 18%**, así la app móvil no se rompe.
+
+**Verificación (todo medido, no "debería")**
+- 🛡️ **`src/lib/igv.test.ts` (23 tests)**: la regla (fábrica, 10%, inválidos, decimales, etiqueta), la **tasa guardada manda** sobre la config, el **A4 de un menú de 11.00 al 10%** (base 10.00 + IGV 1.00; con 18% guardado ⇒ 9.32/1.68) y el **payload a SUNAT** (`tasa_igv: 0.1`, base 10) — más guardas que fallan si alguien vuelve a escribir `0.18` en `sunat.ts`/`comprobante-comun.ts`, si un PDF escribe `'I.G.V.'` a mano, si un camino de emisión deja de guardar la tasa o si `costoDeCompra` pasa a usar la tasa de venta.
+- 🛡️ **`run-igv-config.mjs` (11/11)** contra el emulador + Chrome: el campo está en **Empresa**, arranca en **18**, escribir **10** guarda `igvPorcentaje: 10` en `tblConfiguracion/empresa` (y la ayuda pasa a `I.G.V. (10%)`); un **0** se guarda como **18**; un **30** entra.
+- 🛡️ **Backend `tasa-xml.py` (24/24)**: con un XML UBL mínimo, `aplicar_importes_exactos` con `None` deja **todo igual que antes** (Percent 18.00, IGV 1.68, base 9.32, pagar 11.00) y con **0.10** produce **Percent 10.00, base 10.00, IGV 1.00, pagar 11.00** (base + IGV = exactamente lo cobrado); las tasas inválidas caen a 18% y una línea **exonerada** no se toca. Los 4 archivos del backend **compilan** (`python -m py_compile`).
+- ✅ `npm test` **766/766** (eran 745: +21), `npx tsc -b` ✓, `npm run lint` **80/0** (baseline intacto), `npm run build` ✓ y `dist` sin `demo-key`/`demo-appadm`. `.env.local` restaurado y verificado por hash, `firestore-debug.log` borrado, emulador y dev apagados.
+
+**Next Move**
+- 🔴 **Falta desplegar las DOS puntas y en orden**: (1) el backend `appadm-sunat` (reiniciarlo: sin eso el XML sigue en 18%) y (2) el hosting del app. ⚠️ **Mientras el backend no esté actualizado, dejar el campo en 18**: poner 10% antes haría que el PDF diga 10% y SUNAT reciba 18%.
+- ⏳ El contador debe confirmar la **vigencia** del 10% (Ley 31556) y si aplica a todo el catálogo; si algún día conviven las dos tasas (abarrotes al 18% y menú al 10%), el campo de empresa **no alcanza**: la tasa tendría que ser **por producto**, como la afectación.
+- ⚠️ Los comprobantes emitidos **antes** de este cambio no tienen tasa guardada: al reimprimirse usan la config. Hoy **no hay ninguno gravado** (todo el catálogo es exonerado `'20'`), así que no hay nada que pueda salir mal; si algún día se cambia de régimen, conviene revisar los viejos.
+
+**Relevant Files**: `src/lib/igv.ts`, `src/lib/igv.test.ts`, `src/constants/tributario.ts`, `src/pages/Configuracion.tsx`, `src/hooks/use-configuracion.ts`, `src/lib/comprobante-comun.ts`, `src/lib/sunat-importes.ts`, `src/lib/precio-venta.ts`, `src/lib/sunat.ts`, `src/lib/sire-ventas.ts`, `src/lib/pdf.ts`, `src/lib/comprobante-a4.ts`, `src/services/ventas.ts`, `src/services/notas.ts`, `src/services/consolidado.ts`, `src/pages/ReporteSire.tsx`, `package.json`, **`appadm-sunat`: `app/xml_utils.py`, `app/services/invoice_service.py`, `app/services/note_service.py`, `app/schemas/invoice.py`**, `C:\Users\aaval\AppData\Local\Temp\appadm-yape-test\run-igv-config.mjs`.
+
 ### (2026-10 · 57 — El aviso de que el turno ya tiene demasiadas ventas)
 
 **Objective**: el usuario preguntó *«el sistema app web es escalable? se tiene que pasar al modo blaze en firebase para eso?»* y después pidió el detalle de *«partir el turno cuando se acerque a ~1.000 ventas»*; al final aprobó el aviso en la app: **«que al llegar a los 400 avise que a los 500 tiene que cerrar ese turno, ¿es posible hacer eso?»** ⇒ se implementó.

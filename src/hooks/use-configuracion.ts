@@ -1,6 +1,7 @@
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import * as React from 'react'
 import { CONFIG_POR_DEFECTO } from '@/constants/tributario'
+import { porcentajeValido } from '@/lib/igv'
 import { db } from '@/lib/firebase'
 
 const REF = doc(db, 'tblConfiguracion', 'empresa')
@@ -59,6 +60,9 @@ export function useConfiguracion() {
           topeBoletaDni: Number(config.topeBoletaDni) > 0 ? Number(config.topeBoletaDni) : 700,
           regionExonerada: Boolean(config.regionExonerada),
           igvRecuperable: Boolean(config.igvRecuperable),
+          // 🔑 **La tasa del IGV de venta se guarda siempre válida**: un `0`, un vacío o un dedazo caerían
+          // a las líneas gravadas sin impuesto (o a declarar cualquier cosa). Fuera de rango ⇒ 18%.
+          igvPorcentaje: porcentajeValido(config.igvPorcentaje),
           updatedAt: new Date().toISOString(),
         },
         { merge: true }

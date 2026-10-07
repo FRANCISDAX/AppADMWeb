@@ -213,7 +213,9 @@ export function totalDeclarado(items: readonly ItemVenta[], descuentoTotal: numb
 }
 
 /**
- * Tasa del IGV. Es la que aplica SUNAT y la que usa el backend (`sunat_py`).
+ * Tasa del IGV **de fábrica** (la general del Perú). Es el respaldo de todo lo que no traiga su propia
+ * tasa: la tasa real de un documento sale de `lib/igv.ts` (`tasaDelDocumento`), porque un negocio de
+ * restaurantes/hoteles tributa al 10%.
  */
 export const IGV_RATE = 0.18
 
@@ -238,9 +240,14 @@ export function esGravado(afectacion: string): boolean {
  *
  * Si se mandara el precio con IGV como si fuera la base, una venta de S/ 100 se
  * declararía como S/ 118.
+ *
+ * 🔑 **La tasa es un parámetro** (`tasa`): no siempre es 18% — un restaurante/hotel tributa al 10%
+ * (`lib/igv.ts` → `tasaDelDocumento`). Sin el parámetro se usa la general, así los llamadores viejos
+ * (y la app móvil) no cambian de comportamiento.
  */
-export function valorUnitarioSunat(precioFinal: number, afectacion: string): number {
+export function valorUnitarioSunat(precioFinal: number, afectacion: string, tasa: number = IGV_RATE): number {
   const precio = Number(precioFinal) || 0
   if (!esGravado(afectacion)) return precio
-  return Number((precio / (1 + IGV_RATE)).toFixed(6))
+  const t = Number(tasa) > 0 ? Number(tasa) : IGV_RATE
+  return Number((precio / (1 + t)).toFixed(6))
 }

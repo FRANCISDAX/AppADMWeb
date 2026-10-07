@@ -8,6 +8,7 @@ import { useNotifications } from '@/components/notifications'
 import { EstadoPuenteYape } from '@/components/EstadoPuenteYape'
 import { LinkPedidos } from '@/components/LinkPedidos'
 import { AFECTACION_POR_DEFECTO, CONFIG_POR_DEFECTO, TIPO_AFECTACION, TIPOS_REGIMEN } from '@/constants/tributario'
+import { IGV_PORCENTAJE_MAX } from '@/lib/igv'
 import { useConfiguracion } from '@/hooks/use-configuracion'
 import { useProductos } from '@/hooks/use-productos'
 import { validarSeriesEmpresa, type SerieOcupada } from '@/lib/series'
@@ -229,6 +230,27 @@ export function Configuracion() {
                 <Field label="Teléfono" k="telefono" placeholder="999 888 777" type="tel" />
               </div>
               <Field label="Sucursal" k="sucursal" placeholder="Sucursal Principal" />
+              <div>
+                <Label>IGV de ventas (%)</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={String(config.igvPorcentaje ?? 18)}
+                  onChange={(e) => set('igvPorcentaje', Math.max(0, Math.min(IGV_PORCENTAJE_MAX, Number(e.target.value) || 0)))}
+                  placeholder="18"
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  La tasa con la que se declara el <span className="font-semibold">IGV de tus ventas</span>:{' '}
+                  <span className="font-semibold">18</span> es la general y <span className="font-semibold">10</span> la de restaurantes y hoteles
+                  (Ley 31556). La usan el comprobante, los PDF (la fila sale como <span className="font-semibold">I.G.V. ({String(config.igvPorcentaje ?? 18)}%)</span>), el margen y el
+                  registro que se manda a SUNAT — la misma en todos lados.
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  ⚠️ Los comprobantes <span className="font-semibold">ya emitidos conservan su tasa</span> (una boleta del 18% sigue diciendo 18%); este campo es para los
+                  nuevos. <span className="font-semibold">Dejalo vacío para el 18%</span>. Es una decisión fiscal: la confirma tu contador.
+                </p>
+              </div>
               <div>
                 <Label>Mensaje en comprobantes</Label>
                 <textarea

@@ -24,6 +24,7 @@
  */
 import { redondear2 } from './dinero.ts'
 import { precioSinIgv } from './precio-venta.ts'
+import { tasaDelDocumento } from './igv.ts'
 import { signoDoc } from './ventas-mensuales.ts'
 import {
   afectacionGuardada,
@@ -84,11 +85,16 @@ export function tipoDocSunat(tipoDoc?: string | null): string {
 /**
  * **Lo que declara un documento.** Devuelve los importes ya con el signo del documento aplicado
  * (la NC resta), listos para sumar en los totales del período.
+ *
+ * 🔑 **La tasa del IGV sale del documento** (y, si es anterior a que se guardara, de la configuración de la
+ * empresa): el registro tiene que declarar **lo mismo que el comprobante**, y el comprobante de un
+ * restaurante/hotel va al 10% (`lib/igv.ts`).
  */
-export function calcularFilaSire(d: DocSire | null | undefined): FilaSire {
+export function calcularFilaSire(d: DocSire | null | undefined, config?: unknown): FilaSire {
   const signo = signoDoc(d)
   const venta = d?.venta ?? {}
   const items = venta.items ?? []
+  const tasaIgv = tasaDelDocumento(venta, config)
 
   let baseGravada = 0
   let baseExonerada = 0
@@ -117,7 +123,7 @@ export function calcularFilaSire(d: DocSire | null | undefined): FilaSire {
     const af = afectacionGuardada(it)
     if (esGravado(af)) {
       // El precio es final al público: la base es el valor sin IGV y el IGV, la diferencia.
-      const neto = redondear2(precioSinIgv(importe, af))
+      const neto = redondear2(precioSinIgv(importe, af, tasaIgv))
       baseGravada += neto
       igv += redondear2(importe - neto)
     } else if (af.startsWith('2')) {

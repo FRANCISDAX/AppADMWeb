@@ -2,6 +2,7 @@
 // El envío real lo hace el administrador desde la app móvil.
 import { afectacionDe, cantidadSunat, descuentoDeVenta, itemsParaSunat, valorUnitarioSunat } from './sunat-importes.ts'
 import { redondear2 } from './dinero.ts'
+import { tasaDelDocumento } from './igv.ts'
 
 export function construirUrlApiSunat(base: string, tipo: 'invoices' | 'notes'): string {
   const limpia = String(base || '').trim().replace(/\/+$/, '')
@@ -35,6 +36,11 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
   let opGravadas = 0
   let opExoneradas = 0
   let opInafectas = 0
+  // 🔑 **La tasa del documento** (18% general, 10% restaurantes/hoteles): se guardó con la venta y, si es
+  // anterior a esta función, sale de la configuración de la empresa (`lib/igv.ts`). Una sola lectura para
+  // las líneas, los totales y lo que se manda a SUNAT: si el PDF dijera 10% y el XML 18%, el comprobante
+  // declararía más de lo cobrado.
+  const tasaIgv = tasaDelDocumento(venta, config)
   // El comprobante declara **lo que se cobró**: si la venta tiene descuento
   // (promoción de volumen, cliente o global), se reparte entre las líneas
   // y se manda el valor unitario efectivo. Si no se hiciera, el XML declararía
@@ -49,7 +55,7 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
   const items = itemsParaSunat(venta.items || [], descuentoDeVenta(venta)).map((it: any) => {
     const af = afectacionDe(it, { regionExonerada: config.regionExonerada })
     const cantidad = cantidadSunat(it.cantidad ?? 1)
-    const valor = redondear2(valorUnitarioSunat(it.precioVenta, af))
+    const valor = redondear2(valorUnitarioSunat(it.precioVenta, af, tasaIgv))
     const importe = redondear2(valor * cantidad)
     if (af.startsWith('10') || af.startsWith('11')) opGravadas += importe
     else if (af.startsWith('2')) opExoneradas += importe
@@ -67,7 +73,7 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
   // cuadre al céntimo con lo cobrado; acá se replica la misma regla.
   // ⚠️ **Todo redondeado a 2 decimales**: la suma de floats puede dar `0.30000000000000004` y la
   // API (Pydantic `decimal_places=2`) rechaza el envío por eso.
-  const igv = redondear2(opGravadas * 0.18)
+  const igv = redondear2(opGravadas * tasaIgv)
   const total = redondear2(opGravadas + igv + opExoneradas + opInafectas)
 
   return {
@@ -86,6 +92,10 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
     cliente: { tipo_doc: tipoDocCliente, num_doc: cliDni || '00000000', razon_social: cliNombre || 'CLIENTE', direccion: venta.cliente_direccion || '' },
     items,
     totales: { op_gravadas: redondear2(opGravadas), op_exoneradas: redondear2(opExoneradas), op_inafectas: redondear2(opInafectas), igv, total },
+    // 🔑 **La tasa del IGV viaja al backend**: el XML lo arma `appadm-sunat` y ahí la tasa estaba fija en
+    // 0.18. Sin este campo, un restaurante/hotel (10%) imprimiría 10% en el PDF y SUNAT recibiría 18%
+    // (`app/xml_utils.py` la usa para el `<cbc:Percent>` y para el IGV de cada línea).
+    tasa_igv: tasaIgv,
   }
 }
 
@@ -110,12 +120,15 @@ export function construirPayloadNota(doc: any, config: Record<string, any>) {
   let opGravadas = 0
   let opExoneradas = 0
   let opInafectas = 0
+  // La misma tasa del documento que usa el comprobante: una nota de crédito de una boleta emitida al 10%
+  // tiene que declarar al 10% (`lib/igv.ts`).
+  const tasaIgvNota = tasaDelDocumento(venta, config)
   // Igual que en el comprobante: la nota declara los importes efectivamente cobrados (descuento
   // ya repartido), el valor sin IGV en las líneas gravadas y **2 decimales** (lo que valida la API).
   const items = itemsParaSunat(venta.items || [], descuentoDeVenta(venta)).map((it: any) => {
     const af = afectacionDe(it, { regionExonerada: config.regionExonerada })
     const cantidad = cantidadSunat(Math.abs(it.cantidad ?? 1))
-    const valor = Math.abs(redondear2(valorUnitarioSunat(it.precio_unitario ?? it.precioVenta ?? 0, af)))
+    const valor = Math.abs(redondear2(valorUnitarioSunat(it.precio_unitario ?? it.precioVenta ?? 0, af, tasaIgvNota)))
     const importe = Math.abs(redondear2(valor * cantidad))
     if (af.startsWith('10') || af.startsWith('11')) opGravadas += importe
     else if (af.startsWith('2')) opExoneradas += importe
@@ -129,7 +142,7 @@ export function construirPayloadNota(doc: any, config: Record<string, any>) {
       tipo_afectacion: af,
     }
   })
-  const igv = redondear2(opGravadas * 0.18)
+  const igv = redondear2(opGravadas * tasaIgvNota)
   const total = redondear2(opGravadas + igv + opExoneradas + opInafectas)
 
   return {
@@ -151,5 +164,7 @@ export function construirPayloadNota(doc: any, config: Record<string, any>) {
     motivo_descripcion: venta.motivoNota || venta.motivo || '',
     items,
     totales: { op_gravadas: redondear2(Math.abs(opGravadas)), op_exoneradas: redondear2(Math.abs(opExoneradas)), op_inafectas: redondear2(Math.abs(opInafectas)), igv: redondear2(Math.abs(igv)), total: redondear2(Math.abs(total)) },
+    // La misma tasa del documento (ver `construirPayloadComprobante`).
+    tasa_igv: tasaIgvNota,
   }
 }

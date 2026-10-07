@@ -81,6 +81,13 @@ export const CONFIG_POR_DEFECTO = {
   logo_url: '',
   tipoRegimen: 'general',
   regionExonerada: false,
+  // 🔑 **La tasa del IGV de VENTA, en porcentaje** (Configuración → Empresa). En el Perú la general es
+  // **18%**, pero los **restaurantes y hoteles** (Ley 31556) tributan al **10%** ⇒ es configurable.
+  // ⚠️ **Es solo la tasa de venta**: el IGV de una factura de **compra** es el del papel del proveedor
+  // (18% si es del régimen general) y por eso `costoDeCompra()` y el Registro de Compras no la usan.
+  // ⚠️ Cada comprobante **guarda la tasa con la que nació** (`venta.igvPorcentaje`): cambiar este campo
+  // cambia **lo nuevo**, nunca lo ya emitido (`lib/igv.ts` → `porcentajeDelDocumento`).
+  igvPorcentaje: 18,
   // 🔑 **¿El IGV de las compras es un crédito fiscal?** (empresa de Lima que compra **y** vende
   // gravado). Si está prendido, el **ingreso de mercadería** le separa el IGV al costo que se carga:
   // se escribe el total de la factura (S/ 118) y el costo que se guarda es el neto (S/ 100), que es la

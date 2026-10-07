@@ -9,6 +9,7 @@ import {
   totalConsolidado as totalDe,
 } from '@/lib/consolidado'
 import { db } from '@/lib/firebase'
+import { porcentajeValido } from '@/lib/igv'
 
 // Port de helper/ConsolidadoHelper.js → generarConsolidado (RN): crea una BOLETA
 // que agrupa las Notas de Venta del día y marca cada NV como consolidada.
@@ -60,6 +61,9 @@ export async function generarConsolidado(nvs: any[], config: Record<string, any>
     sucursal: config.sucursal || '',
     mensaje: config.mensaje || '',
     cajero: cajero || 'sistema',
+    // 🔑 La tasa del IGV con la que nace la consolidada (18% general, 10% restaurantes/hoteles): queda
+    // guardada con la venta para que el PDF, el XML y el SIRE declaren lo mismo (`lib/igv.ts`).
+    igvPorcentaje: porcentajeValido(config.igvPorcentaje),
   }
 
   await setDoc(docRef, {

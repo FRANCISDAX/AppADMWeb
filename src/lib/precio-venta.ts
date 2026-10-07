@@ -62,10 +62,14 @@ export type MargenDePrecio = {
 /**
  * El precio **sin IGV** (lo que realmente queda para el negocio) de un precio final al público.
  * Con afectación exonerada o inafecta devuelve el precio tal cual, porque no lleva IGV.
+ *
+ * 🔑 **La tasa es un parámetro**: no siempre es 18% (restaurantes/hoteles van al 10%, `lib/igv.ts` →
+ * `tasaDelDocumento`). Sin el parámetro se usa la general, así los llamadores viejos no cambian.
  */
-export function precioSinIgv(precioFinal: number, afectacion?: string): number {
+export function precioSinIgv(precioFinal: number, afectacion?: string, tasa: number = IGV_RATE): number {
   const precio = Number(precioFinal) || 0
-  return esGravado(String(afectacion ?? '')) ? precio / (1 + IGV_RATE) : precio
+  const t = Number(tasa) > 0 ? Number(tasa) : IGV_RATE
+  return esGravado(String(afectacion ?? '')) ? precio / (1 + t) : precio
 }
 
 /**
@@ -73,9 +77,10 @@ export function precioSinIgv(precioFinal: number, afectacion?: string): number {
  * Es lo que se le muestra al negocio cuando el producto es gravado: el IGV va **sumado** al precio, y
  * por eso el precio final siempre incluye el impuesto (nunca se recarga recién al cobrar).
  */
-export function precioFinalConIgv(precioSinIgv: number, afectacion?: string): number {
+export function precioFinalConIgv(precioSinIgv: number, afectacion?: string, tasa: number = IGV_RATE): number {
   const neto = Number(precioSinIgv) || 0
-  return esGravado(String(afectacion ?? '')) ? neto * (1 + IGV_RATE) : neto
+  const t = Number(tasa) > 0 ? Number(tasa) : IGV_RATE
+  return esGravado(String(afectacion ?? '')) ? neto * (1 + t) : neto
 }
 
 /**
@@ -83,10 +88,10 @@ export function precioFinalConIgv(precioSinIgv: number, afectacion?: string): nu
  * escribe el precio y no se sabe si deja 12% o 40%. Devuelve también el markup para poder mostrar la
  * diferencia (*«30% sobre el precio = 42,9% sobre el costo»*).
  */
-export function margenDePrecio(precioFinal: number, costo: number, afectacion?: string): MargenDePrecio {
+export function margenDePrecio(precioFinal: number, costo: number, afectacion?: string, tasa: number = IGV_RATE): MargenDePrecio {
   const final = Number(precioFinal) || 0
   const c = Number(costo) || 0
-  const neto = precioSinIgv(final, afectacion)
+  const neto = precioSinIgv(final, afectacion, tasa)
   const margen = neto - c
   return {
     precioFinal: final,
@@ -128,6 +133,9 @@ export function costoDeCompra(
   const monto = Number(montoCargado) || 0
   const separaIgv = Boolean(opts.igvRecuperable) && esGravado(String(opts.afectacion ?? '')) && !opts.yaSinIgv
   if (!separaIgv) return { costo: monto, igvSeparado: 0, separaIgv: false }
+  // 🔑 **Acá va la tasa GENERAL, no la de venta del negocio**: el IGV que se separa es el que el
+  // **proveedor** facturó (18% si es del régimen general), y ese IGV es crédito fiscal aunque el negocio
+  // venda al 10% (restaurantes/hoteles). La tasa de venta vive en `lib/igv.ts` y **no** entra acá.
   const costo = monto / (1 + IGV_RATE)
   // El costo se guarda con la precisión del inventario (4 decimales): 118 ÷ 1.18 da 100.00000000000001.
   return { costo: redondearCosto(costo), igvSeparado: redondear2(monto - costo), separaIgv: true }

@@ -11,6 +11,7 @@ import { revisarDescuentoManual } from '@/lib/descuentos'
 import { valorizacionDeMovimiento } from '@/services/kardex'
 import { VENTANA_DUPLICADO_MINUTOS, esPedido, huellaPedido, pedidoDuplicado } from '@/lib/pedidos'
 import { puntoEmisionDe } from '@/lib/sunat'
+import { porcentajeValido } from '@/lib/igv'
 import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
 import { anularPagoYapeDeVenta } from '@/services/yape'
@@ -258,6 +259,10 @@ export async function registrarVenta({ items, venta, config }: { items: VentaIte
         cliente_nombre: venta.cliente_nombre || '-',
         cliente_dni: venta.cliente_dni || '-',
         cliente_direccion: venta.cliente_direccion || '',
+        // 🔑 **La tasa del IGV con la que nace el comprobante** (18% general, 10% restaurantes/hoteles):
+        // queda guardada con la venta para que el PDF, el XML y el SIRE declaren siempre lo mismo, aunque
+        // mañana el negocio cambie de régimen (`lib/igv.ts` → `porcentajeDelDocumento`).
+        igvPorcentaje: porcentajeValido(config.igvPorcentaje),
       }
       let ventaDoc: Record<string, any>
       if (venta.tipoPago === 'efectivo') {
@@ -1169,6 +1174,10 @@ export async function cobrarVentaPendiente({
           efectivo: bolsillos.efectivo,
           totalTransferenciaPago: bolsillos.transferencia,
           serie_numero: serieNumeroFinal,
+          // 🔑 **La tasa del IGV la fija el COBRO**, que es cuando nace el comprobante (el pedido todavía no
+          // era uno): queda guardada con la venta y es la que usan el PDF, el XML y el SIRE
+          // (`lib/igv.ts`). El pedido viejo puede traer otra: manda la del momento de emitir.
+          igvPorcentaje: porcentajeValido(config?.igvPorcentaje),
         },
       }))
 

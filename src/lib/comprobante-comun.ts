@@ -18,7 +18,8 @@
  */
 
 import QRCode from 'qrcode'
-import { afectacionDe } from './sunat-importes.ts'
+import { afectacionDe, IGV_RATE } from './sunat-importes.ts'
+import { tasaDelDocumento } from './igv.ts'
 
 /** Título impreso de cada tipo de documento (lo usan el ticket, el A4 y el QR). */
 export const TITULOS: Record<string, string> = {
@@ -30,21 +31,25 @@ export const TITULOS: Record<string, string> = {
 }
 
 // Afectación: mismas tasas/tipos que constants/Tributario.js (RN).
-export function obtenerInfoAfectacion(codigo: string) {
-  if (['10', '11', '12', '13', '14', '15', '16', '17'].includes(codigo)) return { tasa: 0.18, tipo: 'gravado' }
+// 🔑 **La tasa del gravado es un parámetro** (no siempre es 18%: restaurantes y hoteles van al 10%,
+// `lib/igv.ts`). El IVAP (`'18'`/`'19'`) tiene su tasa propia y no depende del negocio.
+export function obtenerInfoAfectacion(codigo: string, tasaGravado: number = IGV_RATE) {
+  if (['10', '11', '12', '13', '14', '15', '16', '17'].includes(codigo)) {
+    return { tasa: Number(tasaGravado) > 0 ? Number(tasaGravado) : IGV_RATE, tipo: 'gravado' }
+  }
   if (['18', '19'].includes(codigo)) return { tasa: 0.04, tipo: 'gravado' }
   if (['20', '21', '22'].includes(codigo)) return { tasa: 0, tipo: 'exonerado' }
   return { tasa: 0, tipo: 'inafecto' }
 }
 
-export function calcularTotales(items: any[], opts?: { regionExonerada?: boolean }) {
+export function calcularTotales(items: any[], opts?: { regionExonerada?: boolean; tasaIgv?: number }) {
   let opGravadas = 0
   let opExoneradas = 0
   let opInafectas = 0
   let igvTotal = 0
   for (const it of items || []) {
     const cod = afectacionDe(it, opts)
-    const info = obtenerInfoAfectacion(cod)
+    const info = obtenerInfoAfectacion(cod, opts?.tasaIgv)
     const subtotal = (it.precioVenta || it.precio_unitario || 0) * (it.cantidad || it.quantity || 1)
     if (info.tasa > 0) {
       opGravadas += subtotal / (1 + info.tasa)
@@ -78,7 +83,7 @@ export function construirQRData(venta: any, correlativo: any, config: Record<str
   const tipoComprobante = tipoDoc === 'FACTURA' ? '01' : tipoDoc === 'NC' ? '07' : tipoDoc === 'ND' ? '08' : '03'
   const serie = sunat?.serie || (tipoDoc === 'FACTURA' ? 'F001' : tipoDoc === 'BOLETA' ? 'B001' : serieNota(config, venta, tipoDoc))
   const numero = sunat?.numero || correlativo
-  const totales = calcularTotales(venta.items || [], { regionExonerada: config?.regionExonerada })
+  const totales = calcularTotales(venta.items || [], { regionExonerada: config?.regionExonerada, tasaIgv: tasaDelDocumento(venta, config) })
   const fecha = new Date(venta.fecha || venta.createdAt)
   const fechaStr = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
   return [config.ruc || '', tipoComprobante, serie, String(numero), Math.abs(totales.igv).toFixed(2), Math.abs(totales.total).toFixed(2), fechaStr, tipoDocCliente, cliDni || '00000000', sunat?.hash || ''].join('|')

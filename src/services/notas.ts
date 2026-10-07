@@ -7,6 +7,7 @@ import { normalizarSerie } from '@/lib/series'
 import { bolsillosDeVenta, medioDeVenta } from '@/lib/pagos'
 import { valorizacionDeMovimiento } from '@/services/kardex'
 import { redondear2 } from '@/lib/dinero'
+import { porcentajeDelDocumento } from '@/lib/igv'
 import { db } from '@/lib/firebase'
 
 /**
@@ -134,6 +135,10 @@ export async function crearNotaCreditoDebito({
     son_letras: numeroALetras(montoModificacion),
     afectaStock: Boolean(afectaStock) && esCredito,
     cajero: cajero || 'sistema',
+    // 🔑 **La tasa del IGV la hereda del comprobante original**, no de la configuración de hoy: una nota
+    // de crédito de una factura emitida al 18% tiene que declarar al 18% (si no, la nota y su original
+    // dirían cosas distintas ante SUNAT). Si el original no la guardó (documento viejo), la config.
+    igvPorcentaje: porcentajeDelDocumento(ventaOriginal, config),
   }
 
   const docId = `${tipoNota}-${correlativo}`
