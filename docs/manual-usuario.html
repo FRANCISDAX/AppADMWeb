@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.27 — Octubre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.28 — Octubre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -1036,7 +1036,24 @@
   <p>Solo accesible para ADMIN. Tiene 10 pestañas:</p>
 
   <h3>12.1 Empresa</h3>
-  <p>Datos que aparecen en los comprobantes: Razón Social, RUC, Dirección, Logo, Mensaje legal. También: Régimen tributario, Región exonerada de IGV (Amazonía), Conteo ciego, Descuento manual máximo (%) e <strong>Impuesto a las ventas (%)</strong> (el pago a cuenta que se paga como porcentaje de lo vendido: se usa en el punto de equilibrio).</p>
+  <p>Datos que aparecen en los comprobantes: Razón Social, RUC, Dirección, Teléfono, Logo, Mensaje legal. También: Régimen tributario, Región exonerada de IGV (Amazonía), <strong>IGV de ventas (%)</strong>, Conteo ciego, Descuento manual máximo (%) e <strong>Impuesto a las ventas (%)</strong> (el pago a cuenta que se paga como porcentaje de lo vendido: se usa en el punto de equilibrio).</p>
+
+  <div class="tip">
+    <div class="tip-label">💡 «IGV de ventas (%)»: el 18% general y el 10% de restaurantes y hoteles</div>
+    <p>Es la tasa con la que se declara el <strong>IGV de tus ventas</strong> y <strong>viene en 18</strong>, que es la tasa general
+      del Perú. Los <strong>restaurantes y hoteles</strong> tributan al <strong>10%</strong> (Ley 31556): si es tu caso, escribí
+      <strong>10</strong> y guardá. Si lo dejás vacío vuelve al 18%.</p>
+    <p style="margin-top:6px;">La misma tasa se usa <strong>en todos lados</strong>: el comprobante, el <strong>PDF</strong> (la fila sale
+      como <em>I.G.V. (18%)</em> o <em>I.G.V. (10%)</em>), el <strong>margen</strong>, el aviso <em>BAJO COSTO</em> del PDV y el
+      <strong>Registro SIRE</strong>. Así el papel que le das al cliente y lo que se manda a SUNAT no pueden decir cosas
+      distintas del mismo documento.</p>
+    <p style="margin-top:6px;">⚠️ <strong>Los comprobantes ya emitidos conservan su tasa</strong>: una boleta que salió con 18% sigue
+      diciendo 18% aunque después cambies el campo (cada documento guarda la tasa con la que nació, y una nota de crédito
+      hereda la de su comprobante original). Este campo decide <strong>las ventas nuevas</strong>.</p>
+    <p style="margin-top:6px;">⚠️ Tampoco cambia el IGV de tus <strong>compras</strong>: el de la factura del proveedor es el que trae
+      el papel, y ese sí es crédito fiscal. Y es una <strong>decisión fiscal</strong>: confirmá con tu contador qué tasa te
+      corresponde antes de cambiarla.</p>
+  </div>
 
   <h3>12.2 SUNAT</h3>
   <p>Configuración de facturación electrónica: URL de APIs, modo prueba/producción, series de comprobantes, punto de emisión, tope de DNI para boletas (S/ 700) y el receptor de la boleta consolidada.</p>
@@ -1240,7 +1257,7 @@
       <tr><td><strong>Medio</strong></td><td>Detalle del pago: efectivo, yape, plin, tarjeta, transferencia</td></tr>
       <tr><td><strong>SIRE</strong></td><td>Sistema Integrado de Registros Electrónicos (SUNAT)</td></tr>
       <tr><td><strong>RFM</strong></td><td>Recency, Frequency, Monetary — clasificación de clientes</td></tr>
-      <tr><td><strong>IGV</strong></td><td>Impuesto General a las Ventas (18% en Perú)</td></tr>
+      <tr><td><strong>IGV</strong></td><td>Impuesto General a las Ventas: <strong>18%</strong> general en Perú y <strong>10%</strong> para restaurantes y hoteles. La tasa de tus ventas se configura en <em>Configuración → Empresa → IGV de ventas (%)</em></td></tr>
       <tr><td><strong>Afectación</strong></td><td>Tipo tributario del producto: Gravado (10), Exonerado (20), Inafecto (30)</td></tr>
     </tbody>
   </table>
@@ -1450,6 +1467,7 @@
       <tr><td>6</td><td>Venta de prueba de S/ 1</td><td>Número nuevo, stock −1, ticket impreso, un movimiento en el kardex</td></tr>
       <tr><td>7</td><td>Cierre de turno</td><td>El «debería haber» coincide con el conteo físico</td></tr>
       <tr><td>8</td><td>Prueba de corte de internet</td><td>La app avisa que está sin conexión y bloquea el cobro (es lo correcto)</td></tr>
+      <tr><td>9</td><td>La <strong>tasa del IGV de ventas</strong> es la que le corresponde al negocio</td><td><em>Configuración → Empresa → IGV de ventas (%)</em>: 18% general, 10% restaurantes y hoteles (confirmado con el contador)</td></tr>
     </tbody>
   </table>
 
@@ -1640,7 +1658,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.27</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.28</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>
