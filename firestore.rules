@@ -276,7 +276,12 @@ service cloud.firestore {
     match /tblErrores/{id} {
       allow read: if auditoria();
       allow create: if firmado();         // cualquier pantalla puede reportar un error
-      allow update, delete: if false;
+      // 🔑 La retención necesita BORRAR (Auditoría → Errores → «Limpiar +30 días»). Estaba en
+      // `allow update, delete: if false`, así que el botón fallaba con permission-denied y el error se
+      // tragaba en el servicio: decía «no había errores» y la colección **crecía para siempre**.
+      // Mismo criterio que `tblAuditLog`: quien puede leerlos, puede limpiarlos.
+      allow delete: if auditoria();
+      allow update: if false;             // un error registrado no se edita: es una prueba
     }
     match /tblAuditLog/{id} {
       allow read: if auditoria();

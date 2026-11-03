@@ -52,8 +52,12 @@ export function ErroresPanel() {
   async function limpiar() {
     const ok = await confirm({ title: 'Limpiar errores', message: '¿Borrar los errores con más de 30 días?', okText: 'Borrar', destructive: true })
     if (!ok) return
-    const borrados = await limpiarErrores(30)
-    toast(borrados > 0 ? `${borrados} error${borrados === 1 ? '' : 'es'} borrado${borrados === 1 ? '' : 's'}` : 'No había errores con más de 30 días', borrados > 0 ? 'success' : 'info')
+    // 🔑 Si la limpieza falla se dice **por qué en esta pantalla**: antes un borrado imposible se veía como
+    // «no había errores con más de 30 días» (ver `limpiarErrores`).
+    const { borrados, error } = await limpiarErrores(30)
+    if (error) toast(error, 'error')
+    else if (borrados > 0) toast(`${borrados} error${borrados === 1 ? '' : 'es'} borrado${borrados === 1 ? '' : 's'}`, 'success')
+    else toast('No había errores con más de 30 días', 'info')
     cargar()
   }
 

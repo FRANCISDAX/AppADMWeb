@@ -81,7 +81,17 @@ export async function obtenerErrores(max: number = MAX_ERRORES_UI): Promise<Erro
  * corta y se devuelve lo ya borrado (los anteriores ya no están, informar 0
  * sería mentir).
  */
-export async function limpiarErrores(dias = 30): Promise<number> {
+/**
+ * Lo que devuelve la limpieza. 🔑 **Lleva el error adentro a propósito**: antes devolvía solo el número y
+ * un `permission-denied` se traducía en **0 borrados**, que en pantalla se leía «No había errores con más
+ * de 30 días» — una mentira. La regla `firestore.rules` de `tblErrores` decía `allow update, delete: if
+ * false`, así que el botón **nunca pudo borrar nada** y nadie se enteró (📌 hallazgo del 03/11/2026).
+ * La regla ya permite borrar a quien tiene auditoría; esto se queda como red para que un futuro cambio de
+ * reglas se vea en pantalla en vez de esconderse en la consola.
+ */
+export type ResultadoLimpieza = { borrados: number; error: string | null }
+
+export async function limpiarErrores(dias = 30): Promise<ResultadoLimpieza> {
   const corte = new Date()
   corte.setDate(corte.getDate() - dias)
   const limite = corte.toISOString()
@@ -99,8 +109,14 @@ export async function limpiarErrores(dias = 30): Promise<number> {
       await batch.commit()
       borrados += lote.length
     }
+    return { borrados, error: null }
   } catch (e) {
+    // Se devuelve el motivo para que la pantalla lo diga (un guardado bloqueado tiene que explicar por qué).
     console.error('❌ limpiarErrores:', e)
+    const codigo = (e as { code?: string })?.code
+    const motivo = codigo === 'permission-denied'
+      ? 'Sin permiso para borrar errores (revisá el permiso de auditoría y las reglas de Firestore)'
+      : (e as Error)?.message || 'No se pudieron borrar los errores'
+    return { borrados, error: motivo }
   }
-  return borrados
 }
