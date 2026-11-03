@@ -46,6 +46,7 @@ export function PanelPagosYape({
   total,
   pagoEnVentaId,
   onUsar,
+  onAvisos,
 }: {
   /** Total de la venta en curso: sirve para destacar el aviso que coincide con el monto. */
   total: number
@@ -53,6 +54,13 @@ export function PanelPagosYape({
   pagoEnVentaId?: string | null
   /** El PDV reserva el aviso y lo carga como forma de pago de la venta en curso. */
   onUsar: (pago: PagoYape) => void | Promise<void>
+  /**
+   * 🔑 **Cuántos avisos están sin usar**, para avisarlo con el carrito cerrado.
+   * 📌 Mismo motivo que en `PanelVentasPendientes`: en el celular el panel vive dentro del carrito, y un
+   * «yapeó el cliente» que solo se ve abriendo la venta llega tarde. El número es el de la **lista visible**
+   * (`pagosYapeVisibles`: descarta vencidos y los que ya se usaron en otra caja).
+   */
+  onAvisos?: (cantidad: number) => void
 }) {
   const { config: cfg } = useConfiguracion()
   const { tienePermiso, nombre: nombreUsuario } = usePermisos()
@@ -114,6 +122,13 @@ export function PanelPagosYape({
     [pagos, ahora, vigenciaMin],
   )
   const resumen = React.useMemo(() => resumenYape(pagos, { ahora, vigenciaMin }), [pagos, ahora, vigenciaMin])
+
+  // Avisar al PDV cuántos avisos están sin usar (para la barra del celular). Usa la MISMA lista que se
+  // dibuja —si el número dijera algo distinto de lo que hay adentro, el aviso mentiría— y **apagado
+  // informa 0**: un contador viejo no puede quedar prendido cuando la función está desactivada.
+  React.useEffect(() => {
+    onAvisos?.(activo ? visibles.length : 0)
+  }, [onAvisos, visibles.length, activo])
 
   // ─── El pitido ────────────────────────────────────────────────────────────
   /** Un beep corto con la WebAudio del navegador: no hace falta ningún archivo de sonido. */

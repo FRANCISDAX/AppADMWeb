@@ -153,7 +153,22 @@ describe('sire-ventas — los totales del período', () => {
 
   it('una lista vacía no rompe nada', () => {
     const t = totalesSire([])
-    assert.deepEqual(t, { baseGravada: 0, baseExonerada: 0, baseInafecta: 0, igv: 0, total: 0, cantidad: 0, sinDetalle: 0 })
+    assert.deepEqual(t, { baseGravada: 0, baseExonerada: 0, baseInafecta: 0, igv: 0, total: 0, gratuitas: 0, cantidad: 0, sinDetalle: 0 })
+  })
+
+  it('🔑 una operación GRATUITA (código 21/32) NO suma al total: no es una venta', () => {
+    // El valor referencial de un retiro se informa aparte; sumarlo inflaría lo declarado al RVIE.
+    const fila = calcularFilaSire({
+      tipoDoc: 'RETIRO',
+      venta: {
+        comprobante: 'BOLETA',
+        total: 12,
+        items: [{ id: 'p1', nombre: 'Gaseosa', precioVenta: 3, cantidad: 4, tipoAfectacion: '21' }],
+      },
+    })
+    assert.equal(fila.baseExonerada, 0, 'lo gratuito no es base exonerada')
+    assert.equal(fila.gratuitas, 12, 'queda como valor referencial informativo')
+    assert.equal(fila.total, 0, 'y no suma al total del registro')
   })
 })
 

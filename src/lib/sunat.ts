@@ -3,11 +3,27 @@
 import { afectacionDe, cantidadSunat, descuentoDeVenta, itemsParaSunat, valorUnitarioSunat } from './sunat-importes.ts'
 import { redondear2 } from './dinero.ts'
 import { tasaDelDocumento } from './igv.ts'
+import { leyendaParaSunat } from './retiro.ts'
+
+/**
+ * La **base** de la API, sin la ruta de emisión (`https://…/prod`).
+ *
+ * 🔑 **Por qué es una función aparte**: la config guarda la URL de dos maneras —la base pelada o la URL
+ * completa de emisión— y hay que quitarle el sufijo **en un solo lugar**. La usan
+ * `construirUrlApiSunat` (el envío) y la prueba de vida de **Auditoría → Estado del sistema**
+ * (`services/estado-sistema.ts`), que le pega a otra ruta de la misma base.
+ */
+export function baseDeLaApi(base: string): string {
+  return String(base || '')
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/v1\/notes\/emitir$/i, '')
+    .replace(/\/v1\/invoices\/emitir$/i, '')
+    .replace(/\/+$/, '')
+}
 
 export function construirUrlApiSunat(base: string, tipo: 'invoices' | 'notes'): string {
-  const limpia = String(base || '').trim().replace(/\/+$/, '')
-  const sinPath = limpia.replace(/\/v1\/notes\/emitir$/i, '').replace(/\/v1\/invoices\/emitir$/i, '').replace(/\/+$/, '')
-  return `${sinPath}${tipo === 'notes' ? '/v1/notes/emitir' : '/v1/invoices/emitir'}`
+  return `${baseDeLaApi(base)}${tipo === 'notes' ? '/v1/notes/emitir' : '/v1/invoices/emitir'}`
 }
 
 // Devuelve la URL base de la API según modo (producción por defecto).
@@ -29,7 +45,11 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
   const cliDni = (venta.cliente_dni || '') === '-' ? '' : venta.cliente_dni || ''
   const cliNombre = (venta.cliente_nombre || '') === '-' ? '' : venta.cliente_nombre || ''
   const tipoDocCliente = cliDni.length === 11 ? '6' : '1'
-  const tipoComprobante = tipoDocCliente === '6' ? '01' : '03'
+  // 🔑 **Un retiro se declara con el comprobante que se eligió** (boleta o factura), no con el tipo de
+  // documento del receptor: una boleta de retiro puede llevar RUC y no tiene que volverse factura.
+  const tipoComprobante = venta.retiro
+    ? (venta.comprobante === 'FACTURA' ? '01' : '03')
+    : (tipoDocCliente === '6' ? '01' : '03')
   const serie = doc.sunat?.serie || doc.serie || (tipoComprobante === '01' ? config.serieFactura || 'F001' : config.serieBoleta || 'B001')
   const numero = doc.sunat?.numero ?? doc.numero ?? doc.correlativo ?? 0
 
@@ -96,6 +116,10 @@ export function construirPayloadComprobante(doc: any, config: Record<string, any
     // 0.18. Sin este campo, un restaurante/hotel (10%) imprimiría 10% en el PDF y SUNAT recibiría 18%
     // (`app/xml_utils.py` la usa para el `<cbc:Percent>` y para el IGV de cada línea).
     tasa_igv: tasaIgv,
+    // 🔑 **La leyenda del retiro viaja también**: el XML lo escribe el backend, así que sin esto la
+    // transferencia gratuita llegaría a SUNAT como una venta más (el PDF no alcanza: SUNAT guarda el XML).
+    // El backend la escribe como `<cbc:Note languageLocaleID="1000">` antes de firmar.
+    ...(venta.retiro ? { leyenda: leyendaParaSunat(venta) } : {}),
   }
 }
 

@@ -16,6 +16,11 @@ import { db } from '@/lib/firebase'
 import { logActividad } from '@/lib/audit'
 import { anularPagoYapeDeVenta } from '@/services/yape'
 import { exigirRateLimit } from '@/lib/rate-limit'
+import { TIPO_DOC_RETIRO, afectacionDelRetiro, comprobanteValidoParaRetiro, documentoDelReceptor, motivoDe, valorReferencialDe } from '@/lib/retiro'
+import { clienteParaGuardar, revisionDocumentoCliente, revisionEdicionCliente } from '@/lib/edicion-cliente'
+
+/** El tipo de movimiento de kardex de un retiro (salida, valorizada al promedio vigente). */
+const TIPO_MOV_RETIRO = 'retiro'
 
 // Precio efectivo de venta: usa el precio especial (promoción) si el item lo pidió
 // (usarPrecioEspecial) y el producto tiene uno > 0; si no, el precio real.
@@ -1259,5 +1264,341 @@ export async function cancelarVentaPendiente({
   } catch (e) {
     console.error('❌ Error eliminando venta pendiente:', e)
     return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * **Retiro / cortesía: sacar mercadería SIN cobrarla.**
+ *
+ * 🔑 **Qué es y qué NO es** (decisión del usuario, 08/10/2026): no es una venta con descuento del 100%.
+ * Para el IGV es una **venta** (retiro de bienes) y se documenta con un **comprobante con la leyenda
+ * «Transferencia Gratuita»** y el **valor de venta referencial**; ⚠️ **la NOTA DE VENTA no sirve** (no es
+ * comprobante de pago y además entraría al consolidado como si fuera una venta del día).
+ *
+ * ⚠️ **La caja NO se mueve**: el documento se guarda **sin bolsillos** (`pagos: []`, `importeCobrado: 0`)
+ * y **sin tocar el turno** (`ventasDelTurno` no se escribe) ⇒ el esperado, el contado y la diferencia del
+ * arqueo quedan iguales. Lo que cambia es el **stock**: sale con un movimiento propio **`retiro`** y
+ * valorizado al costo promedio vigente (kardex correcto), sin sumar a `vecesVendido` (no fue una venta).
+ *
+ * 🔑 **El importe del documento ES el valor referencial** (opción A, decisión del usuario 08/10/2026): las
+ * líneas llevan la afectación del propio bien (`'10'`/`'20'`/`'30'`) y `total` = Σ líneas = valor
+ * referencial. Así el comprobante y el Registro de Ventas quedan cuadrados al céntimo —con el IGV que
+ * corresponda si el bien es gravado— y **la gratuidad la dicen la leyenda y `valorReferencial`**, no el
+ * código. ⚠️ `importeCobrado: 0` es lo que evita que alguien lo lea como plata que entró.
+ *
+ * El permiso (`retiroGratuito`, ADMIN y GERENTE por defecto) y el motivo obligatorio los pone la pantalla;
+ * acá se vuelve a validar **todo** (el permiso solo se evalúa en el cliente, misma regla que los descuentos).
+ */
+export async function registrarRetiro({
+  items,
+  motivo,
+  tipoDoc,
+  clienteDni,
+  clienteNombre,
+  clienteDireccion,
+  cajero,
+  cajeroNombre,
+  turnoId,
+  cajaId,
+  config,
+}: {
+  items: VentaItem[]
+  motivo: string
+  tipoDoc: 'BOLETA' | 'FACTURA'
+  clienteDni?: string
+  clienteNombre?: string
+  /** La dirección que ya se cargó en la venta (opcional): no se vuelve a pedir. */
+  clienteDireccion?: string
+  cajero?: string
+  cajeroNombre?: string
+  turnoId?: string
+  cajaId?: string
+  config: Record<string, any>
+}): Promise<{ success: boolean; error?: string; documentoId?: string; valorReferencial?: number; correlativo?: string }> {
+  const m = motivoDe(motivo)
+  if (!m) return { success: false, error: 'Elegí un motivo para el retiro (cortesía, uso propio o muestra).' }
+  if (!comprobanteValidoParaRetiro(tipoDoc)) {
+    return { success: false, error: 'El retiro se documenta con Boleta o Factura: la nota de venta no es comprobante de pago.' }
+  }
+  // ⚠️ **El documento del receptor se valida acá, no solo en la pantalla**: el backend (`appadm-sunat`)
+  // rechaza el envío si `num_doc` no tiene 8-11 caracteres, y un comprobante numerado no se corrige.
+  const receptor = documentoDelReceptor(tipoDoc, clienteDni)
+  if (!receptor.ok) return { success: false, error: receptor.error || 'El documento del receptor no es válido.' }
+  const dni = receptor.doc
+  if (!Array.isArray(items) || items.length === 0) return { success: false, error: 'Agregá al menos un producto al retiro.' }
+
+  /**
+   * 🔑 **La serie y el correlativo son los de la venta** (decisión del usuario, 08/10/2026): una boleta
+   * es una boleta. La serie identifica el **punto de emisión**, no el motivo, así que el retiro comparte
+   * serie **y contador** con las boletas/facturas de esa caja ⇒ la numeración sigue siendo correlativa y
+   * sin huecos. ⚠️ **Nunca un contador propio para la misma serie** (el número se repetiría).
+   */
+  const serie = tipoDoc === 'FACTURA' ? String(config.serieFactura || 'F001') : String(config.serieBoleta || 'B001')
+  const contRef = doc(db, COL.CONTADORES, claveContador(tipoDoc, serie))
+
+  // SOLO LECTURA: si el contador todavía no existe, se siembra con el mayor número ya emitido en esa
+  // serie — contando **las ventas y los retiros**, porque comparten la misma numeración.
+  let maxExistente = 0
+  try {
+    const snap = await getDoc(contRef)
+    if (!snap.exists()) {
+      for (const t of [tipoDoc, TIPO_DOC_RETIRO]) {
+        const docsSnap = await getDocs(query(collection(db, COL.DOCUMENTOS), where('tipoDoc', '==', t), where('serie', '==', serie)))
+        docsSnap.forEach((d) => {
+          const n = Number(d.data().numero ?? d.data().correlativo ?? 0)
+          if (n > maxExistente) maxExistente = n
+        })
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ Lectura de correlativos del retiro:', e)
+  }
+
+  try {
+    const f = new Date()
+    const anioMes = `${f.getFullYear()}-${f.getMonth() + 1}`
+    const docId = `${anioMes}_${TIPO_DOC_RETIRO}-${Date.now()}`
+
+    const res = await ejecutarTransaccion(db, async (tx) => {
+      // 1) Lecturas primero (regla de Firestore).
+      const contSnap = await tx.get(contRef)
+      const prods: { item: VentaItem; prodRef: any; prod: any; stockActual: number; cantidad: number; afectacion: string }[] = []
+      for (const item of items) {
+        const cantidad = Number(item.quantity) || 0
+        if (cantidad <= 0) continue
+        const prodRef = doc(db, COL.PRODUCTOS, item.id)
+        const prodSnap = await tx.get(prodRef)
+        if (!prodSnap.exists()) throw new Error(`Producto no encontrado: ${item.nombre}`)
+        const prod = prodSnap.data()
+        const stockActual = prod.stock || 0
+        if (cantidad > stockActual) throw new Error(`Stock insuficiente para ${item.nombre}: disponible ${stockActual}, solicitado ${cantidad}`)
+        const afectacionBien = String(item.tipoAfectacion || prod.tipoAfectacion || config.tipoAfectacionManual || AFECTACION_POR_DEFECTO)
+        prods.push({ item, prodRef, prod, stockActual, cantidad, afectacion: afectacionDelRetiro(m.id, afectacionBien) })
+      }
+      if (prods.length === 0) throw new Error('Agregá al menos un producto al retiro.')
+
+      // Numeración con el **mismo contador de la serie** (el de las boletas/facturas de la caja): se
+      // escribe dentro de la transacción, así dos cajas/pestañas no pueden tomar el mismo número.
+      const numero = contSnap.exists() ? Number(contSnap.data().ultimoCorrelativo ?? 0) + 1 : maxExistente + 1
+      const serieNumero = `${serie}-${String(numero).padStart(6, '0')}`
+      tx.set(contRef, { [CAMPO_CONTADOR]: numero, updatedAt: f.toISOString() }, { merge: true })
+
+      // Precio por **unidad base**: si la pantalla ya lo resolvió (promo, lista de precios) se respeta;
+      // si no, la regla de siempre (`precioDe`). Así el valor referencial que se ve al confirmar es
+      // exactamente el que queda guardado.
+      const precioUnitario = (prod: any, item: VentaItem) => {
+        const precio = Number(item.precioVenta)
+        return Number.isFinite(precio) && precio > 0 ? precio : precioDe(prod, item)
+      }
+      const ventaItems = prods.map(({ item, prod, cantidad, afectacion }) => ({
+        id: item.id,
+        nombre: item.nombre || prod.nombre,
+        // 🔑 Mismo formato que una venta (`registrarVenta`): el comprobante y el ticket lo leen igual.
+        precioVenta: precioUnitario(prod, item),
+        cantidad,
+        unidad: item.presentacionNombre || 'Un',
+        presentacionId: item.presentacionId || 'unidad',
+        factorConversion: item.factorConversion || 1,
+        cantidadEnUnidadBase: cantidad,
+        subtotal: precioUnitario(prod, item) * cantidad,
+        categoria: prod.categoria || '',
+        // La afectación es **la del bien** ('10' gravado paga el IGV de su valor referencial, '20'
+        // exonerado no): la gratuidad la dicen la leyenda y el valor referencial, no el código (opción A).
+        tipoAfectacion: afectacion,
+      }))
+      const valorReferencial = valorReferencialDe(ventaItems)
+
+      // 2) Stock + kardex valorizado. `retiro` es una SALIDA (`esEntrada()` lo resuelve solo).
+      for (const { item, prodRef, prod, stockActual, cantidad } of prods) {
+        const nuevoStock = stockActual - cantidad
+        const valorizado = valorizacionDeMovimiento({
+          tipoMovimiento: TIPO_MOV_RETIRO,
+          cantidad,
+          stockAntes: stockActual,
+          stockNuevo: nuevoStock,
+          producto: prod as { costoPromedio?: number | null; precioCompra?: number | null },
+        })
+        // ⚠️ Sin `vecesVendido`: sacar mercadería no es venderla.
+        tx.update(prodRef, { stock: nuevoStock, ...valorizado.camposProducto, ultimaActualizacion: f.toISOString(), updatedAt: f.toISOString() })
+        const movRef = doc(collection(db, COL.MOVIMIENTOS))
+        tx.set(movRef, limpiarUndefined({
+          productoId: item.id,
+          productoCodigo: prod.codigo || item.id,
+          productoNombre: prod.nombre || item.nombre,
+          tipoMovimiento: TIPO_MOV_RETIRO,
+          cantidad,
+          stockAnterior: stockActual,
+          stockNuevo: nuevoStock,
+          ...valorizado.camposMovimiento,
+          usuario: cajeroNombre || cajero || 'sistema',
+          fecha: f.toISOString(),
+          timestamp: Date.now(),
+          presentacionUsada: item.presentacionNombre || 'Unidad',
+          presentacionId: item.presentacionId || 'unidad',
+          cantidadPresentacion: cantidad,
+          factorConversion: item.factorConversion || 1,
+          metadata: { documentoId: docId, retiro: { motivo: m.id, leyenda: m.leyenda } },
+        }))
+      }
+
+      // 3) El documento. **Sin bolsillos** (la caja no se enteró) y con el valor referencial como
+      //    importe: es lo que declara el comprobante y lo que el contador lleva al Registro de Ventas.
+      const venta = {
+        id: `retiro_${Date.now()}`,
+        fecha: f.toISOString(),
+        items: ventaItems,
+        // 🔑 El importe del comprobante ES el valor referencial (opción A: la línea va como operación
+        // onerosa con la afectación del bien). La gratuidad la dicen la leyenda y el valor referencial.
+        total: valorReferencial,
+        importe_total: valorReferencial,
+        valorReferencial,
+        /** ⚠️ Lo que se **cobró**: nada. Es la marca que separa «importe declarado» de «plata que entró». */
+        importeCobrado: 0,
+        descuentoTotal: 0,
+        tipoPago: 'gratuito',
+        pagos: [],
+        efectivo: 0,
+        totalTransferenciaPago: 0,
+        cliente_nombre: String(clienteNombre ?? '').trim() || (tipoDoc === 'BOLETA' ? 'CLIENTE' : '-'),
+        cliente_dni: dni || (tipoDoc === 'BOLETA' ? '-' : ''),
+        // La dirección llega con el cliente de la venta (no se pide de nuevo). Si no hay, no se escribe.
+        ...(String(clienteDireccion ?? '').trim() ? { cliente_direccion: String(clienteDireccion).trim() } : {}),
+        serie_numero: serieNumero,
+        /** 🔑 El comprobante **real** del retiro: el tipo interno del documento es `RETIRO`, pero ante
+         * SUNAT es una boleta (`03`) o una factura (`01`) como cualquier otra. */
+        comprobante: tipoDoc,
+        /** Marca explícita: el documento es un retiro (lo excluye de los reportes de ventas). */
+        retiro: true,
+        cajero: cajeroNombre || cajero || 'sistema',
+        son_letras: numeroALetras(valorReferencial),
+        turnoId: turnoId || '',
+        motivoRetiro: { id: m.id, leyenda: m.leyenda },
+        igvPorcentaje: porcentajeValido(config.igvPorcentaje),
+      }
+
+      tx.set(doc(db, COL.DOCUMENTOS, docId), limpiarUndefined({
+        tipo: TIPO_DOC_RETIRO,
+        tipoDoc: TIPO_DOC_RETIRO,
+        serie,
+        numero,
+        correlativo: numero,
+        serieNumero,
+        anioMes,
+        anio: f.getFullYear(),
+        mes: f.getMonth() + 1,
+        fecha: f.toISOString(),
+        createdAt: f.toISOString(),
+        updatedAt: f.toISOString(),
+        usuarioId: cajero || '',
+        usuarioNombre: cajeroNombre || '',
+        ...(cajaId ? { cajaId } : {}),
+        turnoId: turnoId || '',
+        estado: 'retirado',
+        // 🔑 **Ya tiene número ⇒ se manda**: el retiro entra a la cola del envío a SUNAT igual que una
+        // boleta (si no, quedaría un comprobante numerado que SUNAT nunca recibe). Las líneas van como
+        // operación onerosa con la afectación del bien, así que el XML es el de una venta normal.
+        sunat: { estado: 'pendiente', serie, numero, puntoEmision: puntoEmisionDe({}, config) },
+        venta,
+      }))
+
+      return { success: true, documentoId: docId, valorReferencial, correlativo: serieNumero }
+    })
+
+    if (res.success) {
+      logActividad({
+        accion: 'registrar_retiro',
+        entidad: COL.DOCUMENTOS,
+        entidadId: res.documentoId,
+        detalle: { motivo: m.id, leyenda: m.leyenda, tipoDoc, valorReferencial: res.valorReferencial, items: items.length },
+      })
+    }
+    return res
+  } catch (e) {
+    console.error('❌ Error registrando el retiro:', e)
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * **Cambiarle el cliente a una nota de venta** (el caso real: el cliente compró sin dar su nombre y después
+ * pide *«esa nota pero con mi nombre»*).
+ *
+ * 🔑 **Por qué es seguro**: una nota de venta **no es comprobante de pago** y **no se declara a SUNAT**; y
+ * la **boleta consolidada del día no usa el cliente de cada NV** (declara el receptor de la configuración,
+ * `lib/consolidado.ts`). El cliente de la nota es un dato **operativo**: el ticket que se le dio, el
+ * historial del cliente (`obtenerVentasDelCliente` filtra por `venta.cliente_dni`) y el envío.
+ *
+ * ⚠️ **La regla vive en `lib/edicion-cliente.ts` y se aplica ACÁ**, no solo en la pantalla: no se edita una
+ * nota **consolidada** (su importe ya está declarado: se corrige con nota de crédito) ni **anulada**, ni un
+ * documento que no sea NV. Si la nota está **a crédito**, la deuda pasa a la cuenta del nuevo documento (la
+ * pantalla lo avisa antes de guardar).
+ *
+ * ⚠️ Si el cliente necesita el nombre para **sustentar un gasto**, esto no le sirve: hace falta boleta o
+ * factura.
+ */
+export async function editarClienteDeNotaVenta({
+  documentoId,
+  clienteNombre,
+  clienteDni,
+  clienteDireccion,
+  clienteTelefono,
+}: {
+  documentoId: string
+  clienteNombre?: string
+  clienteDni?: string
+  clienteDireccion?: string
+  clienteTelefono?: string
+}): Promise<{ success: boolean; error?: string; cliente?: ReturnType<typeof clienteParaGuardar> }> {
+  try {
+    const ref = doc(db, COL.DOCUMENTOS, documentoId)
+    const snap = await getDoc(ref)
+    if (!snap.exists()) return { success: false, error: 'No se encontró el documento.' }
+    const data = snap.data() as { tipoDoc?: string; estado?: string; sunat?: { consolidado?: boolean } | null; venta?: Record<string, any>; serieNumero?: string }
+
+    const revision = revisionEdicionCliente(data)
+    if (!revision.permitido) return { success: false, error: revision.motivo ?? 'No se puede editar el cliente de esta nota.' }
+
+    const documento = revisionDocumentoCliente(clienteDni, clienteNombre)
+    if (!documento.valido) return { success: false, error: documento.motivo ?? 'Documento inválido.' }
+
+    const nuevo = clienteParaGuardar({ nombre: clienteNombre, documento: clienteDni, direccion: clienteDireccion, telefono: clienteTelefono })
+    const antes = {
+      cliente_nombre: data.venta?.cliente_nombre ?? '',
+      cliente_dni: data.venta?.cliente_dni ?? '',
+      cliente_direccion: data.venta?.cliente_direccion ?? '',
+      cliente_telefono: data.venta?.cliente_telefono ?? '',
+    }
+    // Los campos viven DENTRO de `venta` (así los escribe `registrarVenta` y así los leen el ticket, el
+    // historial del cliente y el envío). Se escribe por ruta para no tocar el resto del documento.
+    await updateDoc(ref, limpiarUndefined({
+      'venta.cliente_nombre': nuevo.cliente_nombre,
+      'venta.cliente_dni': nuevo.cliente_dni,
+      'venta.cliente_direccion': nuevo.cliente_direccion || null,
+      'venta.cliente_telefono': nuevo.cliente_telefono || null,
+      updatedAt: new Date().toISOString(),
+    }))
+
+    logActividad({
+      accion: 'editar_cliente_nv',
+      entidad: COL.DOCUMENTOS,
+      entidadId: documentoId,
+      detalle: { serieNumero: data.serieNumero ?? '', antes, despues: nuevo },
+    })
+    return { success: true, cliente: nuevo }
+  } catch (e) {
+    console.error('❌ Error cambiando el cliente de la nota:', e)
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/** Los retiros de un turno (para mostrarlos aparte en Turnos: **no** suman a la caja). */export async function obtenerRetirosDelTurno(turnoId: string): Promise<Record<string, any>[]> {
+  if (!turnoId) return []
+  try {
+    // 🔑 Dos igualdades ⇒ **sin índice compuesto**.
+    const snap = await getDocs(query(collection(db, COL.DOCUMENTOS), where('turnoId', '==', turnoId), where('tipoDoc', '==', TIPO_DOC_RETIRO)))
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  } catch (e) {
+    console.error('❌ Error leyendo los retiros del turno:', e)
+    return []
   }
 }

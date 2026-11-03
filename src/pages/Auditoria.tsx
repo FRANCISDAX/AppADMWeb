@@ -1,4 +1,4 @@
-import { AlertTriangle, DatabaseBackup, Download, History, Loader2, Search, Shield, Trash2 } from 'lucide-react'
+import { Activity, AlertTriangle, DatabaseBackup, Download, History, Loader2, Search, Shield, Trash2 } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -6,6 +6,7 @@ import { useNotifications } from '@/components/notifications'
 import { usePermisos } from '@/context/permisos'
 import { ErroresPanel } from '@/components/auditoria/ErroresPanel'
 import { EstadoRespaldo } from '@/components/EstadoRespaldo'
+import { EstadoSistema } from '@/components/EstadoSistema'
 import { ExportarDatos } from '@/components/ExportarDatos'
 import { obtenerLogs, limpiarLogs, logsToCSV, descargarArchivo, type AuditLog } from '@/lib/audit'
 import { cn } from '@/lib/utils'
@@ -30,6 +31,8 @@ const ACCION_LABELS: Record<string, string> = {
   crear_venta_pendiente: 'Enviar pedido a caja',
   cobrar_venta_pendiente: 'Cobrar pedido',
   eliminar_venta_pendiente: 'Eliminar pedido',
+  // Retiro gratuito (cortesía / uso propio / muestra): queda quién, por qué y por cuánto.
+  registrar_retiro: 'Retiro sin cobro',
 }
 
 const ACCION_COLORS: Record<string, string> = {
@@ -51,6 +54,7 @@ const ACCION_COLORS: Record<string, string> = {
   crear_venta_pendiente: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   cobrar_venta_pendiente: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   eliminar_venta_pendiente: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  registrar_retiro: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
 }
 
 const ACCION_MODULO: Record<string, string> = {
@@ -72,6 +76,7 @@ const ACCION_MODULO: Record<string, string> = {
   crear_venta_pendiente: 'Pedidos',
   cobrar_venta_pendiente: 'Pedidos',
   eliminar_venta_pendiente: 'Pedidos',
+  registrar_retiro: 'Ventas',
 }
 
 export default function Auditoria() {
@@ -84,7 +89,7 @@ export default function Auditoria() {
   const [filtroAccion, setFiltroAccion] = React.useState('')
   const [filtroModulo, setFiltroModulo] = React.useState('')
   const [busqueda, setBusqueda] = React.useState('')
-  const [vista, setVista] = React.useState<'actividad' | 'errores' | 'datos'>('actividad')
+  const [vista, setVista] = React.useState<'actividad' | 'errores' | 'estado' | 'datos'>('actividad')
 
   const cargar = React.useCallback(async () => {
     setCargando(true)
@@ -178,12 +183,12 @@ export default function Auditoria() {
 
       {/* Actividad (lo que hacen los usuarios) vs Errores (lo que falla) */}
       <div className="flex gap-1.5 rounded-xl bg-muted p-1">
-        {([{ id: 'actividad', label: 'Actividad', icon: History }, { id: 'errores', label: 'Errores', icon: AlertTriangle }, { id: 'datos', label: 'Mis Datos', icon: DatabaseBackup }] as const).map((t) => (
+        {([{ id: 'actividad', label: 'Actividad', icon: History }, { id: 'errores', label: 'Errores', icon: AlertTriangle }, { id: 'estado', label: 'Estado', icon: Activity }, { id: 'datos', label: 'Mis Datos', icon: DatabaseBackup }] as const).map((t) => (
           <button
             key={t.id}
             onClick={() => setVista(t.id)}
             className={cn(
-              'flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-bold transition-colors cursor-pointer',
+              'flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition-colors cursor-pointer sm:text-sm',
               vista === t.id ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
             )}
           >
@@ -202,6 +207,11 @@ export default function Auditoria() {
         </div>
       ) : vista === 'errores' ? (
         <ErroresPanel />
+      ) : vista === 'estado' ? (
+        // 🩺 **Estado del sistema** (decisión del usuario, 02/11/2026): las cuatro cosas que pueden
+        // dejar al local sin operar —la caja, la API de SUNAT, el puente del Yape y el respaldo— juntas
+        // y en una pantalla, porque vivían en tres lugares distintos y nadie las miraba.
+        <EstadoSistema />
       ) : (
         <>
       {/* Filtros */}

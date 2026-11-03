@@ -32,9 +32,17 @@ function tiempoTranscurrido(fechaIso: string): string {
  */
 export function PanelVentasPendientes({
   onCobrarPedido,
+  onPendientes,
 }: {
   /** El PDV trae el pedido al carrito para cobrarlo. */
   onCobrarPedido: (pedido: DocumentoVenta) => void
+  /**
+   * 🔑 **Cuántos pedidos están esperando**, para avisarlo con el carrito cerrado.
+   * 📌 Existe porque en el celular este panel vive **dentro** del carrito, que se abre como hoja: sin este
+   * dato, un pedido que llega no se ve hasta abrir la venta — y un pedido que no se ve es una venta perdida.
+   * Se informa **el total** (`mios` + `otrasCajas`): los de otra caja también se pueden cobrar (rescate).
+   */
+  onPendientes?: (cantidad: number) => void
 }) {
   const { user } = useAuth()
   const { cajaId, nombre: nombreUsuario, tienePermiso } = usePermisos()
@@ -53,6 +61,12 @@ export function PanelVentasPendientes({
   }, [])
 
   const { mios, otrasCajas } = React.useMemo(() => repartirPedidos(ventas, cajaId), [ventas, cajaId])
+
+  // Avisar al PDV cuántos hay esperando (para la barra del celular). No sincroniza estado propio: solo
+  // informa lo que ya calculó `repartirPedidos`, así que no hay dos reglas del reparto.
+  React.useEffect(() => {
+    onPendientes?.(mios.length + otrasCajas.length)
+  }, [onPendientes, mios.length, otrasCajas.length])
 
   React.useEffect(() => {
     // 🔑 La lista se escucha **en vivo** (`onSnapshot`): un pedido que se cobra o se elimina sale al

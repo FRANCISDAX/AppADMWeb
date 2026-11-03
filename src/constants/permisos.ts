@@ -56,6 +56,22 @@ export const CLAVES_PERMISOS = {
    * (mismo criterio que `aplicarDescuento`). ⚠️ La app móvil no conoce esta clave y la ignora.
    */
   descargarXmlSunat: 'descargarXmlSunat',
+  /**
+   * 🔑 **Sacar mercadería sin cobrarla** (cortesía, uso propio, muestra) — decisión del usuario,
+   * 08/10/2026: lo hacen **ADMIN y GERENTE** y nadie más; se puede **prender por usuario** en
+   * `Usuarios → Editar`. ⚠️ Como `aplicarDescuento`, es un permiso **de interfaz**: el servicio
+   * (`registrarRetiro`) valida el motivo, el comprobante y el stock, pero quién puede hacerlo lo decide
+   * la pantalla. ⚠️ La app móvil no conoce esta clave y la ignora.
+   */
+  retiroGratuito: 'retiroGratuito',
+  /**
+   * 🔑 **Corregirle el cliente a una nota de venta** (09/10/2026): el cliente compró sin dar su nombre y
+   * después pide *«esa nota pero con mi nombre»*. Lo tienen **ADMIN, GERENTE y CAJERO** (el cajero es quien
+   * atiende el reclamo en el mostrador) y se quita por usuario en `Usuarios → Editar`. ⚠️ La regla de
+   * cuándo se puede (no consolidada, no anulada, solo NV) vive en `lib/edicion-cliente.ts` y el servicio la
+   * revalida. ⚠️ La app móvil no conoce esta clave y la ignora.
+   */
+  editarClienteVenta: 'editarClienteVenta',
 } as const
 
 const ALL_TRUE = Object.fromEntries(Object.values(CLAVES_PERMISOS).map((k) => [k, true]))
@@ -87,6 +103,8 @@ export const PERMISOS_POR_ROL: Record<string, Record<string, boolean>> = {
     cancelarVentaPendiente: true,
     reportesPorVendedor: true,
     aplicarDescuento: true,
+    // El cajero es quien escucha el reclamo («quería la nota con mi nombre»).
+    editarClienteVenta: true,
   },
   VENDEDOR: {
     ...ALL_FALSE,
@@ -124,7 +142,7 @@ export const MODULOS = [
   { key: 'dashboards', label: 'Dashboards', permisos: ['dashboard', 'dashboardOperaciones'] },
   { key: 'modulos', label: 'Módulos (Tabs)', permisos: ['inventario', 'turnos', 'reportes', 'ventas'] },
   { key: 'drawer', label: 'Opciones del Menú', permisos: ['clientes', 'estadoCuenta', 'compras', 'proveedores', 'reporteTurnos', 'reporteFechas', 'arqueoCaja', 'estadisticas', 'notasVenta', 'consolidado', 'registroVentas', 'kardex', 'comandosVoz', 'configuracion', 'informacion', 'usuarios', 'egresos', 'auditoria', 'sire', 'ventasPorEmpleado', 'rotacionInventario'] },
-  { key: 'funciones', label: 'Funciones', permisos: ['crearProducto', 'editarProducto', 'eliminarProducto', 'ajustarStock', 'verCostos', 'anularVenta', 'cobrarCredito', 'imprimirTicket', 'abrirTurno', 'cerrarTurno', 'rectificarCaja', 'corregirPago', 'editarMontoInicial', 'rectificarTurno', 'enviarACaja', 'verVentasPendientes', 'cobrarVenta', 'cancelarVentaPendiente', 'reportesPorVendedor', 'aplicarDescuento', 'descargarXmlSunat'] },
+  { key: 'funciones', label: 'Funciones', permisos: ['crearProducto', 'editarProducto', 'eliminarProducto', 'ajustarStock', 'verCostos', 'anularVenta', 'cobrarCredito', 'imprimirTicket', 'abrirTurno', 'cerrarTurno', 'rectificarCaja', 'corregirPago', 'editarMontoInicial', 'rectificarTurno', 'enviarACaja', 'verVentasPendientes', 'cobrarVenta', 'cancelarVentaPendiente', 'reportesPorVendedor', 'aplicarDescuento', 'descargarXmlSunat', 'retiroGratuito', 'editarClienteVenta'] },
   { key: 'accesos', label: 'Acceso Especial', permisos: ['verTodo'] },
 ]
 
@@ -178,6 +196,8 @@ export const LABELS_PERMISOS: Record<string, string> = {
   reportesPorVendedor: 'Reportes por Vendedor',
   aplicarDescuento: 'Aplicar descuento manual',
   descargarXmlSunat: 'Descargar XML y CDR (SUNAT)',
+  retiroGratuito: 'Retirar sin cobrar (cortesía)',
+  editarClienteVenta: 'Cambiar el cliente de una nota de venta',
 }
 
 export const ROLES = ['ADMIN', 'GERENTE', 'CAJERO', 'VENDEDOR', 'ALMACEN', 'PERSONALIZADO']

@@ -121,7 +121,7 @@
   <h1>AppADM</h1>
   <div class="subtitle">Manual de Usuario</div>
   <div class="tagline">Sistema de Punto de Venta e Inventario para negocios de retail y wholesale en Perú</div>
-  <div class="version">Versión 2.28 — Octubre 2026 · CIBERSOFT CyS</div>
+  <div class="version">Versión 2.32 — Noviembre 2026 · CIBERSOFT CyS</div>
 </div>
 
 <!-- ============ CONTENIDO ============ -->
@@ -284,6 +284,33 @@
     <li style="padding:3px 0; font-size:13px; color:#475569;">• Los descuentos de volumen (3×2, etc.) y de cliente se aplican automáticamente.</li>
   </ul>
 
+  <h3>2.8.1 Retirar sin cobrar (cortesía, uso propio o muestra)</h3>
+  <p>Es para <strong>sacar mercadería sin cobrarla</strong>: un regalo a un cliente, un producto para el propio negocio o una muestra. Solo lo pueden hacer <strong>administrador y gerencia</strong> (permiso <em>«Retirar sin cobrar (cortesía)»</em>, que se prende o se quita por usuario en <code>Usuarios → Editar</code>).</p>
+  <div class="steps">
+    <div class="step"><strong>Carga el producto en el carrito</strong> como en cualquier venta (la cantidad también es la misma).</div>
+    <div class="step">Toca <strong>«Retirar sin cobrar · S/ …»</strong>, el botón punteado que está debajo de los descuentos.</div>
+    <div class="step"><strong>Elige el motivo</strong> (cortesía, uso propio o muestra) y el <strong>comprobante</strong>: <strong>Boleta</strong> o <strong>Factura</strong> (la Factura pide el RUC del receptor).</div>
+    <div class="step">Si ya cargaste el <strong>cliente en la venta</strong> (DNI/RUC, nombre y dirección), el retiro <strong>lo trae puesto</strong>: no lo vuelvas a digitar. Si el documento es un RUC, el comprobante ya viene en <strong>Factura</strong>. Igual podés cambiarlo en la misma ventana.</div>
+    <div class="step"><strong>Confirma.</strong> El retiro queda registrado y el carrito se vacía solo.</div>
+  </div>
+  <div class="warning">
+    <div class="warning-label">⚠️ Ojo: no es un descuento del 100%</div>
+    <p>Para SUNAT un retiro <strong>es una venta</strong>: se documenta con un comprobante con la leyenda del motivo (<em>«Transferencia gratuita»</em>, <em>«Retiro para uso propio»</em> o <em>«Muestra»</em>) y con el <strong>valor referencial</strong> —lo que la mercadería habría costado—, que es el importe que queda en el comprobante aunque nadie lo pague. <strong>La nota de venta no sirve para esto</strong> (no es comprobante de pago y además se mezclaría con las notas del día, que se consolidan en una boleta).</p>
+    <p>Si el producto es <strong>gravado</strong> (paga IGV), ese IGV <strong>se paga igual</strong>: lo pone el negocio. Si es <strong>exonerado</strong> —como todo el catálogo de esta región— no hay IGV que pagar.</p>
+    <p>La <strong>leyenda</strong> y el <strong>valor referencial</strong> viajan también en el <strong>XML</strong> que se manda a SUNAT (no solo en el papel): así el comprobante electrónico que SUNAT guarda dice que no se cobró.</p>
+  </div>
+  <div class="tip">
+    <div class="tip-label">Qué pasa con la caja, el stock y la numeración</div>
+    <p><strong>La caja no se mueve</strong>: no hay pago, así que el efectivo, las transferencias, el esperado y la diferencia del arqueo quedan igual. Lo que sí cambia es el <strong>stock</strong>, que baja (y queda en el kardex como <em>Retiro / cortesía</em>).</p>
+    <p>El comprobante sale con la <strong>misma serie y la misma numeración que tus boletas o facturas</strong> (no hay una serie aparte: la serie es del punto de emisión), se <strong>envía a SUNAT</strong> como cualquier comprobante —solo, por el envío automático, o a mano desde <code>Reportes → Registro SUNAT → Retiros sin cobro</code>, donde también se baja el <strong>XML y el CDR</strong>—. ⚠️ <strong>Ojo</strong>: el retiro <strong>no aparece en la pestaña «Boletas»</strong> (aunque su comprobante sea una boleta): tiene su <strong>propia pestaña «Retiros sin cobro»</strong>, porque no es una venta. Si estás mirando las boletas y no lo encontrás, la pantalla te lo avisa con un recuadro rosa. Su <strong>valor referencial entra al Registro de Ventas</strong> (<code>Reportes → Registro SIRE</code>), donde aparece etiquetado como <em>«Retiros (gratuitas)»</em>. Se imprime con <strong>el mismo ticket y el mismo A4</strong> que las demás boletas y facturas (botón <strong>PDF</strong> en <code>Turnos → Retiros sin cobro</code> o en el Registro SUNAT): el papel dice el comprobante, la <strong>leyenda</strong> y el <strong>valor referencial</strong>, y no muestra forma de pago. El retiro no suma a los reportes de ventas ni al margen: se ve en <code>Turnos</code> y en <code>Auditoría</code> con quién lo hizo y por qué.</p>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">Las dos clases: regalar no es lo mismo que consumir</div>
+    <p>Los motivos son de <strong>dos familias</strong> y el sistema las separa en los reportes: <strong>transferencia gratuita</strong> (la mercadería <strong>sale hacia un cliente</strong>: <em>cortesía</em> y <em>muestra</em>) y <strong>retiro de bienes</strong> (se la queda <strong>el propio negocio</strong>: <em>uso propio</em>).</p>
+    <p>Las dos se declaran igual —para el IGV las dos son una venta—, pero en <code>Reportes → Registro SIRE</code> hay <strong>una tarjeta con el total de cada clase</strong>, cada documento muestra su clase bajo la columna <em>Tipo</em> y hay un filtro <strong>Retiros</strong>; en <code>Registro SUNAT</code> cada retiro dice su <strong>clase y su leyenda</strong>. Así sabes cuánto regalaste y cuánto consumiste, por separado.</p>
+  </div>
+
   <h3>2.9 Envío a domicilio</h3>
   <p>Si está habilitado en <code>Configuración → Envío</code>, aparece la sección <strong>"ENVÍO"</strong> en el carrito:</p>
   <div class="steps">
@@ -335,6 +362,22 @@
     <div class="tip-label">💡 También desde Reportes</div>
     <p>En <strong>Reportes → Notas de Venta / Registro SUNAT</strong> cada documento tiene los botones <strong>PDF</strong> (ticket de ticketera), <strong>A4</strong> y <strong>Enviar</strong>. Sirve para reenviar un comprobante de ayer o de la semana pasada, incluso una <strong>nota de crédito o de débito</strong>.</p>
   </div>
+  <h3>2.13.1 Cambiarle el cliente a una nota de venta</h3>
+  <p>El caso típico: el cliente compra sin dar su nombre y después vuelve y pide <em>«esa nota pero con mi nombre»</em>. En <strong>Reportes → Notas de Venta</strong>, en la fila de la nota, hay un botón <strong>«Cliente»</strong>: abre el nombre, el DNI/RUC, la dirección y el teléfono, y guarda (con la opción <strong>«Guardar e imprimir»</strong>, que reimprime el ticket con el nombre corregido).</p>
+  <div class="steps">
+    <div class="step"><strong>Buscá la nota</strong> en <code>Reportes → Notas de Venta</code> y tocá <strong>«Cliente»</strong>.</div>
+    <div class="step"><strong>Completá el nombre</strong> (y el DNI o RUC si te lo dio; vacío = consumidor final).</div>
+    <div class="step"><strong>«Guardar e imprimir»</strong>: el ticket sale con el nombre nuevo. El anterior queda viejo: se lo tenés que dar corregido.</div>
+  </div>
+  <div class="warning">
+    <div class="warning-label">⚠️ Cuándo NO se puede</div>
+    <p>Si la nota <strong>ya entró a la boleta consolidada del día</strong>, su importe ya está declarado: el botón no aparece y la corrección va por <strong>nota de crédito</strong> (hablalo con tu contador). Tampoco en una nota <strong>anulada</strong>.</p>
+  </div>
+  <div class="warning">
+    <div class="warning-label">⚠️ El nombre no convierte la nota en comprobante</div>
+    <p>La nota de venta <strong>no es comprobante de pago</strong>: el nombre sirve para el ticket y para el historial del cliente. Si el cliente necesita <strong>sustentar un gasto</strong> (o cargar el IGV como crédito fiscal), hace falta emitirle <strong>boleta</strong> (con su DNI) o <strong>factura</strong> (con su RUC) — la nota no le sirve aunque diga su nombre. Si además la nota está <strong>a crédito</strong>, al cambiar el cliente la deuda pasa a la cuenta del nuevo documento y el sistema lo avisa antes de guardar.</p>
+  </div>
+
   <div class="warning">
     <div class="warning-label">⚠️ En Reportes cada uno ve SUS documentos</div>
     <p>Las listas de <strong>Notas de Venta</strong> y del <strong>Registro SUNAT</strong> muestran solo los documentos que cargó <strong>el usuario con el que estás entrando</strong> — la pantalla lo dice arriba: <em>«Tus notas de venta del mes»</em>. El <strong>administrador o un supervisor</strong> ve los de todos: <em>«Todas las notas de venta del mes»</em>. Por eso, si estás buscando una venta que hizo otra persona, entrá con el usuario <strong>admin</strong>. 📌 La lista viene de a <strong>25 documentos</strong> (abajo dice <em>«Mostrando 1–25 de N»</em> y, si hay más, están las flechas <strong>‹ ›</strong> para pasar de página) y el importe de la cabecera es <strong>el de la página que estás viendo</strong>, no el del mes.</p>
@@ -726,6 +769,7 @@
   <div class="warning">
     <div class="warning-label">⚠️ Importante</div>
     <p>No puedes vender sin un turno abierto. Si intentas cobrar, el sistema mostrará: "No hay un turno abierto. Abre un turno antes de vender."</p>
+    <p>Además, al entrar al <strong>Punto de Venta</strong> sin turno abierto aparece un <strong>aviso ámbar arriba</strong> (antes de que armes la venta) con el botón <strong>«Abrir turno»</strong>, que te lleva a esta pantalla. El turno se abre <strong>acá</strong> y no en el PDV a propósito: el <strong>monto inicial</strong> es la base del arqueo, y abrirlo con 0 teniendo plata en el cajón dejaría un <strong>sobrante</strong> en el cierre.</p>
   </div>
 
   <h3>6.2 Turno activo</h3>
@@ -1198,7 +1242,7 @@
   <div class="section-title"><span class="icon">🔍</span> 14. Auditoría</div>
 
   <h3>14.1 Auditoría General</h3>
-  <p>La pantalla tiene <strong>tres pestañas</strong>: <strong>Actividad</strong> (el registro cronológico), <strong>Errores</strong> (los errores capturados con su detalle) y <strong>Mis Datos</strong> (la <strong>exportación de toda la información</strong> del negocio y la tarjeta que avisa <strong>si el respaldo está corriendo</strong> — ver <em>1. Primeros Pasos</em>).</p>
+  <p>La pantalla tiene <strong>cuatro pestañas</strong>: <strong>Actividad</strong> (el registro cronológico), <strong>Errores</strong> (los errores capturados con su detalle), <strong>Estado</strong> (el <strong>estado del sistema</strong>: caja, API de SUNAT, puente del Yape y respaldo — ver <em>14.4</em>) y <strong>Mis Datos</strong> (la <strong>exportación de toda la información</strong> del negocio y la tarjeta que avisa <strong>si el respaldo está corriendo</strong> — ver <em>1. Primeros Pasos</em>).</p>
   <p>Registro cronológico de todas las acciones: ventas, anulaciones, ajustes, cambios de configuración, login/logout. Incluye: usuario, acción, entidad, fecha, dispositivo.</p>
   <p>Filtros: por usuario, por tipo de acción, por fecha. Exportación a Excel.</p>
 
@@ -1207,6 +1251,16 @@
 
   <h3>14.3 Panel de Errores</h3>
   <p>Errores capturados de la app: mensaje, stack trace, contexto, ruta, dispositivo, usuario. Útil para debugging.</p>
+
+  <h3>14.4 Estado del sistema (¿está todo funcionando?)</h3>
+  <p>La pestaña <strong>Estado</strong> junta en una pantalla las <strong>cuatro cosas</strong> que pueden dejar al local sin operar, cada una con su semáforo y —si hay algo que hacer— la instrucción:</p>
+  <ul>
+    <li><strong>Caja (app web)</strong>: cuándo se registró el <strong>último movimiento</strong> (venta, nota, pedido o retiro) y cuál fue. Sin movimientos en <strong>3 días</strong> avisa; en <strong>una semana</strong>, se pone en rojo: alguien está vendiendo y no queda rastro.</li>
+    <li><strong>API SUNAT</strong>: se <strong>prueba en ese momento</strong> (y con el botón <em>Probar de nuevo</em>) pidiéndole una ruta de consulta <strong>sin datos</strong>, así que no emite nada, no consulta a SUNAT y <strong>no gasta</strong> consultas de DNI/RUC. Muestra cuántos milisegundos tardó. Un arranque en frío normal ronda los <strong>3,6 s</strong> y en caliente <strong>0,7 s</strong>.</li>
+    <li><strong>Puente Yape</strong>: el <strong>latido del celular</strong> del negocio (late cada 5 minutos), el mismo aviso que ya aparece en el PDV y en Yape.</li>
+    <li><strong>Respaldo</strong>: cuándo corrió la última copia y cómo salió (es la misma tarjeta de <em>Mis Datos</em>).</li>
+  </ul>
+  <div class="tip"><strong>Importante:</strong> esta pantalla <strong>solo informa</strong> —no bloquea el cobro, la emisión ni el cierre— y <strong>no guarda nada</strong>: la prueba de la API es una foto del momento. Y <strong>«sin datos» no es «caído»</strong>: un negocio nuevo todavía no tiene respaldo y el celular del Yape puede no haber latido nunca; cada caso dice qué revisar.</div>
 </div>
 
 <!-- ============ 15. FUNCIONES ESPECIALES ============ -->
@@ -1658,7 +1712,7 @@
 
 <!-- Footer -->
 <div class="footer">
-  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.28</p>
+  <p><strong>AppADM</strong> — Manual de Usuario · Versión 2.32</p>
   <p>CIBERSOFT CyS · 2026</p>
   <p style="margin-top:8px; font-size:11px;">Documento generado automáticamente. Última actualización: Septiembre 2026.</p>
 </div>

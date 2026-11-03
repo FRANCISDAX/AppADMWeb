@@ -15,6 +15,7 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { AlertTriangle, CheckCircle2, Clock, DatabaseBackup } from 'lucide-react'
 
 import { db, PROYECTO_FIREBASE } from '@/lib/firebase'
+import { COL } from '@/constants/colecciones'
 import { COLORES_RESPALDO, estadoDelRespaldo, type EstadoRespaldoDatos } from '@/lib/respaldo-estado'
 import { cn } from '@/lib/utils'
 
@@ -27,7 +28,7 @@ export function EstadoRespaldo() {
     // (baseline de lint del repo). El caso «no hay project id» se resuelve **en el render**.
     if (!PROYECTO_FIREBASE) return
     const soltar = onSnapshot(
-      doc(db, 'tblRespaldoEstado', PROYECTO_FIREBASE),
+      doc(db, COL.RESPALDO_ESTADO, PROYECTO_FIREBASE),
       (snap) => setDatos(snap.exists() ? (snap.data() as EstadoRespaldoDatos) : null),
       (e) => {
         console.warn('⚠️ No se pudo leer el estado del respaldo:', e)

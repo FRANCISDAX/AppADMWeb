@@ -25,4 +25,8 @@ export const COL = {
   /** **Alertas proactivas**: qué alertas **pospuse** (y hasta cuándo) cada usuario, para no volver a
    *  verlas en la recarga siguiente. Un documento por usuario. Ver `services/alertas.ts`. */
   ALERTAS_VISTAS: 'tblAlertasVistas',
+  /** **Latido del respaldo**: cuándo corrió por última vez la copia y cómo salió. Lo **escribe la
+   *  herramienta** de respaldo (`appadm-backup`, con la cuenta de servicio); el app solo lo lee
+   *  (Auditoría → Mis Datos y Estado del sistema). Ver `lib/respaldo-estado.ts`. */
+  RESPALDO_ESTADO: 'tblRespaldoEstado',
 } as const

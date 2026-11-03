@@ -1,6 +1,9 @@
 import {
+  Bell,
   Check,
   ChevronDown,
+  ChevronUp,
+  Clock,
   FileDown,
   FileText,
   Landmark,
@@ -14,11 +17,13 @@ import {
   ScanBarcode,
   Search,
   Share2,
+  ShieldAlert,
   ShoppingCart,
   Trash2,
   UserRound,
   X,
   ClipboardList,
+  Gift,
 } from 'lucide-react'
 import * as React from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -61,6 +66,7 @@ import { precioSinIgv } from '@/lib/precio-venta'
 import { redondear2 } from '@/lib/dinero'
 import { costoDeProducto } from '@/lib/valorizacion'
 import { CATEGORIA_MANUAL } from '@/lib/categorias'
+import { valorReferencialDe } from '@/lib/retiro'
 import { AFECTACION_POR_DEFECTO, TIPO_AFECTACION } from '@/constants/tributario'
 import { listarVentasPausadas, guardarVentaPausada, eliminarVentaPausada, type VentaPausada } from '@/lib/ventas-pausadas'
 import { EscanearCodigo } from '@/components/EscanearCodigo'
@@ -73,6 +79,7 @@ import QRCode from 'qrcode'
 import { PanelVentasPendientes } from '@/components/PanelVentasPendientes'
 import { PanelPagosYape } from '@/components/PanelPagosYape'
 import { EstadoPuenteYape } from '@/components/EstadoPuenteYape'
+import { RetiroModal } from '@/components/RetiroModal'
 import { InfiniteScroll } from '@/components/ui/infinite-scroll'
 
 // Un producto tiene precio especial (promo) si su valor es > 0.
@@ -106,7 +113,7 @@ const nuevoPago = (medio: MedioPago, monto: string): PagoUI => ({
   operacion: '',
 })
 
-export function Pdv() {
+export function Pdv({ onIrATurnos }: { onIrATurnos?: () => void }) {
   const { user } = useAuth()
   const { nombre: nombreUsuario, tienePermiso, serieBoleta, serieFactura, seriePrefijo, cajaId } = usePermisos()
   const { confirm } = useNotifications()
@@ -168,6 +175,30 @@ export function Pdv() {
   /** Modal de «Pedidos enviados» (solo vendedores). */
   const [misPedidosAbierto, setMisPedidosAbierto] = React.useState(false)
   /**
+   * 🔑 **En celular y tablet el carrito es una hoja que sube desde abajo**, no una columna al costado.
+   *
+   * 📌 **Por qué** (03/11/2026): la maqueta pone el carrito al costado recién desde `lg` (1024 px); abajo
+   * de eso quedaba **debajo de todo el catálogo**, así que vender desde el celular obligaba a bajar a ciegas
+   * para encontrar el cobro (y con 2.000 productos el catálogo se pagina de a 60: el carrito podía estar
+   * a varias pantallas). Ahora una **barra fija** abajo muestra items y total, y el carrito se abre encima.
+   * En `lg` nada de esto existe: la columna se ve siempre y este estado no se usa.
+   */
+  const [carritoAbierto, setCarritoAbierto] = React.useState(false)
+  /**
+   * 🔑 **Cuántos pedidos esperan y cuántos avisos de Yape hay sin usar**, informados por los paneles que
+   * los escuchan en vivo (`PanelVentasPendientes` / `PanelPagosYape`). Sirven para el **badge de la barra
+   * del celular**: esos dos paneles viven dentro del carrito, así que sin el badge un pedido o un yapeo
+   * recién llegados solo se verían abriendo la venta. **No se consulta nada acá**: sería una segunda
+   * suscripción a las mismas colecciones (y lecturas de más en el plan de Firebase).
+   */
+  const [avisos, setAvisos] = React.useState({ pedidos: 0, yape: 0 })
+  const alInformarPedidos = React.useCallback((pedidos: number) => {
+    setAvisos((prev) => (prev.pedidos === pedidos ? prev : { ...prev, pedidos }))
+  }, [])
+  const alInformarAvisosYape = React.useCallback((yape: number) => {
+    setAvisos((prev) => (prev.yape === yape ? prev : { ...prev, yape }))
+  }, [])
+  /**
    * **Aviso de Yape aplicado a la venta en curso** (`filaId` = la fila de «Formas de pago» que lo
    * representa). El aviso queda **reservado** en `tblPagosYape` mientras esté aplicado, así que
    * ninguna otra caja puede usarlo; al cobrar se confirma, y si la fila desaparece se suelta.
@@ -184,20 +215,56 @@ export function Pdv() {
    * venta sería leer el documento más grande de la base para mostrar un aviso.
    */
   const [ventasTurno, setVentasTurno] = React.useState<number | null>(null)
+  /**
+   * 🔑 **¿Hay un turno abierto?** (`null` = todavía no se leyó). Sirve para **avisar arriba, antes de armar la
+   * venta**, que sin turno no se puede cobrar ni emitir — y no recién al apretar «Cobrar». El turno se abre en
+   * su pantalla (`Turnos`), con su monto inicial: acá no se abre ninguno.
+   */
+  const [hayTurno, setHayTurno] = React.useState<boolean | null>(null)
+  /**
+   * 🔑 **¿Hay ALGÚN turno abierto en alguna caja?** (no solo el mío). Para el **vendedor** esto es lo que
+   * importa: su venta va como **pedido** y la cobra el cajero, así que no necesita turno propio. 📌 Bug del
+   * 30/10/2026: el aviso se quedaba pegado en la pantalla del vendedor («no hay turno abierto») **aunque la
+   * caja ya estuviera abierta**, porque solo se miraba *su* turno.
+   */
+  const [hayTurnoEnCaja, setHayTurnoEnCaja] = React.useState<boolean | null>(null)
   const verTodo = tienePermiso('verTodo')
+  /** Retiro sin cobro (cortesía / uso propio / muestra): la pantalla solo aparece con `retiroGratuito`. */
+  const [retiroAbierto, setRetiroAbierto] = React.useState(false)
 
   React.useEffect(() => {
     let cancel = false
-    buscarTurnoAbierto(user?.uid, verTodo)
-      .then((t) => {
-        if (!cancel) setVentasTurno(t ? (t.ventasDelTurno ?? []).length : null)
-      })
-      .catch(() => {
-        // Sin turno (o sin permiso para verlo): no hay nada que avisar acá.
-        if (!cancel) setVentasTurno(null)
-      })
+    ;(async () => {
+      try {
+        // 1) Mi turno (el que hace falta para COBRAR acá).
+        const propio = await buscarTurnoAbierto(user?.uid, verTodo)
+        if (cancel) return
+        setVentasTurno(propio ? (propio.ventasDelTurno ?? []).length : null)
+        setHayTurno(Boolean(propio))
+        if (propio) {
+          setHayTurnoEnCaja(true)
+          return
+        }
+        // 2) Si no tengo turno, ¿hay alguno abierto en caja? (lo que le importa al vendedor).
+        const alguno = await buscarTurnoAbierto(undefined, true)
+        if (!cancel) setHayTurnoEnCaja(Boolean(alguno))
+      } catch {
+        // Sin permiso para verlo / sin conexión: no se afirma nada.
+        if (!cancel) {
+          setVentasTurno(null)
+          setHayTurno(null)
+          setHayTurnoEnCaja(null)
+        }
+      }
+    })()
     return () => { cancel = true }
   }, [user?.uid, verTodo])
+  /**
+   * El aviso de «no hay turno» **solo cuando de verdad frena**:
+   * - al que **cobra** (cajero/gerencia) le frena no tener turno propio ⇒ aviso;
+   * - al **vendedor** no le frena nada si hay una caja abierta (manda el pedido y el cajero lo cobra) ⇒ sin aviso.
+   * (Se calcula donde ya está `esVendedor`, más abajo.)
+   */
 
   const handleBarcodeDetectado = React.useCallback((codigo: string) => {
     const codigoLimpio = codigo.replace(/[\s-]/g, '').trim()
@@ -414,6 +481,20 @@ export function Pdv() {
   // que al vaciarlo (botón, o borrando el último producto) se desactivan solos.
   const hayProductos = Object.keys(cart).length > 0 || Object.keys(manualItems).length > 0 || Boolean(pedidoActivo)
   const esVendedor = tienePermiso('enviarACaja') && !tienePermiso('cobrarVenta')
+  /**
+   * 🔑 **Qué hace el botón grande de la venta, en UNA sola regla**: lo usan el pie del carrito (el que se ve
+   * en la PC) y la barra fija del celular. Si estuviera escrito dos veces, la barra del celular podría decir
+   * «Cobrar» a un vendedor que solo puede **enviar a caja** — y ese es justo el permiso que cambia el flujo.
+   */
+  const accionDeVenta: 'pedido' | 'enviar' | 'cobrar' = pedidoActivo ? 'pedido' : esVendedor ? 'enviar' : 'cobrar'
+  const textoAccionDeVenta =
+    accionDeVenta === 'pedido' ? 'Cobrar pedido' : accionDeVenta === 'enviar' ? 'Enviar a caja' : 'Cobrar'
+  /**
+   * El aviso de «no hay turno» **solo cuando de verdad frena**:
+   * - al que **cobra** (cajero/gerencia) le frena no tener turno propio ⇒ aviso;
+   * - al **vendedor** no le frena nada si hay una caja abierta (manda el pedido y el cajero lo cobra) ⇒ sin aviso.
+   */
+  const sinTurnoQueFrene = hayTurno === false && !(esVendedor && hayTurnoEnCaja)
 
   /** Al quedarse la venta sin nada, se descarta la forma de pago elegida. */
   function limpiarPagoSiVacio(carrito: Record<string, number>, manuales: Record<string, unknown>) {
@@ -763,6 +844,8 @@ export function Pdv() {
       const avisoCobrado = avisoActivo
       setVentaOk({ correlativo, total: pedidoActivo.total, vuelto: resumen.vuelto, documento: (documento ?? {}) as Record<string, unknown> })
       setPedidoActivo(null)
+      // Igual que en la venta directa: en el celular la hoja se cierra y vuelve el catálogo.
+      setCarritoAbierto(false)
       setPagos([])
       // El panel de pendientes no se refresca a mano: escucha la colección en vivo (`onSnapshot`),
       // así que el pedido cobrado sale de la lista por sí solo, en este equipo y en los demás.
@@ -813,6 +896,31 @@ export function Pdv() {
     ...items.map(({ id, p, qty }) => ({ id, nombre: p.nombre ?? '', precio: precioFinal(p), qty, manual: false })),
     ...Object.entries(manualItems).map(([id, it]) => ({ id, nombre: it.nombre, precio: it.precio, qty: it.qty, manual: true })),
   ]
+
+  /**
+   * **Lo que se puede retirar sin cobrar**: solo mercadería del catálogo (el «Embalaje y Otros» no tiene
+   * stock que sacar). Va **en el formato del documento** (`quantity` en unidades base y `precioVenta` por
+   * **unidad base**), igual que una venta, para que el valor referencial que se ve sea el que se guarda.
+   */
+  const itemsRetiro: VentaItem[] = Object.entries(cart)
+    .map(([id, qty]): VentaItem | null => {
+      const p = productos.find((x) => x.id === id)
+      if (!p || qty <= 0) return null
+      const presId = presentacionesSel[id]
+      const pres = presId ? p.presentaciones?.find((pr) => pr.id === presId) : null
+      const factor = pres?.factor ?? 1
+      return {
+        id,
+        nombre: p.nombre ?? '',
+        quantity: qty * factor,
+        precioVenta: precioFinal(p),
+        presentacionNombre: pres?.nombre ?? 'Unidad',
+        presentacionId: pres?.id ?? 'unidad',
+        factorConversion: factor,
+      }
+    })
+    .filter((it): it is VentaItem => it != null)
+  const puedeRetirar = tienePermiso('retiroGratuito')
 
   // Customer display: broadcast cart data to Firestore for cross-device sync.
   React.useEffect(() => {
@@ -1137,12 +1245,16 @@ export function Pdv() {
         // La venta ya está guardada dentro del turno: se lleva la cuenta para el aviso del límite.
         setVentasTurno((n) => (n === null ? null : n + 1))
         setVentaOk({ correlativo: res.correlativo ?? '', total, vuelto: resumen.vuelto, documento: res.documento })
+        // La venta terminó: en el celular la hoja se cierra sola y vuelve el catálogo (la barra queda en
+        // cero, lista para la próxima venta).
+        setCarritoAbierto(false)
         setCart({})
         setPagos([])
         setPagoCredito(false)
         setGrupoTransf(false)
         setClienteDni('')
         setClienteNombre('')
+        setClienteDireccion('')
         setDniConsultado(false)
         setManualItems({})
         setEnvio({ tipo: 'tienda', direccion: '', referencia: '', zonaId: '', costo: 0, notas: '' })
@@ -1287,12 +1399,15 @@ export function Pdv() {
 
       if (res.success) {
         setToast(`✅ Pedido ${res.correlativo ?? ''} enviado a caja`)
+        // El vendedor suele vender desde el celular: la hoja se cierra y vuelve al catálogo.
+        setCarritoAbierto(false)
         setCart({})
         setPagos([])
         setPagoCredito(false)
         setGrupoTransf(false)
         setClienteDni('')
         setClienteNombre('')
+        setClienteDireccion('')
         setDniConsultado(false)
         setManualItems({})
         setEnvio({ tipo: 'tienda', direccion: '', referencia: '', zonaId: '', costo: 0, notas: '' })
@@ -1353,7 +1468,7 @@ export function Pdv() {
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_440px] items-start">
+    <div className="grid gap-5 pb-32 lg:grid-cols-[1fr_440px] lg:pb-0 items-start">
       {/* ===== Catálogo ===== */}
       <section className="min-w-0">
         <div className="flex gap-2 mb-4">
@@ -1567,8 +1682,84 @@ export function Pdv() {
       {/* ===== Caja ===== */}
       {misPedidosAbierto && <PanelMisPedidos onCerrar={() => setMisPedidosAbierto(false)} />}
 
+      {/* 🔑 **Barra del celular**: con el carrito abajo del catálogo, el cobro quedaba a varias pantallas de
+          scroll. Acá está siempre visible: cuántos items y cuánto es, y abre el carrito encima. En `lg`
+          desaparece porque la columna del carrito ya se ve al costado.
+          ⚠️ **Nunca se deshabilita**: dentro del carrito viven «Pausadas», «Pedidos enviados» y «Retiro sin
+          cobro», así que con la venta vacía igual hay que poder abrirlo (por eso con 0 items dice
+          «Ver carrito» en vez de «Cobrar»). */}
+      {!carritoAbierto && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 px-3 py-2 backdrop-blur lg:hidden">
+          {/* Badges: lo que está esperando y **no se ve** con el carrito cerrado. Sin esto, un pedido o un
+              yapeo recién llegados dependen de que al cajero se le ocurra abrir la venta. */}
+          {(avisos.pedidos > 0 || avisos.yape > 0) && (
+            <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+              {avisos.pedidos > 0 && (
+                <span className="flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-extrabold text-white">
+                  <ClipboardList className="h-3 w-3" />
+                  {avisos.pedidos === 1 ? '1 pedido esperando' : `${avisos.pedidos} pedidos esperando`}
+                </span>
+              )}
+              {avisos.yape > 0 && (
+                <span className="flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-extrabold text-white">
+                  <Bell className="h-3 w-3" />
+                  {avisos.yape === 1 ? '1 aviso de Yape' : `${avisos.yape} avisos de Yape`}
+                </span>
+              )}
+            </div>
+          )}
+          <Button
+            className="h-12 w-full justify-between gap-3 text-base font-bold shadow-card"
+            onClick={() => setCarritoAbierto(true)}
+          >
+            <span className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              <span className="num rounded-full bg-primary-foreground/25 px-2 py-0.5 text-xs font-extrabold">
+                {allItems.length}
+              </span>
+            </span>
+            <span className="num">{fmt(total)}</span>
+            <span className="flex items-center gap-1.5">
+              {allItems.length === 0 && !pedidoActivo ? 'Ver carrito' : textoAccionDeVenta}
+              <ChevronUp className="h-4 w-4" />
+            </span>
+          </Button>
+        </div>
+      )}
+
+      {/* Velo de la hoja: tocar afuera la cierra (en `lg` no existe, la columna está siempre a la vista). */}
+      {carritoAbierto && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+          onClick={() => setCarritoAbierto(false)}
+          aria-hidden="true"
+        />
+      )}
+
       <aside className="lg:self-start">
-        <div className="rounded-2xl border bg-card shadow-card lg:min-h-[560px] flex flex-col">
+        <div
+          className={cn(
+            // 🔑 **Un solo bloque para las dos maquetas**, con el orden «celular primero, escritorio después»
+            // (`lg:` = 1024 px). En celular/tablet es una hoja fija pegada abajo; desde `lg` vuelve a ser la
+            // columna del costado, igual que siempre. ⚠️ Se evita a propósito el variante `max-lg:`: Tailwind
+            // lo compila con la sintaxis nueva `@media not all and (width>=1024px)`, que un iPad o un
+            // navegador viejo **descarta entera** y dejaría el carrito suelto abajo del catálogo.
+            'flex-col rounded-t-2xl border bg-card',
+            'fixed inset-x-0 bottom-0 z-40 max-h-[88vh] overflow-y-auto shadow-2xl',
+            'lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:rounded-2xl lg:shadow-card lg:min-h-[560px]',
+            // Cerrado en el celular = no se dibuja; en el escritorio la columna está siempre.
+            carritoAbierto ? 'flex' : 'hidden lg:flex'
+          )}
+        >
+          {/* Encabezado propio de la hoja: dice dónde está parado y cómo volver al catálogo. */}
+          <div className="flex items-center justify-between gap-2 border-b px-4 py-3 lg:hidden">
+            <span className="flex items-center gap-2 text-sm font-bold">
+              <ShoppingCart className="h-4 w-4 text-primary" /> Tu venta
+            </span>
+            <Button variant="outline" size="sm" onClick={() => setCarritoAbierto(false)} className="gap-1.5 text-xs font-semibold">
+              <X className="h-4 w-4" /> Seguir vendiendo
+            </Button>
+          </div>
           {/* Cabecera flexible: con el botón de pedidos del vendedor la fila se llenaba y el contador
               de items salía del recuadro. Ahora envuelve y el contador queda anclado a la derecha. */}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-5 py-4">
@@ -1618,6 +1809,42 @@ export function Pdv() {
             </span>
           </div>
 
+          {/* 🔑 **Sin turno abierto no se cobra ni se emite**: se avisa acá arriba —antes de armar la venta— y
+              no recién al apretar «Cobrar». El turno se abre en su pantalla (`Turnos`) porque ahí se declara el
+              **monto inicial**, que es la base del arqueo: abrirlo desde acá con 0 dejaría un sobrante fantasma
+              en el cierre. La pantalla del PDV se vuelve a montar al volver, así que el aviso desaparece solo. */}
+          {sinTurnoQueFrene && (
+            <div className="mx-5 mt-3 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs dark:border-amber-500/40 dark:bg-amber-500/10">
+              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-amber-800 dark:text-amber-300">
+                  {esVendedor ? 'No hay ninguna caja abierta' : 'No hay un turno abierto'}
+                </p>
+                <p className="mt-0.5 leading-snug text-amber-800 dark:text-amber-300">
+                  {esVendedor
+                    ? 'Podés armar la venta y enviarla a caja, pero va a quedar en espera hasta que el cajero abra su turno.'
+                    : 'No se puede cobrar ni emitir hasta abrirlo. Se abre en Turnos, con el monto inicial con el que arranca la caja (es la base del arqueo).'}
+                </p>
+                {tienePermiso('turnos') ? (
+                  onIrATurnos && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 border-amber-400 text-amber-800 hover:bg-amber-100 dark:border-amber-500/40 dark:text-amber-300"
+                      onClick={onIrATurnos}
+                    >
+                      <Clock className="mr-1.5 h-3.5 w-3.5" /> Abrir turno
+                    </Button>
+                  )
+                ) : (
+                  <p className="mt-1 text-[11px] text-amber-800 dark:text-amber-300">
+                    Pedile a un cajero o a un supervisor que abra el turno.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* 🔑 **El aviso de que el turno ya tiene demasiadas ventas**: el detalle del turno se guarda
               completo y no puede pasar de 1 MiB, así que al acercarse al límite la venta no se guarda (y
               con ella el cobro). Sale de `lib/turno-limite.ts` y solo se dibuja cuando hay algo que decir. */}
@@ -1641,12 +1868,13 @@ export function Pdv() {
               total={total}
               pagoEnVentaId={avisoActivo?.pago.id ?? null}
               onUsar={usarAvisoYape}
+              onAvisos={alInformarAvisosYape}
             />
           )}
 
           {tienePermiso('verVentasPendientes') && (
             <div className="border-b px-5 py-3">
-              <PanelVentasPendientes onCobrarPedido={activarPedido} />
+              <PanelVentasPendientes onCobrarPedido={activarPedido} onPendientes={alInformarPedidos} />
             </div>
           )}
 
@@ -2251,6 +2479,27 @@ export function Pdv() {
               </p>
             ))}
 
+            {/* Retiro sin cobro (cortesía / uso propio / muestra). Solo ADMIN y GERENTE tienen
+                `retiroGratuito`. ⚠️ No es un descuento del 100%: es una transferencia gratuita que se
+                documenta con Boleta o Factura y **no toca la caja**. */}
+            {!pedidoActivo && puedeRetirar && (
+              <div className="space-y-1">
+                <Button
+                  variant="outline"
+                  className="w-full border-dashed text-xs"
+                  onClick={() => setRetiroAbierto(true)}
+                  disabled={itemsRetiro.length === 0 || cobrando}
+                >
+                  <Gift className="h-4 w-4" />
+                  Retirar sin cobrar{itemsRetiro.length > 0 ? ` · ${fmt(valorReferencialDe(itemsRetiro))}` : ''}
+                </Button>
+                <p className="text-[10px] leading-snug text-muted-foreground">
+                  Saca mercadería del inventario <strong>sin cobrarla</strong> (cortesía, uso propio o muestra). Se
+                  documenta con Boleta o Factura y <strong>no entra a la caja</strong>.
+                </p>
+              </div>
+            )}
+
             <div className="flex items-end justify-between">
               <span className="text-sm text-muted-foreground">{pedidoActivo ? 'Total del pedido' : 'Total'}</span>
               <div className="text-right">
@@ -2272,7 +2521,7 @@ export function Pdv() {
                 <Pause className="h-4 w-4" />
                 Pausar
               </Button>
-            {pedidoActivo ? (
+            {accionDeVenta === 'pedido' ? (
               // Modo pedido: las acciones del carrito no aplican (el pedido se cotizó en otro lado).
               <>
                 <Button variant="outline" onClick={soltarPedido} disabled={cobrando}>
@@ -2280,18 +2529,18 @@ export function Pdv() {
                 </Button>
                 <Button className="col-span-2" onClick={cobrarPedido} disabled={cobrando || !resumen.puedeCobrar}>
                   {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {cobrando ? 'Cobrando…' : `Cobrar pedido ${fmt(total)}`}
+                  {cobrando ? 'Cobrando…' : `${textoAccionDeVenta} ${fmt(total)}`}
                 </Button>
               </>
-            ) : tienePermiso('enviarACaja') && !tienePermiso('cobrarVenta') ? (
+            ) : accionDeVenta === 'enviar' ? (
               <Button onClick={enviarACaja} disabled={allItems.length === 0 || cobrando || revisionDescuento.excede}>
                 {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                {cobrando ? 'Enviando…' : 'Enviar a caja'}
+                {cobrando ? 'Enviando…' : textoAccionDeVenta}
               </Button>
             ) : (
               <Button onClick={cobrar} disabled={allItems.length === 0 || cobrando || revisionDescuento.excede || (!pagoCredito && !resumen.puedeCobrar)}>
                 {cobrando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                {cobrando ? 'Procesando…' : 'Cobrar'}
+                {cobrando ? 'Procesando…' : textoAccionDeVenta}
               </Button>
             )}
             </div>
@@ -2300,9 +2549,39 @@ export function Pdv() {
       </aside>
 
       {/* Toast */}
-      <div className={cn('pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 transition-opacity', toast ? 'opacity-100' : 'opacity-0')}>
+      {/* Toast. En el celular sube para no quedar tapado por la barra de cobro (que está abajo, fija). */}
+      <div className={cn('pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2 transition-opacity lg:bottom-6', toast ? 'opacity-100' : 'opacity-0')}>
         <div className="rounded-full bg-foreground px-4 py-2.5 text-sm font-semibold text-white shadow-lg">{toast}</div>
       </div>
+
+      {/* Retiro sin cobro: la pantalla que guarda la transferencia gratuita (y vacía el carrito). */}
+      {retiroAbierto && (
+        <RetiroModal
+          items={itemsRetiro}
+          // Las series de la caja del usuario mandan sobre las de la empresa (igual que al cobrar un
+          // pedido y que en el PDV): el retiro usa la MISMA serie y el mismo contador de sus ventas.
+          config={{ ...cfg, serieBoleta: serieBoleta || cfg.serieBoleta, serieFactura: serieFactura || cfg.serieFactura }}
+          cajaId={cajaId}
+          // 🔑 El cliente ya cargado en la venta viaja al retiro: es la misma persona y no se digita dos veces.
+          clienteInicial={{ documento: clienteDni, nombre: clienteNombre, direccion: clienteDireccion }}
+          onCerrar={() => setRetiroAbierto(false)}
+          onRegistrado={() => {
+            setRetiroAbierto(false)
+            // La mercadería ya salió del inventario: el carrito no tiene nada que cobrar.
+            setCart({})
+            setManualItems({})
+            setUsarPromo({})
+            setPresentacionesSel({})
+            setPagos([])
+            // Y el cliente se limpia igual que después de una venta: si quedara cargado, la próxima venta
+            // saldría a nombre de él sin que nadie lo haya elegido (el retiro ya quedó con su comprobante).
+            setClienteDni('')
+            setClienteNombre('')
+            setClienteDireccion('')
+            setDniConsultado(false)
+          }}
+        />
+      )}
 
       {/* Venta completada → imprimir comprobante */}
       {ventaOk && (

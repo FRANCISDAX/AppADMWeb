@@ -1,4 +1,4 @@
-import { Clock, Loader2, Lock, LockOpen, Truck } from 'lucide-react'
+import { Clock, Loader2, Lock, LockOpen, Printer, Truck } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,8 @@ import { useConfiguracion } from '@/hooks/use-configuracion'
 import { abrirTurno, buscarTurnoAbierto, cerrarTurno, editarMontoInicial, type Turno } from '@/services/turnos'
 import { obtenerEnviosPendientesAnteriores, actualizarEstadoEnvio, type EnvioPendiente, type EnvioEstado } from '@/services/envios'
 import { obtenerPagosYapeDelTurno } from '@/services/yape'
+import { obtenerRetirosDelTurno } from '@/services/ventas'
+import { abrirPDFComprobante } from '@/lib/pdf'
 import type { PagoYape } from '@/lib/yape'
 import { cn } from '@/lib/utils'
 import { desglosarTurno, lineasDeOrigen, type DesgloseTurno } from '@/lib/arqueo'
@@ -40,6 +42,11 @@ export function Turnos() {
   const [mostrarEnvios, setMostrarEnvios] = React.useState(false)
   const [cargandoEnvios, setCargandoEnvios] = React.useState(false)
   const [envioActualizando, setEnvioActualizando] = React.useState<string | null>(null)
+  /**
+   * **Retiros sin cobro del turno** (cortesía / uso propio / muestra). Se muestran **aparte** y no se
+   * suman a la caja: no hubo pago, así que el arqueo no los ve. Se leen de `tblDocumentos` por `turnoId`.
+   */
+  const [retirosTurno, setRetirosTurno] = React.useState<Record<string, any>[] | null>(null)
 
   // Envíos del turno actual
   const enviosTurnoActual = React.useMemo(() => {
@@ -79,6 +86,18 @@ export function Turnos() {
     })()
     return () => { cancel = true }
   }, [turno?.id, turno?.fechaApertura])
+
+  React.useEffect(() => {
+    if (!turno?.id) return
+    const turnoId = turno.id
+    let cancel = false
+    ;(async () => {
+      setRetirosTurno(null)
+      const lista = await obtenerRetirosDelTurno(turnoId)
+      if (!cancel) setRetirosTurno(lista)
+    })()
+    return () => { cancel = true }
+  }, [turno?.id])
 
   async function onCambiarEstadoEnvio(envio: EnvioPendiente | { docId: string; turnoId?: string; serieNumero: string }, nuevoEstado: EnvioEstado) {
     setEnvioActualizando(envio.docId)
@@ -334,6 +353,45 @@ export function Turnos() {
               </div>
             )}
           </div>
+
+          {/* Retiros sin cobro del turno: información, NO plata. No se suman a ninguna columna del
+              arqueo porque no hubo pago (`registrarRetiro` guarda total 0 y sin bolsillos). */}
+          {retirosTurno != null && retirosTurno.length > 0 && (
+            <div className="rounded-2xl border border-pink-200 bg-card p-6 shadow-card dark:border-pink-900/40">
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="font-bold text-pink-700 dark:text-pink-400">Retiros sin cobro</h2>
+                <span className="num text-sm text-muted-foreground">{retirosTurno.length}</span>
+              </div>
+              <p className="mb-3 text-[11px] leading-snug text-muted-foreground">
+                Cortesía, uso propio o muestra: <strong>no entran a la caja</strong> (no hubo pago) pero sí salieron del
+                inventario. El total es el <strong>valor referencial</strong> que se declaró en cada comprobante.
+              </p>
+              <div className="divide-y">
+                {retirosTurno.map((r) => {
+                  const v = (r.venta ?? {}) as Record<string, any>
+                  return (
+                    <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
+                      <div className="min-w-[7.5rem] flex-1">
+                        <div className="font-semibold">{v.motivoRetiro?.leyenda || 'Retiro'}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {v.comprobante || r.tipoDoc} {r.serieNumero || ''} · {v.cliente_nombre || 'Consumidor'} · {v.cajero || r.usuarioNombre || ''}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="num font-bold">{fmt(v.valorReferencial ?? 0)}</div>
+                        <div className="text-[11px] text-muted-foreground">valor referencial · no cobrado</div>
+                      </div>
+                      {/* El ticket del retiro sale con la MISMA plantilla de 72 mm que una boleta: lleva
+                          la leyenda del motivo y el valor referencial. */}
+                      <Button variant="outline" size="sm" onClick={() => abrirPDFComprobante(r, config)}>
+                        <Printer className="h-3.5 w-3.5" /> PDF
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Envíos Pendientes */}
           {(enviosTurnoActual.length > 0 || enviosAnteriores.length > 0) && (

@@ -27,6 +27,7 @@ import { cantidadDe, descuentoDeVenta, importeBrutoDe, itemsConDescuento, valorU
 import { lineasPersonal, personalDeVenta } from './personal.ts'
 import { TITULOS, calcularTotales, construirQRData, generarQRDataUrl, normalizarMontosNota } from './comprobante-comun.ts'
 import { etiquetaIgv, porcentajeDelDocumento, tasaDePorcentaje } from './igv.ts'
+import { comprobanteDeDocumento, leyendaDeRetiro } from './retiro.ts'
 
 /** Documento tal como lo entrega Firestore (venta + campos que viven a nivel del documento). */
 export type DocComprobante = {
@@ -70,9 +71,14 @@ export type ModeloA4 = {
     opGravadas: number
     opExoneradas: number
     opInafectas: number
+    /** Valor referencial de las operaciones gratuitas (catálogo 07): **no** es plata cobrada. */
+    opGratuitas: number
     igv: number
     descuento: number
+    /** Importe del comprobante (incluye el valor referencial de lo gratuito). */
     total: number
+    /** Lo que el cliente **paga**: 0.00 en un comprobante 100 % gratuito. */
+    totalAPagar: number
     sonLetras: string
     /** 🔑 La tasa del documento, para el título de la fila (`I.G.V. (18%)` / `I.G.V. (10%)`). */
     igvPorcentaje: number
@@ -132,6 +138,11 @@ export function datosComprobanteA4({ doc, correlativo, config, tipoDoc = 'NV', s
 
   const venta = normalizarMontosNota(ventaBase, tipoDoc)
 
+  // 🔑 Un **retiro sin cobro** usa este mismo A4: el título y el QR salen del **comprobante real**
+  // (boleta/factura) y debajo de los totales va la **leyenda** con el **valor referencial**.
+  const esRetiro = Boolean(venta.retiro)
+  tipoDoc = comprobanteDeDocumento(tipoDoc, venta.comprobante)
+
   const fecha = new Date(venta.fecha || venta.createdAt || Date.now())
   const fechaStr = `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')}/${fecha.getFullYear()}`
   const horaStr = venta.hora || fecha.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
@@ -164,7 +175,7 @@ export function datosComprobanteA4({ doc, correlativo, config, tipoDoc = 'NV', s
   const total = Number(venta.importe_total || venta.total || totalesCalc.total || 0)
   const sonLetras = limpiarTextoA4(venta.son_letras || numeroALetras(total)) || numeroALetras(total)
 
-  const formaPago = limpiarTextoA4(venta.forma_pago || formaPagoLabel(venta.pagos ?? [], venta.tipoPago))
+  const formaPago = esRetiro ? 'No se cobra' : limpiarTextoA4(venta.forma_pago || formaPagoLabel(venta.pagos ?? [], venta.tipoPago))
   const lineasPago: { etiqueta: string; monto: string }[] = []
   if (Array.isArray(venta.pagos) && venta.pagos.length > 1) {
     for (const p of venta.pagos) {
@@ -173,6 +184,12 @@ export function datosComprobanteA4({ doc, correlativo, config, tipoDoc = 'NV', s
         monto: Number(p?.monto || 0).toFixed(2),
       })
     }
+  }
+  if (esRetiro) {
+    // Sin forma de pago: la leyenda del motivo y el valor referencial, que es lo que exige el RCP.
+    lineasPago.length = 0
+    lineasPago.push({ etiqueta: leyendaDeRetiro(venta) || 'TRANSFERENCIA GRATUITA', monto: '' })
+    lineasPago.push({ etiqueta: 'Valor referencial (no se cobra)', monto: Number(venta.importe_total || venta.total || 0).toFixed(2) })
   }
 
   const clienteNombre = limpiarTextoA4(venta.cliente_nombre || venta.cliente || 'Consumidor final')
@@ -226,9 +243,11 @@ export function datosComprobanteA4({ doc, correlativo, config, tipoDoc = 'NV', s
       opGravadas: totalesCalc.opGravadas,
       opExoneradas: totalesCalc.opExoneradas,
       opInafectas: totalesCalc.opInafectas,
+      opGratuitas: totalesCalc.opGratuitas,
       igv: totalesCalc.igv,
       descuento: descuentoDoc,
       total,
+      totalAPagar: totalesCalc.totalAPagar,
       sonLetras,
       igvPorcentaje,
     },
@@ -457,13 +476,18 @@ export function dibujarComprobanteA4(d: JSPDFDoc, m: ModeloA4, qrDataUrl: string
   const filas: [string, string][] = []
   if (m.totales.descuento > 0) filas.push(['Descuento', `- S/ ${m.totales.descuento.toFixed(2)}`])
   const hayGravadas = Math.abs(m.totales.opGravadas) > 0
+  // 🔑 **Lo gratuito va como «Op. Gratuitas»** con su valor referencial (catálogo 07: 21/32/37, tributo
+  // 9996). Antes se imprimía «Op. Exonerada», que es el nombre del código `20` (operación **onerosa**).
+  if (Math.abs(m.totales.opGratuitas) > 0) {
+    filas.push(['Op. Gratuitas', `S/ ${m.totales.opGratuitas.toFixed(2)}`])
+  }
   if (hayGravadas) {
     filas.push(['Op. Gravadas', `S/ ${m.totales.opGravadas.toFixed(2)}`])
   } else if (Math.abs(m.totales.opExoneradas) > 0) {
     filas.push(['Op. Exonerada', `S/ ${m.totales.opExoneradas.toFixed(2)}`])
   } else if (Math.abs(m.totales.opInafectas) > 0) {
     filas.push(['Op. Inafecta', `S/ ${m.totales.opInafectas.toFixed(2)}`])
-  } else {
+  } else if (Math.abs(m.totales.opGratuitas) === 0) {
     filas.push(['Op. Gratuita', 'S/ 0.00'])
   }
   filas.push([etiquetaIgv(m.totales.igvPorcentaje), `S/ ${m.totales.igv.toFixed(2)}`])
@@ -478,7 +502,8 @@ export function dibujarComprobanteA4(d: JSPDFDoc, m: ModeloA4, qrDataUrl: string
   d.setFillColor(0, 0, 0)
   d.rect(118, y - 1, 77, 8, 'F')
   texto(d, 'TOTAL IMPORTE', 120, y + 4.4, { size: 9.5, bold: true, color: [255, 255, 255] })
-  texto(d, `S/ ${m.totales.total.toFixed(2)}`, M + ANCHO - 1, y + 4.4, { size: 11, bold: true, align: 'right', color: [255, 255, 255] })
+  // 🔑 Lo que el cliente **paga** (0.00 en un retiro gratuito, igual que el `PayableAmount` del XML).
+  texto(d, `S/ ${m.totales.totalAPagar.toFixed(2)}`, M + ANCHO - 1, y + 4.4, { size: 11, bold: true, align: 'right', color: [255, 255, 255] })
   y += 12
 
   // ---- Son letras + forma de pago ----
@@ -486,7 +511,7 @@ export function dibujarComprobanteA4(d: JSPDFDoc, m: ModeloA4, qrDataUrl: string
   y += 6
 
   const pagos: string[] = [`Forma de pago: ${m.pago.formaPago}`]
-  for (const l of m.pago.lineas) pagos.push(`${l.etiqueta}: S/ ${l.monto}`)
+  for (const l of m.pago.lineas) pagos.push(l.monto ? `${l.etiqueta}: S/ ${l.monto}` : l.etiqueta)
   if (m.pago.credito) pagos.push(m.pago.cobrado > 0 ? `Crédito (cobrado S/ ${m.pago.cobrado.toFixed(2)})` : 'Crédito')
   else if (m.pago.recibido > 0) pagos.push(`Efectivo recibido: S/ ${m.pago.recibido.toFixed(2)}  ·  Vuelto: S/ ${m.pago.vuelto.toFixed(2)}`)
   if (m.pago.referencia) pagos.push(`Referencia: ${m.pago.referencia}`)

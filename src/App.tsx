@@ -1,8 +1,10 @@
-import { Banknote, BarChart3, BookOpen, CalendarDays, CalendarRange, ChevronDown, Clock, FileText, LogOut, Menu, Moon, Package, RotateCcw, Settings, Shield, ShoppingBag, ShoppingCart, Sun, Truck, UserRound, Users, WifiOff, X } from 'lucide-react'
+import { Banknote, BarChart3, BookOpen, CalendarDays, CalendarRange, ChevronDown, Clock, FileText, Hand, LogOut, Menu, Moon, Package, RotateCcw, Settings, Shield, ShoppingBag, ShoppingCart, Sun, Truck, UserRound, Users, WifiOff, X } from 'lucide-react'
 import * as React from 'react'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
 import { useTheme } from '@/hooks/use-theme'
+import { useModoTactil } from '@/hooks/use-modo-tactil'
+import { etiquetaModoTactil, textoAvisoModoTactil, textoModoTactil } from '@/lib/modo-tactil'
 import { useSunatAuto } from '@/hooks/use-sunat-auto'
 import { usePublicarCatalogo } from '@/hooks/use-publicar-catalogo'
 import { Button } from '@/components/ui/button'
@@ -86,6 +88,11 @@ function Shell() {
   const { user, loading, logout } = useAuth()
   const { nombre: nombrePerfil, tienePermiso, loading: permisosLoading } = usePermisos()
   const { theme, toggle } = useTheme()
+  // 🔑 **Modo táctil** (`lib/modo-tactil.ts` + `hooks/use-modo-tactil.ts`): agranda letra y áreas de toque en
+  // un equipo con pantalla táctil. La preferencia es **del equipo** (`localStorage`), no del negocio. El
+  // `avisoModoTactil` es el cartel que lo explica **la primera vez** que se enciende solo: nadie tiene que
+  // adivinar por qué la letra cambió ni cómo se apaga.
+  const { modoTactil, toggleModoTactil, avisoModoTactil, descartarAviso } = useModoTactil()
   // 🔑 **Envío automático a SUNAT**, montado en el Shell (no en una pantalla): tiene que correr en
   // cualquier sección y en cualquier equipo —cuantos más abiertos, más chance de declarar a tiempo—,
   // y dos pestañas no pueden mandar el mismo comprobante (reclamo transaccional). No hace nada si el
@@ -297,6 +304,21 @@ function Shell() {
               <button onClick={() => setInfoAbierto(true)} className="hidden items-center gap-2 rounded-full border border-emerald-200/60 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-100 cursor-pointer md:flex dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" /> CiberSoft
               </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleModoTactil}
+                aria-pressed={modoTactil}
+                aria-label={textoModoTactil(modoTactil)}
+                title={textoModoTactil(modoTactil)}
+                className={cn(
+                  'gap-1.5 text-xs font-semibold',
+                  modoTactil ? 'bg-accent text-accent-foreground ring-1 ring-primary/40' : 'text-muted-foreground'
+                )}
+              >
+                <Hand className="h-4 w-4" />
+                <span className="hidden md:inline">{etiquetaModoTactil(modoTactil)}</span>
+              </Button>
               <Button variant="ghost" size="icon" onClick={toggle} aria-label="Cambiar tema">
                 {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </Button>
@@ -310,6 +332,22 @@ function Shell() {
           </header>
 
           <main className="flex-1 overflow-y-auto p-4 md:p-6">
+            {avisoModoTactil && (
+              // La primera vez que el modo se enciende solo, se explica **en la pantalla donde está parado**:
+              // qué detectó, qué cambió y con qué botón se apaga. Una vez descartado, no vuelve.
+              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-primary/30 bg-accent px-4 py-3 text-sm text-accent-foreground">
+                <Hand className="h-4 w-4 shrink-0" />
+                <p className="min-w-0 flex-1">{textoAvisoModoTactil()}</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={toggleModoTactil}>
+                    Desactivar
+                  </Button>
+                  <Button size="sm" onClick={descartarAviso}>
+                    Entendido
+                  </Button>
+                </div>
+              </div>
+            )}
             {!online && (
               <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
                 <WifiOff className="h-4 w-4 shrink-0" />
@@ -327,7 +365,9 @@ function Shell() {
                 <ErrorBoundary key={seccion} contexto={`pantalla:${seccion}`}>
                   <div key={seccion} className="animate-slide-up">
                   {seccion === 'pdv' ? (
-                    <Pdv />
+                    // 🔑 El PDV **no** abre turnos: avisa que no hay uno abierto y lleva a **Turnos**, donde se
+                    // declara el monto inicial (la base del arqueo). Sin el permiso `turnos`, no ofrece el botón.
+                    <Pdv onIrATurnos={() => setSeccion('turnos')} />
                   ) : seccion === 'turnos' ? (
                     <Turnos />
                   ) : seccion === 'inventario' ? (

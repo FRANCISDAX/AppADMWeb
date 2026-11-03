@@ -69,6 +69,13 @@ export const MINUTOS_ENTRE_REINTENTOS = 15
 /** Tipos de comprobante que se declaran a SUNAT (los que llevan serie y correlativo propios). */
 export const TIPOS_COMPROBANTE_SUNAT = ['BOLETA', 'FACTURA'] as const
 
+/**
+ * 🔑 **El retiro sin cobro también se declara**: el documento se guarda con `tipoDoc: 'RETIRO'` (para que
+ * no infle los reportes de ventas) pero **tiene serie y correlativo de la boleta/factura de la caja**, así
+ * que va a SUNAT como cualquier comprobante — si no, quedaría un número emitido que SUNAT nunca recibe.
+ */
+export const TIPO_DOC_RETIRO_SUNAT = 'RETIRO' as const
+
 /** Notas de crédito/débito: van a SUNAT **después** del comprobante que modifican. */
 export const TIPOS_NOTA_SUNAT = ['NC', 'ND'] as const
 
@@ -194,9 +201,10 @@ export function maxPorPasadaSunat(config?: ConfigSunatAuto | null): number {
 
 // ─── Qué documento es y en qué estado está ──────────────────────────────────
 
-/** ¿Es un tipo que se declara a SUNAT? (`BOLETA`/`FACTURA`/`NC`/`ND`). */
+/** ¿Es un tipo que se declara a SUNAT? (`BOLETA`/`FACTURA`/`NC`/`ND`/`RETIRO`). */
 export function esEnviableASunat(doc: DocumentoSunat): boolean {
   const tipo = String(doc.tipoDoc ?? '')
+  if (tipo === TIPO_DOC_RETIRO_SUNAT) return true
   return (TIPOS_COMPROBANTE_SUNAT as readonly string[]).includes(tipo) || (TIPOS_NOTA_SUNAT as readonly string[]).includes(tipo)
 }
 

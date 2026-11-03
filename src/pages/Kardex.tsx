@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { diaLocalISO } from '@/lib/fechas'
 
 const TIPO_LABEL: Record<string, string> = {
   compra: 'Compra',
@@ -22,6 +23,8 @@ const TIPO_LABEL: Record<string, string> = {
   inventario_fisico_salida: 'Inventario físico (-)',
   anulacion_venta: 'Anulación de venta',
   nota_credito: 'Nota de crédito',
+  // Salida sin cobro (cortesía / uso propio / muestra): es una SALIDA, no una venta.
+  retiro: 'Retiro / cortesía',
 }
 const TIPO_COLOR: Record<string, string> = {
   compra: '#4CAF50',
@@ -34,12 +37,9 @@ const TIPO_COLOR: Record<string, string> = {
   inventario_fisico_salida: '#9C27B0',
   anulacion_venta: '#607D8B',
   nota_credito: '#FF9800',
+  retiro: '#E91E63',
 }
 
-const hoyISO = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 const fmtFecha = (iso?: string) => (iso ? new Date(iso).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-')
 
 type Fila = { id: string; tipoMovimiento: string; cantidad: number; cantidadReal: number; stockCorriente: number;
@@ -52,8 +52,8 @@ export function Kardex() {
   const { productos } = useProductos()
   const { toast } = useNotifications()
   const [productoId, setProductoId] = React.useState('')
-  const [desde, setDesde] = React.useState(hoyISO())
-  const [hasta, setHasta] = React.useState(hoyISO())
+  const [desde, setDesde] = React.useState(diaLocalISO())
+  const [hasta, setHasta] = React.useState(diaLocalISO())
   const [cargando, setCargando] = React.useState(false)
   const [kardex, setKardex] = React.useState<KardexData | null>(null)
   const [q, setQ] = React.useState('')
@@ -77,7 +77,9 @@ export function Kardex() {
     setCargando(true)
     setKardex(null)
     try {
-      const r = await consultarKardex(producto, new Date(desde), new Date(hasta))
+      // 🔑 Se pasan los **textos** del calendario: el servicio los interpreta como días **locales**
+      // (`rangoDelDia`). `new Date('2026-10-30')` sería medianoche UTC y dejaría afuera la tarde del día.
+      const r = await consultarKardex(producto, desde, hasta)
       setKardex(r)
     } catch (e) {
       console.error('❌ Error consultando kardex:', e)

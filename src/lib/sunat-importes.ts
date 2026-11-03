@@ -229,6 +229,23 @@ export function esGravado(afectacion: string): boolean {
 }
 
 /**
+ * ¿La afectación es una **operación gratuita** (catálogo 07)?
+ *
+ * 🔑 **Los códigos gratuitos son `11`-`16` (gravado), `21` (exonerado) y `31`-`37` (inafecto)**, y el
+ * catálogo les asigna el tributo **`9996` (GRATUITO)**: no llevan IGV en el comprobante y su importe es el
+ * **valor referencial** de la mercadería, no plata cobrada (`PayableAmount` = 0).
+ *
+ * ⚠️ **El `20` (exonerado - operación onerosa) NO es gratuito**: es una venta normal sin IGV. La
+ * diferencia importa: por eso un retiro declarado `'21'` o `'32'` se lee como gratuito y uno `'20'`, no.
+ */
+export function esGratuita(afectacion: string): boolean {
+  const af = String(afectacion || '').trim()
+  if (!af) return false
+  const n = Number(af)
+  return (n >= 11 && n <= 16) || af === '21' || (n >= 31 && n <= 37)
+}
+
+/**
  * Valor de venta **sin IGV** para declarar en el comprobante.
  *
  * ⚠️ El precio del producto es un **precio final al público** (incluye el IGV, es

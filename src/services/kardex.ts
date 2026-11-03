@@ -2,6 +2,7 @@ import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { ultimoCostoDeProducto, valorizarMovimiento } from '@/lib/valorizacion'
+import { rangoDelDia } from '@/lib/fechas'
 import type { Producto } from '@/hooks/use-productos'
 
 // Port de services/kardex.js de la app RN.
@@ -73,14 +74,21 @@ export async function cargarProductos(): Promise<Producto[]> {
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Producto, 'id'>) }))
 }
 
-export async function consultarKardex(producto: Producto, fechaDesde: Date, fechaHasta: Date) {
-  const desdeISO = new Date(fechaDesde)
-  desdeISO.setHours(0, 0, 0, 0)
-  const hastaISO = new Date(fechaHasta)
-  hastaISO.setHours(23, 59, 59, 999)
+/**
+ * Los movimientos de un producto en el rango de días elegido.
+ *
+ * 🔑 **Los días son LOCALES**: lo que se elige en el calendario es un día del negocio, no un día UTC. Antes
+ * se hacía `new Date('2026-10-30')` (medianoche **UTC** = 19:00 del 29 en Lima) y después `setHours` local,
+ * así que las salidas de la tarde/noche quedaban fuera del día y había que mirar el día siguiente
+ * (`rangoDelDia` en `lib/fechas.ts` es la regla única).
+ */
+export async function consultarKardex(producto: Producto, fechaDesde: Date | string, fechaHasta: Date | string) {
+  const rango = rangoDelDia(fechaDesde, fechaHasta)
+  if (!rango) throw new Error('El rango de fechas no es válido.')
+  const { desdeISO, hastaISO } = rango
 
   const snap = await getDocs(
-    query(collection(db, COL.MOVIMIENTOS), where('productoId', '==', producto.id), where('fecha', '>=', desdeISO.toISOString()), where('fecha', '<=', hastaISO.toISOString()))
+    query(collection(db, COL.MOVIMIENTOS), where('productoId', '==', producto.id), where('fecha', '>=', desdeISO), where('fecha', '<=', hastaISO))
   )
 
   const movimientos: any[] = []

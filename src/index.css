@@ -122,3 +122,76 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ===== MODO TÁCTIL (inicio) =====
+ * La clase la pone `hooks/use-modo-tactil.ts` en `<html>` cuando el equipo tiene pantalla táctil (o
+ * cuando alguien lo enciende a mano). La regla que decide está en `lib/modo-tactil.ts`.
+ *
+ * 🔑 **Solo se agrandan dos cosas: la letra y el área de toque.** Nada de la maqueta cambia, y **cada
+ * selector de acá abajo empieza con `.modo-tactil`** para que el modo no pueda tocar la UI normal: lo fija
+ * `lib/modo-tactil.test.ts`, que lee este bloque y falla si una regla se escapa.
+ *
+ * 📌 Los tamaños de partida que se corrigen: `text-[10px]`/`text-[11px]` (12-13 px de base),
+ * `text-xs` (12), `text-sm` (14) y los botones dibujados a 28-40 px (`h-7`, `h-8`, `size="sm"` = `h-9`,
+ * `size="icon"` = `h-10`). Referencia táctil: **44 px** de lado.
+ */
+
+/* Letra: sube un escalón lo que estaba chico (el de 10-11 px es ilegible a un brazo de distancia). */
+.modo-tactil .text-\[10px\],
+.modo-tactil .text-\[11px\] {
+  font-size: 0.8125rem; /* 13px */
+  line-height: 1.15rem;
+}
+.modo-tactil .text-xs {
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.3rem;
+}
+.modo-tactil .text-sm {
+  font-size: 0.9375rem; /* 15px */
+  line-height: 1.45rem;
+}
+
+/* Campos de texto: 16 px es el mínimo con el que iOS/iPadOS **no** hace zoom al enfocar. */
+.modo-tactil input.text-xs,
+.modo-tactil input.text-sm,
+.modo-tactil textarea.text-sm,
+.modo-tactil select.text-sm {
+  font-size: 1rem;
+}
+
+/* Área de toque: todo lo que se toca mide al menos 44 px de alto. */
+.modo-tactil button,
+.modo-tactil [role='button'],
+.modo-tactil select {
+  min-height: 2.75rem;
+}
+
+/* Y lo que estaba dibujado más chico que eso crece, en alto y en ancho. */
+.modo-tactil .h-7,
+.modo-tactil .h-8,
+.modo-tactil .h-9,
+.modo-tactil .h-10 {
+  height: 2.75rem;
+}
+.modo-tactil .w-8,
+.modo-tactil .w-9,
+.modo-tactil .w-10 {
+  width: 2.75rem;
+}
+
+/* Casillas: se agrandan, pero no a 44 px (un cuadrado de 44 al lado de un texto se ve como un error). */
+.modo-tactil input[type='checkbox'],
+.modo-tactil input[type='radio'] {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+/* Las tarjetas del Dashboard se reordenan arrastrando: sin `touch-action` el gesto se lo lleva el scroll. */
+.modo-tactil .cursor-grab {
+  touch-action: none;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+/* ===== MODO TÁCTIL (fin) ===== */
+

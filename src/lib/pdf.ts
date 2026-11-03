@@ -10,6 +10,7 @@ import { lineasPersonal, personalDeVenta } from '@/lib/personal'
 // documento. El diseño de la ticketera sigue acá abajo, intacto.
 import { TITULOS, calcularTotales, construirQRData, generarQRDataUrl, normalizarMontosNota } from '@/lib/comprobante-comun'
 import { etiquetaIgv, porcentajeDelDocumento, tasaDePorcentaje } from '@/lib/igv'
+import { comprobanteDeDocumento, leyendaDeRetiro } from '@/lib/retiro'
 
 // ⚠️ Los títulos, las tasas de afectación, `calcularTotales`, `serieNota`, `construirQRData` y
 // `generarQRDataUrl` se movieron a **`lib/comprobante-comun.ts`** (arriba está el import): son las
@@ -21,6 +22,12 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   // la necesita **igual**: si el ticket la aplicara y el A4 no, el mismo documento mostraría dos
   // importes distintos según cómo se mande al cliente.
   venta = normalizarMontosNota(venta, tipoDoc)
+
+  // 🔑 **Un retiro sin cobro se imprime con ESTE mismo ticket** (misma plantilla, márgenes y totales):
+  // lo único distinto es que el comprobante es la boleta/factura que se emitió —no «RETIRO»— y que lleva
+  // la **leyenda** del motivo con el **valor referencial**. No hay una plantilla aparte.
+  const esRetiro = Boolean(venta.retiro)
+  tipoDoc = comprobanteDeDocumento(tipoDoc, venta.comprobante)
 
   const fecha = new Date(venta.fecha || venta.createdAt)
   const fechaStr = `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')}/${fecha.getFullYear()}`
@@ -47,10 +54,11 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
     .join('')
 
   const totalStr = Number(venta.importe_total || venta.total || 0).toFixed(2)
-  const formaPago = venta.forma_pago || formaPagoLabel(venta.pagos ?? [], venta.tipoPago)
+  const formaPago = esRetiro ? 'No se cobra' : (venta.forma_pago || formaPagoLabel(venta.pagos ?? [], venta.tipoPago))
   // Pago múltiple (efectivo + Yape + tarjeta…): muestra el desglose con el medio real.
-  const pagoHTML =
-    Array.isArray(venta.pagos) && venta.pagos.length > 1
+  const pagoHTML = esRetiro
+    ? `<tr><td class="td-l b" colspan="3">${esc(leyendaDeRetiro(venta) || 'TRANSFERENCIA GRATUITA')}</td></tr><tr><td class="td-l" colspan="3">Valor referencial S/ ${totalStr} · no se cobra</td></tr>`
+    : Array.isArray(venta.pagos) && venta.pagos.length > 1
       ? venta.pagos.map((p: any) => `<tr><td class="td-l" colspan="3">${etiquetaPago(p)} S/ ${Number(p.monto || 0).toFixed(2)}${p.operacion ? ` · ${esc(textoReferenciaPago(p.operacion))}` : ''}</td></tr>`).join('')
         + (Number(venta.cambio || 0) > 0
           ? (Number(venta.montoRecibido || 0) > 0
@@ -106,13 +114,25 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   // 🔑 El título de la fila dice **la tasa del documento** (`I.G.V. (18%)` / `I.G.V. (10%)`), no un 18%
   // escrito a mano: es lo que pidió el negocio y lo que evita que el papel diga una tasa y el XML otra.
   const tituloIgv = etiquetaIgv(igvPorcentaje)
-  const filasTotales = hayIGV
+  // 🔑 **El «TOTAL IMPORTE» es lo que el cliente PAGA**, no el valor referencial: en un retiro gratuito es
+  // 0.00 (coincide con el `PayableAmount` del XML). El valor referencial se imprime aparte, en la leyenda.
+  const totalAPagarStr = Number(totalesCalc.totalAPagar).toFixed(2)
+  // 🔑 **Lo gratuito va como «Op. Gratuitas»** con su valor referencial (catálogo 07: 21/32/37, tributo
+  // 9996). Antes se imprimía «Op. Exonerada», que es el nombre del código `20` (operación **onerosa**).
+  const filaGratuitas = totalesCalc.opGratuitas > 0
+    ? `<tr><td class="td-r tot-l">Op. Gratuitas</td><td class="td-r tot-v">S/ ${totalesCalc.opGratuitas.toFixed(2)}</td></tr>`
+    : ''
+  const filasTotales = `${filaGratuitas}${
+    hayIGV
     ? `<tr><td class="td-r tot-l">Op. Gravadas</td><td class="td-r tot-v">S/ ${totalesCalc.opGravadas.toFixed(2)}</td></tr><tr><td class="td-r tot-l">${tituloIgv}</td><td class="td-r tot-v">S/ ${totalesCalc.igv.toFixed(2)}</td></tr>`
     : tieneExoneradas
     ? `<tr><td class="td-r tot-l">Op. Exonerada</td><td class="td-r tot-v">S/ ${totalesCalc.opExoneradas.toFixed(2)}</td></tr><tr><td class="td-r tot-l">${tituloIgv}</td><td class="td-r tot-v">S/ 0.00</td></tr>`
     : tieneInafectas
     ? `<tr><td class="td-r tot-l">Op. Inafecta</td><td class="td-r tot-v">S/ ${totalesCalc.opInafectas.toFixed(2)}</td></tr><tr><td class="td-r tot-l">${tituloIgv}</td><td class="td-r tot-v">S/ 0.00</td></tr>`
+    : totalesCalc.opGratuitas > 0
+    ? ''
     : `<tr><td class="td-r tot-l">Op. Gratuita</td><td class="td-r tot-v">S/ 0.00</td></tr><tr><td class="td-r tot-l">${tituloIgv}</td><td class="td-r tot-v">S/ 0.00</td></tr>`
+  }`
 
   const esElectronico = tipoDoc === 'BOLETA' || tipoDoc === 'FACTURA' || tipoDoc === 'NC' || tipoDoc === 'ND'
   let qrSvg = ''
@@ -120,10 +140,16 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   if (esElectronico && sunat) {
     const qrData = construirQRData(venta, correlativo, config, tipoDoc, sunat)
     qrSvg = await generarQRDataUrl(qrData)
-    hashText = sunat.hash || ''
+    hashText = esc(sunat.hash || '')
   }
 
-  const logo = config.logo_url || ''
+  /**
+   * 🔑 **El logo va VALIDADO y ESCAPADO**: entra en un atributo (`src="…"`), así que un valor con comillas
+   * (`x" onerror="…`) se saldría del atributo y ejecutaría código en una ventana del **mismo origen** que el
+   * POS. Solo se aceptan `http(s)`, `data:image/…` y rutas del propio sitio.
+   */
+  const logoCrudo = String(config.logo_url || '').trim()
+  const logo = /^(https?:\/\/|data:image\/|\/[^/])/i.test(logoCrudo) ? logoCrudo : ''
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
   * { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -165,7 +191,7 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   .anulado-box { background:#FDECEA; border:1px solid #D32F2F; border-radius:4px; padding:2mm; margin:2mm 0; }
   .anulado-titulo { color:#D32F2F; font-weight:700; font-size:10px; } .anulado-texto { color:#B71C1C; font-size:8px; }
   </style></head><body>
-  ${logo ? `<img class="header-logo" src="${logo}" alt="Logo" />` : ''}
+  ${logo ? `<img class="header-logo" src="${esc(logo)}" alt="Logo" />` : ''}
   <div class="c brand">${esc(config.nombre)}</div>
   <div class="c cinfo">${esc(config.direccion)}</div>
   ${sucursal ? `<div class="c cinfo">${esc(sucursal)}</div>` : ''}
@@ -190,7 +216,7 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   ${filasDescuento}
   ${filasTotales}
   <tr><td class="td-r tot-l">I.C.B.P.E.R.</td><td class="td-r tot-v">S/ 0.00</td></tr>
-  <tr><td class="td-l" style="padding-top:2mm">Moneda: <span class="b">Soles</span></td><td class="td-r tot-total b">TOTAL IMPORTE S/ ${totalStr}</td></tr>
+  <tr><td class="td-l" style="padding-top:2mm">Moneda: <span class="b">Soles</span></td><td class="td-r tot-total b">TOTAL IMPORTE S/ ${totalAPagarStr}</td></tr>
   </table>
   ${sonLetras ? `<div class="c s" style="margin:2mm 0;font-size:9.5px;">Son: ${esc(sonLetras)} SOLES</div>` : ''}
   ${(venta.docReferencia || venta.documentoReferencia || venta.motivo || venta.motivoNota) ? `
@@ -202,7 +228,7 @@ export async function construirHTMLComprobante({ venta, correlativo, config, tip
   <table class="tbl">${pagoHTML}</table>
   ${autorizacion ? `<div class="c s" style="margin-top:2mm;">Autorización: ${esc(autorizacion)}</div>` : ''}
   ${validarEn ? `<div class="c s">Validar en: ${esc(validarEn)}</div>` : ''}
-  ${esElectronico && qrSvg ? `<hr class="sep"><table class="qr-row"><tr><td><img src="${qrSvg}" /></td><td class="qr-txt">Representación impresa de la ${TITULOS[tipoDoc] || 'comprobante'}. consúltelo en www.sunat.gob.pe${hashText ? '<br>' + hashText : ''}</td></tr></table>` : ''}
+  ${esElectronico && qrSvg ? `<hr class="sep"><table class="qr-row"><tr><td><img src="${esc(qrSvg)}" /></td><td class="qr-txt">Representación impresa de la ${TITULOS[tipoDoc] || 'comprobante'}. consúltelo en www.sunat.gob.pe${hashText ? '<br>' + hashText : ''}</td></tr></table>` : ''}
   ${anulacion ? `<div class="anulado-box"><div class="anulado-titulo">ESTE DOCUMENTO HA SIDO ANULADO</div><div class="anulado-texto">Motivo: ${esc(anulacion.motivo || 'sin motivo')}</div></div>` : ''}
   <hr class="sep">
   ${personalLineas ? `<div class="c s">${personalLineas}</div>` : ''}

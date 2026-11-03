@@ -29,6 +29,7 @@ import { signoDoc } from './ventas-mensuales.ts'
 import {
   afectacionGuardada,
   descuentoDeVenta,
+  esGratuita,
   esGravado,
   importeBrutoDe,
   itemsParaSunat,
@@ -46,6 +47,10 @@ export type DocSire = {
     total?: number | null
     descuentoTotal?: number | null
     descuento_total?: number | null
+    /** En un retiro: el comprobante real (`BOLETA`/`FACTURA`) que se emitió. */
+    comprobante?: string | null
+    /** La tasa con la que nació el documento (`lib/igv.ts`); la config es el respaldo de los viejos. */
+    igvPorcentaje?: number | null
     items?: readonly ItemSire[] | null
   } | null
 }
@@ -60,7 +65,13 @@ export type FilaSire = {
   baseInafecta: number
   /** El IGV de las líneas gravadas (separado del precio, nunca sumado encima). */
   igv: number
-  /** **Lo declarado por el comprobante**: `Σ líneas` ya con el descuento aplicado. */
+  /**
+   * **Valor referencial de las operaciones gratuitas** (catálogo 07: 11-16, 21, 31-37).
+   * ⚠️ **No se suma** a las bases ni al total: en el RVIE una operación gratuita no es una venta (el txt
+   * no tiene columna para ella, y sumarla infla lo declarado). Va acá para mostrarla en pantalla.
+   */
+  gratuitas: number
+  /** **Lo declarado por el comprobante**: `Σ líneas` ya con el descuento aplicado (sin lo gratuito). */
   total: number
   /** `-1` para la nota de crédito (resta), `+1` para el resto. */
   signo: number
@@ -75,7 +86,11 @@ export type FilaSire = {
 }
 
 /** El **tipo de comprobante de SUNAT** (Tabla 11 del RVIE) según el tipo del documento. */
-export function tipoDocSunat(tipoDoc?: string | null): string {
+export function tipoDocSunat(tipoDoc?: string | null, comprobante?: string | null): string {
+  // 🔑 Un **retiro sin cobro** se declara con el comprobante que se emitió (boleta `03` o factura `01`):
+  // su tipo interno es `RETIRO` porque no es una venta para los reportes, pero para SUNAT es un
+  // comprobante más y su importe (el valor referencial) tiene que figurar en el registro.
+  if (tipoDoc === 'RETIRO') return comprobante === 'FACTURA' ? '01' : '03'
   if (tipoDoc === 'FACTURA') return '01'
   if (tipoDoc === 'NC') return '07'
   if (tipoDoc === 'ND') return '08'
@@ -99,6 +114,7 @@ export function calcularFilaSire(d: DocSire | null | undefined, config?: unknown
   let baseGravada = 0
   let baseExonerada = 0
   let baseInafecta = 0
+  let gratuitas = 0
   let igv = 0
 
   if (items.length === 0) {
@@ -109,9 +125,10 @@ export function calcularFilaSire(d: DocSire | null | undefined, config?: unknown
       baseExonerada: redondear2(signo * baseExonerada),
       baseInafecta: 0,
       igv: 0,
+      gratuitas: 0,
       total: redondear2(signo * baseExonerada),
       signo,
-      tipoDocSunat: tipoDocSunat(d?.tipoDoc),
+      tipoDocSunat: tipoDocSunat(d?.tipoDoc, venta.comprobante),
       sinDetalle: true,
     }
   }
@@ -121,6 +138,12 @@ export function calcularFilaSire(d: DocSire | null | undefined, config?: unknown
     const importe = redondear2(Math.abs(importeBrutoDe(it)))
     if (importe === 0) continue
     const af = afectacionGuardada(it)
+    // 🔑 **Gratuita** (21/32/37…): su importe es el **valor referencial**, no una venta ⇒ no entra a las
+    // bases ni al total. Se informa aparte para que la pantalla lo muestre.
+    if (esGratuita(af)) {
+      gratuitas += importe
+      continue
+    }
     if (esGravado(af)) {
       // El precio es final al público: la base es el valor sin IGV y el IGV, la diferencia.
       const neto = redondear2(precioSinIgv(importe, af, tasaIgv))
@@ -142,10 +165,11 @@ export function calcularFilaSire(d: DocSire | null | undefined, config?: unknown
     baseExonerada: bExo,
     baseInafecta: bIna,
     igv: igvR,
+    gratuitas: redondear2(gratuitas),
     // El total sale de las partes (no de `venta.total`): así no puede contradecir a las bases.
     total: redondear2(bGrav + bExo + bIna + igvR),
     signo,
-    tipoDocSunat: tipoDocSunat(d?.tipoDoc),
+    tipoDocSunat: tipoDocSunat(d?.tipoDoc, venta.comprobante),
     sinDetalle: false,
   }
 }
@@ -157,6 +181,8 @@ export type TotalesSire = {
   baseInafecta: number
   igv: number
   total: number
+  /** Valor referencial de las operaciones gratuitas (informativo: **no suma** al total). */
+  gratuitas: number
   /** Cuántos documentos entraron en la cuenta. */
   cantidad: number
   /** Cuántos se declararon sin detalle de ítems (ver `FilaSire.sinDetalle`). */
@@ -165,13 +191,14 @@ export type TotalesSire = {
 
 /** Suma las filas del registro. */
 export function totalesSire(filas: readonly FilaSire[] | null | undefined): TotalesSire {
-  const t: TotalesSire = { baseGravada: 0, baseExonerada: 0, baseInafecta: 0, igv: 0, total: 0, cantidad: 0, sinDetalle: 0 }
+  const t: TotalesSire = { baseGravada: 0, baseExonerada: 0, baseInafecta: 0, igv: 0, total: 0, gratuitas: 0, cantidad: 0, sinDetalle: 0 }
   for (const f of filas ?? []) {
     t.baseGravada += f.baseGravada
     t.baseExonerada += f.baseExonerada
     t.baseInafecta += f.baseInafecta
     t.igv += f.igv
     t.total += f.total
+    t.gratuitas += f.gratuitas ?? 0
     t.cantidad += 1
     if (f.sinDetalle) t.sinDetalle += 1
   }
@@ -181,6 +208,7 @@ export function totalesSire(filas: readonly FilaSire[] | null | undefined): Tota
     baseInafecta: redondear2(t.baseInafecta),
     igv: redondear2(t.igv),
     total: redondear2(t.total),
+    gratuitas: redondear2(t.gratuitas),
     cantidad: t.cantidad,
     sinDetalle: t.sinDetalle,
   }

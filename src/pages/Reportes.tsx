@@ -1,5 +1,5 @@
-import { ClipboardList, CloudUpload, Download, FileDown, FileText, Loader2, Printer, Receipt, Send, Share2, Smartphone, Trash2, Wallet } from 'lucide-react'
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
+import { ClipboardList, CloudUpload, Download, FileDown, FileText, Loader2, Printer, Receipt, Send, Share2, Smartphone, Trash2, UserRound, Wallet } from 'lucide-react'
+import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
 import * as React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,9 +23,12 @@ import { ListaPaginada } from '@/components/ListaPaginada'
 import { DescargarArchivosSunat } from '@/components/DescargarArchivosSunat'
 import { ReporteAvisosYape } from '@/components/ReporteAvisosYape'
 import { PaginadorControles } from '@/components/PaginadorControles'
+import { EditarClienteModal } from '@/components/EditarClienteModal'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { cn } from '@/lib/utils'
+import { revisionEdicionCliente } from '@/lib/edicion-cliente'
+import { claseDeDocumento, etiquetaDeClase, leyendaDeRetiro } from '@/lib/retiro'
 
 const fmt = (n: number) => 'S/ ' + (n ?? 0).toFixed(2)
 const PAGE = 25
@@ -35,6 +38,10 @@ const SUNAT_TIPOS = [
   { key: 'FACTURA', label: 'Facturas', color: '#4CAF50' },
   { key: 'NC', label: 'Notas Crédito', color: '#FF9800' },
   { key: 'ND', label: 'Notas Débito', color: '#E91E63' },
+  // 🔑 Un retiro sin cobro tiene serie y correlativo de boleta/factura y **se declara a SUNAT**: se
+  // lista acá con su estado y su botón «Enviar» (el tipo interno `RETIRO` es solo para no contarlo
+  // como venta en los reportes).
+  { key: 'RETIRO', label: 'Retiros sin cobro', color: '#EC4899' },
 ] as const
 
 type Doc = {
@@ -47,7 +54,7 @@ type Doc = {
   fecha?: string
   createdAt?: string
   estado?: string
-  venta?: { total?: number; cliente_nombre?: string; cliente_dni?: string; tipoPago?: string; items?: any[]; fecha?: string; referencia?: string; cajero?: string }
+  venta?: { total?: number; cliente_nombre?: string; cliente_dni?: string; tipoPago?: string; items?: any[]; fecha?: string; referencia?: string; cajero?: string; comprobante?: string; motivoRetiro?: { id?: string; leyenda?: string } }
   // 🔑 `xml` y `cdr` son los archivos del envío, **en base64 dentro del propio comprobante** (los baja
   // `DescargarArchivosSunat` con el permiso `descargarXmlSunat`). Llegan solos en la lectura: no hay que
   // pedirlos aparte ni tocar ninguna regla.
@@ -91,7 +98,7 @@ export function Reportes() {
   const verTodo = tienePermiso('verTodo')
   const miUid = verTodo ? '' : (user?.uid || '')
   const [tab, setTab] = React.useState<'nv' | 'consolidado' | 'sunat' | 'pedidos' | 'yape'>('nv')
-  const [filtroTipo, setFiltroTipo] = React.useState<'BOLETA' | 'FACTURA' | 'NC' | 'ND'>('BOLETA')
+  const [filtroTipo, setFiltroTipo] = React.useState<'BOLETA' | 'FACTURA' | 'NC' | 'ND' | 'RETIRO'>('BOLETA')
   const [mes, setMes] = React.useState(mesDeHoy())
   const [notaDoc, setNotaDoc] = React.useState<Doc | null>(null)
   const [notaTipo, setNotaTipo] = React.useState<'NC' | 'ND'>('NC')
@@ -107,6 +114,8 @@ export function Reportes() {
   const [corregirDoc, setCorregirDoc] = React.useState<Doc | null>(null)
   const [corregirTipo, setCorregirTipo] = React.useState<'efectivo' | 'transferencia'>('efectivo')
   const [corregirRef, setCorregirRef] = React.useState('')
+  /** Nota de venta cuyo cliente se está corrigiendo (modal). */
+  const [clienteDoc, setClienteDoc] = React.useState<Doc | null>(null)
   const [procesando, setProcesando] = React.useState(false)
   const [consolidando, setConsolidando] = React.useState(false)
   const [refreshConsol, setRefreshConsol] = React.useState(0)
@@ -133,6 +142,45 @@ export function Reportes() {
     [filtroTipo, añoMesTarget, miUid]
   )
   const sunatPag = usePaginacionFirestore<Doc>({ baseQuery: baseQuerySunat, enabled: tab === 'sunat' })
+
+  /**
+   * 🔑 **El retiro sin cobro NO se pierde de vista**: se documenta con boleta o factura, pero se lista en
+   * **su** pestaña (su `tipoDoc` interno es `RETIRO`, para que no lo cuenten como venta los reportes). Si
+   * alguien lo busca donde están las boletas, la pantalla le dice **dónde está** en vez de dejarlo creer que
+   * no se emitió. Se consulta **uno** (el último del mes), no todos: una lectura con `limit(1)`.
+   */
+  const [ultimoRetiroMes, setUltimoRetiroMes] = React.useState<{ serieNumero: string; estado: string } | null>(null)
+  React.useEffect(() => {
+    if (tab !== 'sunat') return
+    let activo = true
+    ;(async () => {
+      try {
+        const snap = await getDocs(
+          query(
+            collection(db, COL.DOCUMENTOS),
+            where('tipoDoc', '==', 'RETIRO'),
+            where('anioMes', '==', añoMesTarget),
+            orderBy('fecha', 'desc'),
+            limit(1),
+          ),
+        )
+        if (!activo) return
+        const d = snap.docs[0]
+        const v = (d?.data() ?? {}) as Doc
+        setUltimoRetiroMes(
+          d
+            ? { serieNumero: String(v.serieNumero ?? v.serie ?? d.id), estado: String(v.sunat?.estado ?? '') }
+            : null,
+        )
+      } catch (e) {
+        // Un fallo acá no puede romper el registro: el aviso es una ayuda, no un dato contable.
+        console.warn('⚠️ No se pudo leer el último retiro del mes:', e)
+      }
+    })()
+    return () => {
+      activo = false
+    }
+  }, [tab, añoMesTarget])
 
   // ── Consolidado: NV de las últimas 24h (ventana rolling) ──
   React.useEffect(() => {
@@ -279,6 +327,12 @@ export function Reportes() {
   const puedeCorregir = (d: Doc) =>
     tienePermiso('corregirPago') &&
     (d.tipoDoc === 'NV' ? !d.sunat?.consolidado : d.sunat?.estado == null || d.sunat.estado === 'pendiente')
+
+  /**
+   * 🔑 **Cambiarle el cliente a una nota de venta**: la regla (solo NV, no consolidada, no anulada) vive en
+   * `lib/edicion-cliente.ts` y la revalida el servicio; acá solo se decide si se muestra el botón.
+   */
+  const puedeEditarCliente = (d: Doc) => tienePermiso('editarClienteVenta') && revisionEdicionCliente(d as never).permitido
 
   function abrirAnular(d: Doc) {
     setAnularDoc(d)
@@ -438,7 +492,12 @@ export function Reportes() {
     }
   }
 
-  const Row = ({ d, sunat, mostrarAcciones = false }: { d: Doc; sunat?: boolean; mostrarAcciones?: boolean }) => (
+  /** ⚠️ Un retiro sin cobro se declara a SUNAT, pero **no** se imprime ni se le hace NC/ND. */
+  const esRetiroDe = (d: Doc) => d.tipoDoc === 'RETIRO'
+
+  const Row = ({ d, sunat, mostrarAcciones = false }: { d: Doc; sunat?: boolean; mostrarAcciones?: boolean }) => {
+    const esRetiro = esRetiroDe(d)
+    return (
     <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 text-sm hover:bg-muted/40", d.estado === 'anulada' && "opacity-50")}>
       {/* min-w: el número del comprobante (B001-00000123) no debe partirse en dos
           líneas ni quedar aplastado por los botones de la derecha. */}
@@ -448,6 +507,14 @@ export function Reportes() {
           {d.venta?.cliente_nombre && d.venta.cliente_nombre !== '-' ? d.venta.cliente_nombre : 'Consumidor'} · {d.fecha ? new Date(d.fecha).toLocaleString('es-PE') : ''}
           {d.venta?.cajero ? ` · 👤 ${d.venta.cajero}` : ''}
         </div>
+        {/* 🔑 En un retiro, la **clase de la operación** (por qué salió la mercadería): es la diferencia
+            entre regalarle algo a un cliente y consumirlo uno mismo. La saca `lib/retiro.ts` del motivo. */}
+        {esRetiro && (
+          <div className="mt-0.5 text-[11px] font-semibold text-pink-600 dark:text-pink-300">
+            {etiquetaDeClase(claseDeDocumento(d)) || 'Retiro'}
+            <span className="ml-1 font-normal text-muted-foreground">· {leyendaDeRetiro(d.venta) || 'sin leyenda'}</span>
+          </div>
+        )}
       </div>
       <span className={cn('num shrink-0 whitespace-nowrap font-bold', d.tipoDoc === 'NC' && 'text-destructive')}>
         {d.tipoDoc === 'NC' ? '-' : ''}{fmt(d.venta?.total ?? 0)}
@@ -456,20 +523,24 @@ export function Reportes() {
         <>
           <Badge variant={badgeSunat(d).variant} title={badgeSunat(d).tooltip || undefined}>{badgeSunat(d).label}</Badge>
           <div className="flex min-w-0 flex-wrap justify-end gap-1.5">
+            {/* 🔑 El retiro se imprime con el **mismo PDF** que las demás boletas/facturas: el título sale
+                del comprobante real y debajo de los totales va la leyenda con el valor referencial. */}
             <Button variant="outline" size="sm" onClick={() => verPDF(d)}><Printer className="h-3.5 w-3.5" /> PDF</Button>
             <Button variant="outline" size="sm" onClick={() => verPDFA4(d)} disabled={a4Id === d.id} title="A4 para enviar por correo o WhatsApp">
               {a4Id === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />} A4
             </Button>
-            <Button variant="outline" size="sm" onClick={() => enviarPDFA4(d)} disabled={a4Id === d.id} title="Compartir el A4 (WhatsApp, correo)">
-              <Share2 className="h-3.5 w-3.5" /> Enviar
-            </Button>
+            {!esRetiro && (
+              <Button variant="outline" size="sm" onClick={() => enviarPDFA4(d)} disabled={a4Id === d.id} title="Compartir el A4 (WhatsApp, correo)">
+                <Share2 className="h-3.5 w-3.5" /> Enviar
+              </Button>
+            )}
             {(d.tipoDoc === 'BOLETA' || d.tipoDoc === 'FACTURA') && d.sunat?.estado === 'aceptado' && (
               <>
                 <Button variant="outline" size="sm" className="text-amber-600" onClick={() => abrirNota(d, 'NC')}>NC</Button>
                 <Button variant="outline" size="sm" className="text-pink-600" onClick={() => abrirNota(d, 'ND')}>ND</Button>
               </>
             )}
-            {(d.tipoDoc === 'BOLETA' || d.tipoDoc === 'FACTURA') && (
+            {(d.tipoDoc === 'BOLETA' || d.tipoDoc === 'FACTURA' || esRetiro) && (
               <Button variant="outline" size="sm" onClick={() => enviarDoc(d)} disabled={enviandoId === d.id || d.sunat?.estado === 'aceptado'}>
                 {enviandoId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} {enviandoId === d.id ? 'Enviando…' : d.sunat?.estado === 'aceptado' ? 'Enviado' : 'Enviar'}
               </Button>
@@ -508,13 +579,17 @@ export function Reportes() {
           {d.estado !== 'anulada' && mostrarAcciones && puedeCorregir(d) && (
             <Button variant="outline" size="sm" onClick={() => abrirCorregir(d)}><Wallet className="h-3.5 w-3.5" /> Pago</Button>
           )}
+          {d.estado !== 'anulada' && mostrarAcciones && puedeEditarCliente(d) && (
+            <Button variant="outline" size="sm" onClick={() => setClienteDoc(d)}><UserRound className="h-3.5 w-3.5" /> Cliente</Button>
+          )}
           {d.estado !== 'anulada' && mostrarAcciones && puedeAnular(d) && (
             <Button variant="outline" size="sm" className="text-destructive" onClick={() => abrirAnular(d)}><Trash2 className="h-3.5 w-3.5" /> Anular</Button>
           )}
         </span>
       )}
     </div>
-  )
+    )
+  }
 
   // Helper para una lista paginada (hook) con controles arriba y abajo.
   type Pag = { items: Doc[]; total: number; pagina: number; totalPaginas: number; loading: boolean; error: string | null; setPagina: (p: number) => void; recargar: () => void }
@@ -698,6 +773,28 @@ export function Reportes() {
             </div>
             <ListaHooked pag={sunatPag} renderItem={(d) => <Row key={d.id} d={d} sunat />} empty={<p className="py-16 text-center text-sm text-muted-foreground">Sin {SUNAT_TIPOS.find((t) => t.key === filtroTipo)?.label.toLowerCase()} en este mes</p>} />
           </div>
+
+          {/* 🔑 Un retiro ES una boleta o una factura, pero se lista en SU pestaña: si estás mirando las
+              boletas y no lo encontrás, acá está el motivo y el camino. */}
+          {ultimoRetiroMes && filtroTipo !== 'RETIRO' && (
+            <div className="rounded-xl border border-pink-300/70 bg-pink-50/70 p-3 text-xs dark:border-pink-500/30 dark:bg-pink-500/5">
+              <p className="font-bold text-pink-700 dark:text-pink-300">¿Buscás un retiro sin cobro?</p>
+              <p className="mt-1 leading-snug text-pink-800 dark:text-pink-200">
+                Este mes hay retiros documentados con boleta o factura —el último es{' '}
+                <strong className="num">{ultimoRetiroMes.serieNumero}</strong>
+                {ultimoRetiroMes.estado ? ` (${ultimoRetiroMes.estado})` : ''}— y <strong>se listan aparte</strong>: el retiro no es una
+                venta, así que tiene su propia pestaña.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 border-pink-300 text-pink-700 dark:border-pink-500/40 dark:text-pink-300"
+                onClick={() => setFiltroTipo('RETIRO')}
+              >
+                Ver los retiros del mes
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -751,6 +848,15 @@ export function Reportes() {
       )}
 
       {/* Modal Anular NV */}
+      {clienteDoc && (
+        <EditarClienteModal
+          doc={clienteDoc as unknown as Record<string, any>}
+          config={cfg as unknown as Record<string, any>}
+          onCerrar={() => setClienteDoc(null)}
+          onGuardado={() => nvPag.recargar()}
+        />
+      )}
+
       {anularDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl">

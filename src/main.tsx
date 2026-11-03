@@ -9,6 +9,7 @@ import { NotificationsProvider } from './components/notifications.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { instalarCapturaGlobal } from './lib/errores.ts'
 import { registrarError } from './services/errores.ts'
+import { leerYAplicarModoTactil } from '@/hooks/use-modo-tactil'
 
 // Errores que no pasan por React (excepciones sueltas y promesas sin catch):
 // sin esto se perdían en la consola del navegador y nadie se enteraba.
@@ -22,6 +23,15 @@ instalarCapturaGlobal((error, contexto, detalle) => {
  * ⚠️ **Ni Firebase ni el login entran en esa rama**: el app de adentro queda exactamente igual.
  */
 const esPedidoPublico = /^\/pedido\/?$/.test(window.location.pathname)
+
+/**
+ * 🔑 **Modo táctil antes del primer pintado** (`lib/modo-tactil.ts`): pone la clase en `<html>` antes de
+ * montar React, así el login ya sale con el tamaño correcto y no hay un salto al entrar. En un equipo con
+ * mouse no hace nada.
+ * ⚠️ **La vidriera pública (`/pedido`) queda afuera a propósito**: es la cara del negocio para el cliente,
+ * tiene su propia maqueta apretada (tarjetas con +/- de 32 px) y no es «la pantalla táctil de la caja».
+ */
+if (!esPedidoPublico) leerYAplicarModoTactil()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

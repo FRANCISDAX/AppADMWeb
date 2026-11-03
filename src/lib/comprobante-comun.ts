@@ -18,7 +18,7 @@
  */
 
 import QRCode from 'qrcode'
-import { afectacionDe, IGV_RATE } from './sunat-importes.ts'
+import { afectacionDe, esGratuita, IGV_RATE } from './sunat-importes.ts'
 import { tasaDelDocumento } from './igv.ts'
 
 /** Título impreso de cada tipo de documento (lo usan el ticket, el A4 y el QR). */
@@ -46,11 +46,19 @@ export function calcularTotales(items: any[], opts?: { regionExonerada?: boolean
   let opGravadas = 0
   let opExoneradas = 0
   let opInafectas = 0
+  let opGratuitas = 0
   let igvTotal = 0
   for (const it of items || []) {
     const cod = afectacionDe(it, opts)
-    const info = obtenerInfoAfectacion(cod, opts?.tasaIgv)
     const subtotal = (it.precioVenta || it.precio_unitario || 0) * (it.cantidad || it.quantity || 1)
+    // 🔑 **Lo gratuito se declara aparte** (catálogo 07: 11-16, 21, 31-37, tributo 9996): su importe es el
+    // **valor referencial** y no lleva IGV, así que no se suma a las bases gravada/exonerada/inafecta —que en
+    // el Registro de Ventas son "operaciones" cobradas— ni al importe a pagar.
+    if (esGratuita(cod)) {
+      opGratuitas += subtotal
+      continue
+    }
+    const info = obtenerInfoAfectacion(cod, opts?.tasaIgv)
     if (info.tasa > 0) {
       opGravadas += subtotal / (1 + info.tasa)
       igvTotal += subtotal - subtotal / (1 + info.tasa)
@@ -60,12 +68,21 @@ export function calcularTotales(items: any[], opts?: { regionExonerada?: boolean
       opInafectas += subtotal
     }
   }
+  const bases = opGravadas + opExoneradas + opInafectas + igvTotal
   return {
     opGravadas: Number(opGravadas.toFixed(2)),
     opExoneradas: Number(opExoneradas.toFixed(2)),
     opInafectas: Number(opInafectas.toFixed(2)),
+    /** Valor referencial de las líneas gratuitas (no se cobra). */
+    opGratuitas: Number(opGratuitas.toFixed(2)),
     igv: Number(igvTotal.toFixed(2)),
-    total: Number((opGravadas + opExoneradas + opInafectas + igvTotal).toFixed(2)),
+    /** El importe del comprobante: bases + IGV **+ lo gratuito** (su valor referencial). */
+    total: Number((bases + opGratuitas).toFixed(2)),
+    /**
+     * Lo que el cliente **paga**. En un retiro es **0** (todo es gratuito): es lo que va al `PayableAmount`
+     * del XML y lo que muestra el «TOTAL» del papel. En un comprobante normal coincide con `total`.
+     */
+    totalAPagar: Number(bases.toFixed(2)),
   }
 }
 
@@ -86,7 +103,7 @@ export function construirQRData(venta: any, correlativo: any, config: Record<str
   const totales = calcularTotales(venta.items || [], { regionExonerada: config?.regionExonerada, tasaIgv: tasaDelDocumento(venta, config) })
   const fecha = new Date(venta.fecha || venta.createdAt)
   const fechaStr = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
-  return [config.ruc || '', tipoComprobante, serie, String(numero), Math.abs(totales.igv).toFixed(2), Math.abs(totales.total).toFixed(2), fechaStr, tipoDocCliente, cliDni || '00000000', sunat?.hash || ''].join('|')
+  return [config.ruc || '', tipoComprobante, serie, String(numero), Math.abs(totales.igv).toFixed(2), Math.abs(totales.totalAPagar).toFixed(2), fechaStr, tipoDocCliente, cliDni || '00000000', sunat?.hash || ''].join('|')
 }
 
 export async function generarQRDataUrl(data: string) {

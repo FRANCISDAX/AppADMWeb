@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { calcularFilaSire, totalesSire, type FilaSire } from '@/lib/sire-ventas'
+import { claseDeDocumento, etiquetaDeClase, resumenRetiros } from '@/lib/retiro'
 import { etiquetaIgv, porcentajeDelDocumento } from '@/lib/igv'
 import { cn } from '@/lib/utils'
 import {
@@ -54,6 +55,10 @@ type Doc = {
     fecha?: string
     cajero?: string
     sucursal?: string
+    /** En un retiro: el comprobante real y el motivo (de donde sale la **clase** de la operación). */
+    comprobante?: string
+    igvPorcentaje?: number
+    motivoRetiro?: { id?: string; leyenda?: string }
   }
   sunat?: { estado?: string }
 }
@@ -116,6 +121,9 @@ const TIPO_DOC_LABELS: Record<string, { label: string; color: string }> = {
   FACTURA: { label: 'Facturas', color: '#4CAF50' },
   NC: { label: 'Notas Crédito', color: '#F59E0B' },
   ND: { label: 'Notas Débito', color: '#E91E63' },
+  // 🔑 El retiro sin cobro **se declara** (es una venta para el IGV): entra al registro con el importe
+  // del valor referencial y con el tipo de comprobante que se emitió (boleta o factura).
+  RETIRO: { label: 'Retiros (gratuitas)', color: '#EC4899' },
 }
 
 export function ReporteSire() {
@@ -132,7 +140,7 @@ export function ReporteSire() {
   const [docs, setDocs] = React.useState<Doc[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
-  const [filtro, setFiltro] = React.useState<'todos' | 'BOLETA' | 'FACTURA' | 'NC' | 'ND'>('todos')
+  const [filtro, setFiltro] = React.useState<'todos' | 'BOLETA' | 'FACTURA' | 'NC' | 'ND' | 'RETIRO'>('todos')
 
   /**
    * El **Registro de Compras**: las compras del mes agrupadas por comprobante del proveedor.
@@ -156,7 +164,7 @@ export function ReporteSire() {
     setLoading(true)
     setError(null)
 
-    const tipos = ['BOLETA', 'FACTURA', 'NC', 'ND']
+    const tipos = ['BOLETA', 'FACTURA', 'NC', 'ND', 'RETIRO']
     const baseFilters = [where('anioMes', '==', añoMesTarget)]
     if (miUid) baseFilters.push(where('usuarioId', '==', miUid))
 
@@ -222,8 +230,18 @@ export function ReporteSire() {
 
   const totales = React.useMemo(() => totalesSire(docsFiltrados), [docsFiltrados])
 
+  /**
+   * **Los retiros, separados por clase de operación**: *transferencia gratuita* (se le regala a un cliente)
+   * contra *retiro de bienes* (se queda el negocio para usarlo). Las dos se **declaran igual** (opción A);
+   * esto solo las agrupa, leyendo el motivo que ya está guardado en el documento.
+   */
+  const retirosPorClase = React.useMemo(
+    () => resumenRetiros(docsCalc.filter((d) => d.estado !== 'anulada')),
+    [docsCalc],
+  )
+
   const totalesPorTipo = React.useMemo(() => {
-    const tipos = ['BOLETA', 'FACTURA', 'NC', 'ND']
+    const tipos = ['BOLETA', 'FACTURA', 'NC', 'ND', 'RETIRO']
     return tipos.map((tipo) => {
       const items = docsCalc.filter((d) => d.tipoDoc === tipo && d.estado !== 'anulada')
       const anulados = docsCalc.filter((d) => d.tipoDoc === tipo && d.estado === 'anulada')
@@ -342,6 +360,23 @@ export function ReporteSire() {
         ))}
       </div>
 
+      {/* 🔑 Los retiros, por CLASE de operación: no es lo mismo regalarle algo a un cliente que consumirlo
+          uno mismo. Se declaran igual (opción A), así que esto es información, no un cambio de importes. */}
+      {retirosPorClase.length > 0 && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {retirosPorClase.map((r) => (
+            <div key={r.clase ?? 'sin-clase'} className="rounded-xl border border-pink-300/60 bg-pink-50/60 p-3 shadow-card dark:border-pink-500/30 dark:bg-pink-500/5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-pink-700 dark:text-pink-300">{r.etiqueta}</span>
+                <span className="text-xs text-muted-foreground">{r.cantidad} docs</span>
+              </div>
+              <div className="mt-1 text-lg font-bold num text-pink-700 dark:text-pink-300">{fmt(r.total)}</div>
+              <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">{r.detalle}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="flex gap-1.5 rounded-xl bg-muted p-1">
         {([
@@ -350,6 +385,7 @@ export function ReporteSire() {
           { key: 'FACTURA', label: 'Facturas' },
           { key: 'NC', label: 'Notas Crédito' },
           { key: 'ND', label: 'Notas Débito' },
+          { key: 'RETIRO', label: 'Retiros' },
         ] as const).map((t) => (
           <button key={t.key} onClick={() => setFiltro(t.key)} className={cn('rounded-lg px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer', filtro === t.key ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground')}>
             {t.label}
@@ -404,6 +440,12 @@ export function ReporteSire() {
                         <span className="rounded-md px-2 py-0.5 text-xs font-bold" style={{ backgroundColor: `${label?.color}15`, color: label?.color }}>
                           {label?.label || d.tipoDoc}
                         </span>
+                        {/* La clase del retiro: transferencia gratuita a un cliente vs retiro de bienes. */}
+                        {d.tipoDoc === 'RETIRO' && (
+                          <div className="mt-0.5 text-[10px] text-muted-foreground">
+                            {etiquetaDeClase(claseDeDocumento(d)) || 'Sin motivo'}
+                          </div>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-2 font-mono text-xs font-semibold">{d.serieNumero ?? `${d.serie}-${String(d.numero ?? '').padStart(6, '0')}`}</td>
                       <td className="px-4 py-2 text-xs">{d.venta?.cliente_nombre && d.venta.cliente_nombre !== '-' ? d.venta.cliente_nombre : 'Consumidor'}</td>
@@ -469,6 +511,11 @@ export function ReporteSire() {
           </li>
           <li>El archivo CSV se exporta en formato pipe-delimited para carga en SUNAT SIRE</li>
           <li>Las Notas de Crédito se restan de los totales (signo negativo)</li>
+          <li>
+            🔑 <strong>Retiros sin cobro</strong>: figuran con el <strong>valor referencial</strong> como importe (para el
+            IGV un retiro <em>es</em> una venta) y se separan por <strong>clase</strong>: <em>transferencia gratuita</em>
+            (se le regala a un cliente) contra <em>retiro de bienes</em> (lo usa el propio negocio).
+          </li>
         </ul>
       </div>
       </>
