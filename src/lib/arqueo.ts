@@ -104,6 +104,46 @@ export function efectivoEsperadoDe(turno: {
 }
 
 /**
+ * 🔑 **Los gastos de un turno, separados por de dónde salió la plata.**
+ *
+ * 📌 **Por qué existe** (03/11/2026): el campo `totalGastos` del turno suma **todo** —efectivo, transferencia
+ * y «otro»— porque se escribe con `+ monto` sin mirar el `tipoPago` (`services/egresos.ts`), y además le
+ * suman las **compras** y los **pagos a proveedores** hechos de caja. La tarjeta «Turno activo» del Dashboard
+ * de Operaciones mostraba ese total como «Gastos», al lado de «Vendido» y del efectivo/transferencia de las
+ * ventas: parecía lo que salió del cajón y **no lo era**.
+ *
+ * 🔑 **`caja` es el ÚNICO número que explica el arqueo**: es exactamente lo que resta `efectivoEsperadoDe()`.
+ * Si un número de «gastos» tiene que cerrar con la caja, sale de acá y no de `totalGastos`.
+ * ⚠️ **Los otros dos no se esconden**: son plata que salió del negocio (banco o «otro») y se muestran
+ * aparte, con su nombre.
+ */
+export type GastosDelTurno = {
+  /** Salió del cajón: egresos de caja + compras y pagos a proveedores pagados de caja. Cierra con el arqueo. */
+  caja: number
+  /** Pagado por transferencia/banco: **no** toca el efectivo. */
+  transferencia: number
+  /** Egresos con `tipoPago: 'otro'` y lo que no cae en ninguno de los dos (histórico incluido). */
+  otro: number
+  /** `totalGastos` del turno: la suma de los tres (se calcula, no se lee, para que no pueda desalinearse). */
+  total: number
+}
+
+export function gastosDelTurno(turno: {
+  totalGastos?: number
+  totalGastosEfectivo?: number
+  totalGastosTransferencia?: number
+}): GastosDelTurno {
+  const caja = Number(turno.totalGastosEfectivo) || 0
+  const transferencia = Number(turno.totalGastosTransferencia) || 0
+  const guardado = Number(turno.totalGastos) || 0
+  // «Otro» es el **residuo**: si el total guardado es mayor que la suma de los dos bolsillos, la diferencia
+  // salió por un medio que no es ninguno de los dos (o es un turno anterior a la separación del 16/09/2026).
+  // Nunca negativo: un turno sin los campos nuevos deja `caja = transferencia = 0` y todo cae acá.
+  const otro = Math.max(0, guardado - caja - transferencia)
+  return { caja, transferencia, otro, total: caja + transferencia + otro }
+}
+
+/**
  * Bolsillo de un item de cobro o de nota, según su `tipoPago`.
  *
  * Las **notas** siguen la regla que ya usa `services/notas.ts` al mover la caja: una NC

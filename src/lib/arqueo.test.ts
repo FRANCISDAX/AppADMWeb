@@ -12,7 +12,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { desglosarTurno, efectivoEsperadoDe, lineasDeOrigen, mediosDelTurno, sumarDesgloses, type ItemTurno } from './arqueo.ts'
+import { desglosarTurno, efectivoEsperadoDe, gastosDelTurno, lineasDeOrigen, mediosDelTurno, sumarDesgloses, type ItemTurno } from './arqueo.ts'
 
 describe('efectivoEsperadoDe — la fórmula única del arqueo', () => {
   it('fondo + efectivo − gastos (el caso normal)', () => {
@@ -363,5 +363,36 @@ describe('sumarDesgloses', () => {
     const vacio = sumarDesgloses([])
     assert.deepEqual(vacio.efectivo, { total: 0, ventas: 0, cobranzas: 0, notas: 0 })
     assert.equal(vacio.consistente, true)
+  })
+})
+
+describe('gastosDelTurno — qué gasto salió del cajón y qué no', () => {
+  it('separa los tres medios y el total nunca se desalinea', () => {
+    // Caso real: turno con un egreso de caja (45), uno por transferencia (120) y otro sin detalle (5).
+    const g = gastosDelTurno({ totalGastos: 170, totalGastosEfectivo: 45, totalGastosTransferencia: 120 })
+    assert.equal(g.caja, 45)
+    assert.equal(g.transferencia, 120)
+    assert.equal(g.otro, 5)
+    assert.equal(g.total, 170)
+    assert.equal(g.total, g.caja + g.transferencia + g.otro)
+  })
+
+  it('«caja» es EXACTAMENTE lo que resta el arqueo (el número de la tarjeta cierra con la caja)', () => {
+    const turno = { montoInicial: 100, totalEfectivo: 300, totalGastosEfectivo: 45, totalGastosTransferencia: 120, totalGastos: 165 }
+    // Si la tarjeta mostrara `totalGastos`, el esperado del arqueo no cerraría con lo que se ve.
+    assert.equal(efectivoEsperadoDe(turno), 100 + 300 - gastosDelTurno(turno).caja)
+    assert.notEqual(gastosDelTurno(turno).caja, gastosDelTurno(turno).total)
+  })
+
+  it('un turno sin los campos nuevos (histórico) no inventa gastos de caja', () => {
+    const g = gastosDelTurno({ totalGastos: 80 })
+    assert.equal(g.caja, 0)
+    assert.equal(g.transferencia, 0)
+    assert.equal(g.otro, 80)
+  })
+
+  it('sin gastos queda todo en cero (y «otro» nunca es negativo)', () => {
+    assert.deepEqual(gastosDelTurno({}), { caja: 0, transferencia: 0, otro: 0, total: 0 })
+    assert.equal(gastosDelTurno({ totalGastos: 10, totalGastosEfectivo: 20 }).otro, 0)
   })
 })
