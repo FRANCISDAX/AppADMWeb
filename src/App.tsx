@@ -6,6 +6,7 @@ import { useTheme } from '@/hooks/use-theme'
 import { useModoTactil } from '@/hooks/use-modo-tactil'
 import { etiquetaModoTactil, textoAvisoModoTactil, textoModoTactil } from '@/lib/modo-tactil'
 import { useSunatAuto } from '@/hooks/use-sunat-auto'
+import { registrarEvento, useMetricas } from '@/hooks/use-metricas'
 import { usePublicarCatalogo } from '@/hooks/use-publicar-catalogo'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -102,11 +103,20 @@ function Shell() {
   // tener el app abierto (una venta cambia el stock y el link lo refleja), sin depender de que alguien entre a
   // Configuración. Está limitado a una publicación cada 5 min para no escribir la base en cada venta.
   usePublicarCatalogo()
+  // 🔑 **Observabilidad propia** (03/11/2026): Web Vitals de ESTE equipo al documento del día
+  // (`tblMetricas`) y la bitácora de pantallas que viaja con cada error. Sin terceros: lo lee
+  // Auditoría → Observabilidad. Ver `hooks/use-metricas.ts` y `lib/observabilidad.ts`.
+  useMetricas()
   // 🔑 **Aceptación de los Términos y Condiciones** (`components/AceptacionTerminos.tsx`), montada en el
   // Shell: al **ADMIN** (el que representa al negocio) le aparece una vez, en su primer ingreso, y queda
   // registrado quién aceptó, qué versión y cuándo (hora del servidor). **No bloquea a nadie más**: una
   // venta nunca se frena por esto.
   const [seccion, setSeccion] = React.useState<string | null>(null)
+  // La bitácora de la sesión anota por dónde pasó la persona: es lo que después explica un error
+  // («estaba en Inventario y venía de PDV»). No sincroniza estado de React, así que no causa re-render.
+  React.useEffect(() => {
+    if (seccion) registrarEvento('pantalla', seccion)
+  }, [seccion])
   const [abiertas, setAbiertas] = React.useState<Record<string, boolean>>({ Operación: true, Reportes: true })
   const [toast, setToast] = React.useState<string | null>(null)
   const [menuAbierto, setMenuAbierto] = React.useState(false)

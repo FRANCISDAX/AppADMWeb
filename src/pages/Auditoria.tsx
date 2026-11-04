@@ -1,10 +1,11 @@
-import { Activity, AlertTriangle, DatabaseBackup, Download, History, Loader2, Search, Shield, Trash2 } from 'lucide-react'
+import { Activity, AlertTriangle, DatabaseBackup, Download, Gauge, History, Loader2, Search, Shield, Trash2 } from 'lucide-react'
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useNotifications } from '@/components/notifications'
 import { usePermisos } from '@/context/permisos'
 import { ErroresPanel } from '@/components/auditoria/ErroresPanel'
+import { ObservabilidadPanel } from '@/components/auditoria/ObservabilidadPanel'
 import { EstadoRespaldo } from '@/components/EstadoRespaldo'
 import { EstadoSistema } from '@/components/EstadoSistema'
 import { ExportarDatos } from '@/components/ExportarDatos'
@@ -89,7 +90,7 @@ export default function Auditoria() {
   const [filtroAccion, setFiltroAccion] = React.useState('')
   const [filtroModulo, setFiltroModulo] = React.useState('')
   const [busqueda, setBusqueda] = React.useState('')
-  const [vista, setVista] = React.useState<'actividad' | 'errores' | 'estado' | 'datos'>('actividad')
+  const [vista, setVista] = React.useState<'actividad' | 'errores' | 'observabilidad' | 'estado' | 'datos'>('actividad')
 
   const cargar = React.useCallback(async () => {
     setCargando(true)
@@ -183,7 +184,7 @@ export default function Auditoria() {
 
       {/* Actividad (lo que hacen los usuarios) vs Errores (lo que falla) */}
       <div className="flex gap-1.5 rounded-xl bg-muted p-1">
-        {([{ id: 'actividad', label: 'Actividad', icon: History }, { id: 'errores', label: 'Errores', icon: AlertTriangle }, { id: 'estado', label: 'Estado', icon: Activity }, { id: 'datos', label: 'Mis Datos', icon: DatabaseBackup }] as const).map((t) => (
+        {([{ id: 'actividad', label: 'Actividad', icon: History }, { id: 'errores', label: 'Errores', icon: AlertTriangle }, { id: 'observabilidad', label: 'Observabilidad', icon: Gauge }, { id: 'estado', label: 'Estado', icon: Activity }, { id: 'datos', label: 'Mis Datos', icon: DatabaseBackup }] as const).map((t) => (
           <button
             key={t.id}
             onClick={() => setVista(t.id)}
@@ -207,6 +208,10 @@ export default function Auditoria() {
         </div>
       ) : vista === 'errores' ? (
         <ErroresPanel />
+      ) : vista === 'observabilidad' ? (
+        // 📊 **Observabilidad propia** (03/11/2026): errores agrupados, rendimiento en las cajas y la serie
+        // por día. Sin servicios externos; la pestaña **Errores** sigue siendo el detalle para depurar.
+        <ObservabilidadPanel />
       ) : vista === 'estado' ? (
         // 🩺 **Estado del sistema** (decisión del usuario, 02/11/2026): las cuatro cosas que pueden
         // dejar al local sin operar —la caja, la API de SUNAT, el puente del Yape y el respaldo— juntas

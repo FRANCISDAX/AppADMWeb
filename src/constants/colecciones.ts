@@ -15,6 +15,10 @@ export const COL = {
   CONFIGURACION: 'tblConfiguracion',
   CATEGORIAS: 'tblCategorias',
   ERRORES: 'tblErrores',
+  /** **Métricas por día**: un documento por fecha local (`YYYY-MM-DD`) con las sumas de Web Vitals, las
+   *  visitas medidas y los errores del día. La escriben todos los equipos abiertos (`increment` para los
+   *  contadores) y la lee **Auditoría → Observabilidad**. Ver `services/metricas.ts` y `lib/observabilidad.ts`. */
+  METRICAS: 'tblMetricas',
   CAJAS: 'tblCajas',
   /** Avisos de pago de Yape: los **crea el puente** (notificación del celular o pasarela) y el
    *  POS solo los lee y avanza su estado. Ver `services/yape.ts`. */

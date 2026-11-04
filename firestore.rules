@@ -289,6 +289,17 @@ service cloud.firestore {
       allow delete: if auditoria();       // `limpiarLogs` (retención)
       allow update: if false;             // una bitácora no se reescribe
     }
+    // 🔑 **Métricas por día** (Auditoría → Observabilidad). Una colección nueva **nace cerrada**: esta regla
+    // es lo que la abre. La escribe **cualquier equipo abierto** (cada caja aporta sus Web Vitals al
+    // documento del día con `increment`) y la lee quien tiene auditoría.
+    // ⚠️ `create, update: if firmado()` es deliberadamente abierto: son **agregados de rendimiento**, no
+    // datos del negocio. Cerrarlo por usuario obligaría a un documento por equipo y multiplicaría las
+    // lecturas; el riesgo real (que alguien infle un contador) es cosmético.
+    match /tblMetricas/{dia} {
+      allow read: if auditoria();
+      allow create, update: if firmado();
+      allow delete: if false;             // es una serie histórica: no se borra desde el app
+    }
 
     // ── Público (sin sesión) ───────────────────────────────────────────────────────────────────
     // El catálogo del link de pedidos y las pantallas de cliente se leen SIN cuenta; **escribirlos

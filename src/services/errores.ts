@@ -2,6 +2,9 @@ import { addDoc, collection, getDocs, limit as fsLimit, orderBy, query, writeBat
 import { COL } from '@/constants/colecciones'
 import { auth, db } from '@/lib/firebase'
 import { crearGuardiaErrores, esRuido, normalizarError, trocearLotes, type ErrorApp } from '@/lib/errores'
+import { bitacora } from '@/lib/bitacora'
+import { huellaDeError, textoDeBitacora } from '@/lib/observabilidad'
+import { contarErrorDelDia } from '@/services/metricas'
 
 /**
  * Registro de errores de la app web (`tblErrores`).
@@ -44,6 +47,10 @@ export async function registrarError(error: unknown, contexto: string, detalle?:
     console.error(`❌ [${contexto}]`, error)
 
     const user = auth.currentUser
+    // 🔑 La bitácora se adjunta **antes** de guardar: qué estaba haciendo la persona es lo que después
+    // explica el error (el `stack` solo dice dónde se rompió).
+    bitacora.registrar('error', `${contexto}: ${mensaje.slice(0, 60)}`)
+    const eventos = textoDeBitacora(bitacora.eventos())
     const doc: Omit<ErrorApp, 'id'> = {
       mensaje: mensaje.slice(0, 1000),
       contexto,
@@ -52,10 +59,15 @@ export async function registrarError(error: unknown, contexto: string, detalle?:
       usuarioId: user?.uid ?? null,
       ruta: typeof window !== 'undefined' ? window.location.href.slice(0, 300) : '',
       dispositivo: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 300) : '',
+      // Identidad del problema, para agrupar en Auditoría → Observabilidad sin recalcular al leer.
+      huella: huellaDeError({ mensaje, contexto }),
+      ...(eventos.length > 1 ? { bitacora: eventos } : {}),
       ...(stack ? { stack: stack.slice(0, 3000) } : {}),
       ...(detalle ? { detalle } : {}),
     }
     await addDoc(collection(db, COL.ERRORES), doc)
+    // Contador del día para la serie del panel. Best-effort y en paralelo: nunca frena el registro.
+    void contarErrorDelDia()
   } catch (e) {
     console.warn('⚠️ No se pudo registrar el error:', e)
   }

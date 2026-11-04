@@ -107,3 +107,26 @@ describe('limpiarErrores: un borrado imposible no puede parecer «no había nada
     assert.match(panel, /if \(error\) toast\(error/, 'ErroresPanel tiene que avisar del fallo')
   })
 })
+
+describe('toda colección que el app escribe tiene su regla (una nueva nace cerrada)', () => {
+  const colecciones = readFileSync(join(aqui, '..', 'constants', 'colecciones.ts'), 'utf8')
+  const servicioMetricas = readFileSync(join(aqui, '..', 'services', 'metricas.ts'), 'utf8')
+
+  test('tblMetricas está declarada y tiene bloque en firestore.rules', () => {
+    // Sin regla, la escritura da permission-denied y el panel quedaría siempre vacío: el mismo tipo de
+    // defecto que tenía el botón de limpiar errores, pero silencioso desde el día uno.
+    assert.match(colecciones, /METRICAS: 'tblMetricas'/, 'tiene que estar en `constants/colecciones.ts`')
+    assert.match(reglas, /match \/tblMetricas\//, 'tiene que existir `match /tblMetricas/` en firestore.rules')
+  })
+
+  test('quien tiene auditoría la lee, cualquier equipo firmado la escribe y no se borra', () => {
+    const lista = permisos(bloqueDe('tblMetricas'))
+    assert.ok(lista.some((p) => p.startsWith('read:') && p.includes('auditoria()')))
+    assert.ok(lista.some((p) => p.startsWith('create') && p.includes('firmado()')))
+    assert.ok(lista.some((p) => p === 'delete: false'), 'es una serie histórica: no se borra desde el app')
+  })
+
+  test('el servicio realmente escribe en esa colección', () => {
+    assert.match(servicioMetricas, /COL\.METRICAS/, 'services/metricas.ts tiene que usar COL.METRICAS')
+  })
+})

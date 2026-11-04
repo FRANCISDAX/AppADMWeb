@@ -22,6 +22,17 @@ export type ErrorApp = {
   usuarioId?: string | null
   detalle?: Record<string, unknown>
   fecha: string
+  /**
+   * 🔑 **Huella del error** = `contexto` + mensaje normalizado (`huellaDeError`, `lib/observabilidad.ts`).
+   * Se guarda para no recalcularla al agrupar en el panel y para que la identidad del problema sea
+   * **estable entre equipos y versiones**. Los registros anteriores no la tienen: se calcula al leerlos.
+   */
+  huella?: string
+  /**
+   * **Bitácora de la sesión** en el momento del error (los últimos eventos: qué pantalla, qué buscó, qué
+   * acción hizo). Es lo que explica el error; sin esto solo queda el `stack`. Nunca lleva datos del negocio.
+   */
+  bitacora?: string[]
 }
 
 /** Errores conocidos que no aportan nada (ruido del navegador o de librerías). */
