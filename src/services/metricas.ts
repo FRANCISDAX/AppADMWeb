@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, increment, limit as fsLimit, orderBy, query, setDoc, Timestamp } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, limit as fsLimit, orderBy, query, Timestamp } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { db } from '@/lib/firebase'
 import { ejecutarTransaccion } from '@/services/transacciones'
@@ -68,20 +68,6 @@ export async function registrarMetricas(medidas: MedidasWeb): Promise<void> {
   } catch (e) {
     // Degradar en silencio (con rastro): las métricas no son parte de la venta.
     console.warn('⚠️ No se pudieron guardar las métricas:', e)
-  }
-}
-
-/**
- * Suma 1 al contador de errores del día. Se llama desde `registrarError`, así que **nunca lanza**.
- * Usa `increment()` a propósito: es atómico y no relee el documento (la transacción de las métricas ya
- * cubre lo que necesita comparar).
- */
-export async function contarErrorDelDia(): Promise<void> {
-  try {
-    const ref = doc(db, COL.METRICAS, diaDeHoy())
-    await setDoc(ref, { errores: increment(1), actualizado: new Date().toISOString() }, { merge: true })
-  } catch (e) {
-    console.warn('⚠️ No se pudo contar el error del día:', e)
   }
 }
 

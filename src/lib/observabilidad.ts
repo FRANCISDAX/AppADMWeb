@@ -229,9 +229,14 @@ export function percentil(valores: readonly number[], p: number): number | null 
 // ─── Métricas agregadas por día (`tblMetricas`) ──────────────────────────────
 
 /**
- * Un día de métricas. Se guarda **agregado** (sumas y contadores, no cada muestra): una escritura por
- * visita en vez de una por métrica, y el panel divide.
+ * Un día de métricas **de rendimiento**. Se guarda **agregado** (sumas y contadores, no cada muestra): una
+ * escritura por visita en vez de una por métrica, y el panel divide.
  * `id` = fecha local `YYYY-MM-DD` (el día del negocio, no UTC: un turno de las 21:00 pertenece a ese día).
+ *
+ * ⚠️ **Acá NO va el conteo de errores**: los errores tienen **una sola fuente** (`tblErrores`, leído por
+ * rango de fechas) y de ahí salen tanto los grupos como la serie diaria del panel. Tener un contador aparte
+ * hacía que las barras por día y la lista agrupada **pudieran no coincidir** — dos fuentes del mismo número.
+ * Ver `serieDeErrores()`.
  *
  * ⚠️ **Campos planos** (`suma_lcp`, `peor_inp`…) a propósito: `increment()` sobre un campo anidado obliga a
  * `FieldPath`, y así el servicio escribe `{ suma_lcp: increment(x), peor_lcp: max(...) }` sin trucos.
@@ -240,8 +245,6 @@ export type DiaDeMetricas = {
   id: string
   /** Visitas medidas del día (denominador de los promedios). */
   muestras?: number
-  /** Errores registrados ese día (contador). */
-  errores?: number
   suma_lcp?: number
   suma_inp?: number
   suma_cls?: number
@@ -272,20 +275,16 @@ export function diaDeHoy(ahora: Date = new Date()): string {
   return `${ahora.getFullYear()}-${dos(ahora.getMonth() + 1)}-${dos(ahora.getDate())}`
 }
 
-/** Resumen del período: promedio y peor de cada métrica, y los errores del día. */
+/** Resumen del período: promedio y peor de cada métrica. */
 export type ResumenMetricas = {
   dias: number
   muestras: number
-  errores: number
   porMetrica: { metrica: MetricaWeb; promedio: number | null; peor: number | null; nivel: NivelMetrica | null; dias: number }[]
-  /** Serie por día para dibujar la tendencia (errores y LCP). */
-  serie: { dia: string; errores: number; muestras: number; lcp: number | null }[]
 }
 
 export function resumirMetricas(dias: readonly DiaDeMetricas[]): ResumenMetricas {
   const ordenados = [...dias].sort((a, b) => a.id.localeCompare(b.id))
   const muestras = ordenados.reduce((s, d) => s + (d.muestras ?? 0), 0)
-  const errores = ordenados.reduce((s, d) => s + (d.errores ?? 0), 0)
 
   const porMetrica = METRICAS_WEB.map((metrica) => {
     // 🔑 Se acumula por métrica: si un día no midió INP, las muestras de ese día no entran en el promedio
@@ -308,21 +307,47 @@ export function resumirMetricas(dias: readonly DiaDeMetricas[]): ResumenMetricas
     return { metrica, promedio, peor, nivel: nivelDeMetrica(metrica, promedio), dias: diasConDato }
   })
 
-  return {
-    dias: ordenados.length,
-    muestras,
-    errores,
-    porMetrica,
-    serie: ordenados.map((d) => {
-      const suma = valorDeMetrica(d, 'lcp', 'suma')
-      return {
-        dia: d.id,
-        errores: d.errores ?? 0,
-        muestras: d.muestras ?? 0,
-        lcp: suma !== null && (d.muestras ?? 0) > 0 ? suma / (d.muestras ?? 1) : null,
-      }
-    }),
+  return { dias: ordenados.length, muestras, porMetrica }
+}
+
+// ─── Errores por día ────────────────────────────────────────────────────────
+
+/** `YYYY-MM-DD` **local** de una fecha ISO. El día del negocio, no UTC. */
+export function diaLocalDe(fechaIso: string | null | undefined): string {
+  const d = fechaIso ? new Date(fechaIso) : new Date(Number.NaN)
+  if (Number.isNaN(d.getTime())) return ''
+  return diaDeHoy(d)
+}
+
+/**
+ * 🔑 **La serie de errores por día, calculada de los MISMOS registros que se agrupan.**
+ *
+ * 📌 **Por qué no un contador aparte** (03/11/2026): la primera versión guardaba un contador diario en
+ * `tblMetricas` y las barras salían de ahí mientras la lista agrupada salía de `tblErrores`: dos fuentes del
+ * mismo número, que **podían no coincidir** (el contador suma todo; la lista muestra los últimos N). Es
+ * exactamente la trampa que el repo evita: *si lo que se ve y lo que se cuenta salen de distinto lado, se
+ * contradicen*. Ahora la serie y los grupos salen de la misma lectura.
+ *
+ * Devuelve **todos** los días del rango (con 0 si no hubo errores): un día sin errores es información.
+ */
+export function serieDeErrores(
+  errores: readonly Pick<ErrorObservado, 'fecha'>[],
+  dias: number,
+  ahora: Date = new Date()
+): { dia: string; cantidad: number }[] {
+  const cuantos = Math.max(1, Math.floor(dias))
+  const cubeta = new Map<string, number>()
+  for (let i = cuantos - 1; i >= 0; i--) {
+    const d = new Date(ahora)
+    d.setDate(d.getDate() - i)
+    cubeta.set(diaDeHoy(d), 0)
   }
+  for (const e of errores) {
+    const dia = diaLocalDe(e.fecha)
+    // Los errores fuera del rango (o sin fecha válida) no entran: no son parte del período que se muestra.
+    if (cubeta.has(dia)) cubeta.set(dia, (cubeta.get(dia) ?? 0) + 1)
+  }
+  return [...cubeta.entries()].map(([dia, cantidad]) => ({ dia, cantidad }))
 }
 
 /**

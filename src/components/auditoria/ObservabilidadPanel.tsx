@@ -2,13 +2,14 @@ import { Activity, AlertTriangle, Gauge, Loader2, RefreshCw, Smartphone } from '
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { obtenerErrores, type ErrorApp } from '@/services/errores'
+import { obtenerErroresDelPeriodo, type ErrorApp } from '@/services/errores'
 import { obtenerMetricas } from '@/services/metricas'
 import {
   NOMBRE_METRICA,
   formatoMetrica,
   resumenDeErrores,
   resumirMetricas,
+  serieDeErrores,
   type DiaDeMetricas,
   type NivelMetrica,
 } from '@/lib/observabilidad'
@@ -23,9 +24,15 @@ import {
  *    umbrales oficiales, el promedio y el peor del período.
  * 3. **¿Está empeorando?** La serie por día, que es lo que el promedio de un día no dice.
  *
- * ⚠️ **No bloquea nada y no reemplaza al panel de Errores**: ese sigue mostrando el detalle de cada registro
- * (stack, ruta, equipo) para depurar. Este muestra el **panorama**.
+ * 🔑 **Esta pestaña y la de «Errores» miran los mismos documentos, y está bien**: son dos vistas del mismo
+ * dato con propósitos distintos — acá **agrupado y por período** para decidir, allá **registro por registro**
+ * (stack, ruta, equipo) para depurar y limpiar. Lo que **no** puede pasar es que cuenten distinto: por eso
+ * **grupos y serie salen de la misma lectura** (`obtenerErroresDelPeriodo` + `serieDeErrores`), y el conteo
+ * de errores **no** tiene un contador aparte (`tblMetricas` es solo rendimiento).
  */
+
+/** La ventana del panorama. 7 días alcanzan para ver la tendencia sin inflar las lecturas. */
+const DIAS_PANORAMA = 7
 
 const COLOR_NIVEL: Record<NivelMetrica, string> = {
   ok: 'text-emerald-600 dark:text-emerald-400',
@@ -54,22 +61,27 @@ function haceCuanto(iso: string): string {
 
 export function ObservabilidadPanel() {
   const [errores, setErrores] = React.useState<ErrorApp[]>([])
+  const [truncado, setTruncado] = React.useState(false)
   const [dias, setDias] = React.useState<DiaDeMetricas[]>([])
   const [cargando, setCargando] = React.useState(true)
   const [fallo, setFallo] = React.useState<string | null>(null)
 
   // La lectura, sin tocar estado: la usan el montaje y el botón «Actualizar».
   const traer = React.useCallback(async () => {
-    const [listaErrores, listaDias] = await Promise.all([obtenerErrores(), obtenerMetricas(14)])
-    return { listaErrores, listaDias }
+    const [{ errores: listaErrores, truncado: recortado }, listaDias] = await Promise.all([
+      obtenerErroresDelPeriodo(DIAS_PANORAMA),
+      obtenerMetricas(14),
+    ])
+    return { listaErrores, recortado, listaDias }
   }, [])
 
   const cargar = React.useCallback(async () => {
     setCargando(true)
     setFallo(null)
     try {
-      const { listaErrores, listaDias } = await traer()
+      const { listaErrores, recortado, listaDias } = await traer()
       setErrores(listaErrores)
+      setTruncado(recortado)
       setDias(listaDias)
     } catch (e) {
       // Si falla la lectura, la pantalla lo dice (no se muestra «todo vacío» como si estuviera sano).
@@ -84,9 +96,10 @@ export function ObservabilidadPanel() {
   React.useEffect(() => {
     let vigente = true
     traer()
-      .then(({ listaErrores, listaDias }) => {
+      .then(({ listaErrores, recortado, listaDias }) => {
         if (!vigente) return
         setErrores(listaErrores)
+        setTruncado(recortado)
         setDias(listaDias)
       })
       .catch((e: unknown) => {
@@ -102,8 +115,10 @@ export function ObservabilidadPanel() {
 
   const erroresResumen = React.useMemo(() => resumenDeErrores(errores), [errores])
   const metricas = React.useMemo(() => resumirMetricas(dias), [dias])
+  // 🔑 La serie sale de los MISMOS registros que se agrupan: así las barras y la lista no pueden contradecirse.
+  const serie = React.useMemo(() => serieDeErrores(errores, DIAS_PANORAMA), [errores])
   // El máximo de la serie sirve para escalar las barras del gráfico.
-  const maxErrores = Math.max(1, ...metricas.serie.map((s) => s.errores))
+  const maxErrores = Math.max(1, ...serie.map((s) => s.cantidad))
 
   if (cargando) {
     return (
@@ -118,13 +133,25 @@ export function ObservabilidadPanel() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="flex-1 text-xs text-muted-foreground">
-          Últimos <strong>{errores.length}</strong> errores registrados y <strong>{metricas.dias}</strong> días de
-          métricas de <strong>este</strong> negocio. Los errores repetidos se cuentan una sola vez por minuto.
+          Últimos <strong>{DIAS_PANORAMA}</strong> días: <strong>{errores.length}</strong> error
+          {errores.length === 1 ? '' : 'es'} registrado{errores.length === 1 ? '' : 's'} y{' '}
+          <strong>{metricas.dias}</strong> días de métricas de <strong>este</strong> negocio. El detalle de
+          cada registro está en la pestaña <strong>Errores</strong>.
         </p>
         <Button variant="outline" size="sm" onClick={() => void cargar()}>
           <RefreshCw className="h-4 w-4" /> Actualizar
         </Button>
       </div>
+
+      {truncado && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Se alcanzó el tope de la ventana (500 registros): los grupos y las barras son de los <strong>más
+            recientes</strong>. Con este volumen de errores conviene revisar la pestaña <strong>Errores</strong>.
+          </span>
+        </div>
+      )}
 
       {fallo && (
         <div className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
@@ -171,21 +198,22 @@ export function ObservabilidadPanel() {
       </section>
 
       {/* ── Tendencia por día ───────────────────────────────────────────── */}
-      {metricas.serie.length > 0 && (
+      {serie.length > 0 && (
         <section className="rounded-2xl border bg-card p-4 shadow-card">
           <h3 className="flex items-center gap-2 text-sm font-bold">
             <Activity className="h-4 w-4 text-primary" /> Errores por día
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            La serie que el promedio no muestra: lo que importa es si **empeora**, no el total.
+            La serie que el promedio no muestra: lo que importa es si <strong>empeora</strong>, no el total.
+            Sale de los mismos registros que la lista de abajo, así los dos números coinciden siempre.
           </p>
           <div className="mt-3 flex items-end gap-1.5">
-            {metricas.serie.map((p) => (
-              <div key={p.dia} className="flex flex-1 flex-col items-center gap-1" title={`${p.dia} · ${p.errores} error(es) · ${p.muestras} visita(s)`}>
-                <span className="num text-[10px] text-muted-foreground">{p.errores}</span>
+            {serie.map((p) => (
+              <div key={p.dia} className="flex flex-1 flex-col items-center gap-1" title={`${p.dia} · ${p.cantidad} error(es)`}>
+                <span className="num text-[10px] text-muted-foreground">{p.cantidad}</span>
                 <div
-                  className={cn('w-full rounded-t', p.errores > 0 ? 'bg-destructive/70' : 'bg-muted')}
-                  style={{ height: `${Math.max(3, (p.errores / maxErrores) * 48)}px` }}
+                  className={cn('w-full rounded-t', p.cantidad > 0 ? 'bg-destructive/70' : 'bg-muted')}
+                  style={{ height: `${Math.max(3, (p.cantidad / maxErrores) * 48)}px` }}
                 />
                 <span className="text-[10px] text-muted-foreground">{p.dia.slice(8)}</span>
               </div>
@@ -253,8 +281,9 @@ export function ObservabilidadPanel() {
       </section>
 
       <p className="text-[11px] text-muted-foreground">
-        El detalle de cada error (stack, ruta, equipo) sigue en la pestaña <strong>Errores</strong>.
-        Sin servicios externos: todo esto vive en la base del negocio.
+        Los mismos documentos se ven <strong>registro por registro</strong> (con stack, ruta y equipo) en la
+        pestaña <strong>Errores</strong>, que también es donde se limpia lo viejo. Sin servicios externos: todo
+        esto vive en la base del negocio.
       </p>
     </div>
   )

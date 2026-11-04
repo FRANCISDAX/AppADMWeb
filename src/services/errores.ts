@@ -1,17 +1,16 @@
-import { addDoc, collection, getDocs, limit as fsLimit, orderBy, query, writeBatch } from 'firebase/firestore'
+import { addDoc, collection, getDocs, limit as fsLimit, orderBy, query, where, writeBatch } from 'firebase/firestore'
 import { COL } from '@/constants/colecciones'
 import { auth, db } from '@/lib/firebase'
 import { crearGuardiaErrores, esRuido, normalizarError, trocearLotes, type ErrorApp } from '@/lib/errores'
 import { bitacora } from '@/lib/bitacora'
 import { huellaDeError, textoDeBitacora } from '@/lib/observabilidad'
-import { contarErrorDelDia } from '@/services/metricas'
 
 /**
  * Registro de errores de la app web (`tblErrores`).
  *
  * Antes los errores solo iban a `console.error`: en producción —sobre todo desde
  * el celular— nadie los veía. Ahora se guardan acá y se revisan en
- * **Auditoría → Errores**.
+ * **Auditoría → Errores** (el detalle) y **Auditoría → Observabilidad** (el panorama agrupado).
  *
  * Reglas:
  * - **Nunca lanza**: un fallo al registrar errores no puede romper una venta ni
@@ -21,11 +20,53 @@ import { contarErrorDelDia } from '@/services/metricas'
  * - **Firestore aquí, no en los componentes**: la UI solo llama a `registrarError`.
  */
 
-/** Máximo de errores que se traen para ver en Auditoría. */
+/** Máximo de errores que se traen para ver en Auditoría → Errores (la lista de detalle). */
 export const MAX_ERRORES_UI = 100
+
+/**
+ * Tope de la ventana del panorama (`Observabilidad`). 500 documentos alcanzan de sobra para 7 días: la
+ * guardia de `lib/errores.ts` registra un mismo error **una vez por minuto**, así que llegar al tope ya
+ * significa que hay un problema serio (y la pantalla lo dice).
+ */
+export const MAX_ERRORES_PERIODO = 500
 
 /** Máximo de operaciones por lote de Firestore. */
 const TAMANO_LOTE = 500
+
+/**
+ * 🔑 **Los errores de los últimos `dias`, para el panel de Observabilidad.**
+ *
+ * 📌 **Por qué existe** (03/11/2026): `obtenerErrores` trae «los últimos N documentos», que es lo correcto
+ * para la **lista de detalle** pero **no** para un panorama por período — y menos para dibujar una serie por
+ * día. Con un contador aparte, las barras y los grupos podían no coincidir. Ahora **el panel lee esto** y de
+ * acá salen los grupos **y** la serie: una sola fuente.
+ *
+ * ⚠️ Un solo campo con rango + `orderBy` sobre ese mismo campo ⇒ **sin índice compuesto**.
+ * Devuelve además si se **truncó** en `max`, para poder decirlo en pantalla en vez de mentir con un total.
+ */
+export async function obtenerErroresDelPeriodo(
+  dias = 7,
+  max = MAX_ERRORES_PERIODO
+): Promise<{ errores: ErrorApp[]; truncado: boolean }> {
+  const desde = new Date()
+  desde.setDate(desde.getDate() - Math.max(1, dias))
+  desde.setHours(0, 0, 0, 0)
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, COL.ERRORES),
+        where('fecha', '>=', desde.toISOString()),
+        orderBy('fecha', 'desc'),
+        fsLimit(max)
+      )
+    )
+    const errores = snap.docs.map((d) => ({ ...(d.data() as Omit<ErrorApp, 'id'>), id: d.id }))
+    return { errores, truncado: errores.length >= max }
+  } catch (e) {
+    console.error('❌ No se pudieron leer los errores del período:', e)
+    return { errores: [], truncado: false }
+  }
+}
 
 /** Error repetido u ola de errores: no se registra de nuevo. */
 const permitido = crearGuardiaErrores()
@@ -66,8 +107,6 @@ export async function registrarError(error: unknown, contexto: string, detalle?:
       ...(detalle ? { detalle } : {}),
     }
     await addDoc(collection(db, COL.ERRORES), doc)
-    // Contador del día para la serie del panel. Best-effort y en paralelo: nunca frena el registro.
-    void contarErrorDelDia()
   } catch (e) {
     console.warn('⚠️ No se pudo registrar el error:', e)
   }

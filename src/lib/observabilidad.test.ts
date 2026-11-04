@@ -23,6 +23,7 @@ import {
   percentil,
   resumenDeErrores,
   resumirMetricas,
+  serieDeErrores,
   textoDeBitacora,
   valorDeMetrica,
   type DiaDeMetricas,
@@ -221,10 +222,10 @@ describe('percentil', () => {
 
 describe('resumen por día (lo que dibuja el panel)', () => {
   const dias: DiaDeMetricas[] = [
-    { id: '2026-11-01', muestras: 2, errores: 5, suma_lcp: 4000, suma_inp: 200, peor_lcp: 2600, peor_inp: 120 },
-    { id: '2026-11-02', muestras: 2, errores: 1, suma_lcp: 5000, suma_inp: 300, peor_lcp: 3100, peor_inp: 180 },
+    { id: '2026-11-01', muestras: 2, suma_lcp: 4000, suma_inp: 200, peor_lcp: 2600, peor_inp: 120 },
+    { id: '2026-11-02', muestras: 2, suma_lcp: 5000, suma_inp: 300, peor_lcp: 3100, peor_inp: 180 },
     // Día sin INP medido: no puede hundir el promedio de INP.
-    { id: '2026-11-03', muestras: 2, errores: 0, suma_lcp: 3000, peor_lcp: 1800 },
+    { id: '2026-11-03', muestras: 2, suma_lcp: 3000, peor_lcp: 1800 },
   ]
 
   test('el promedio de cada métrica usa SOLO las muestras de esa métrica', () => {
@@ -242,21 +243,16 @@ describe('resumen por día (lo que dibuja el panel)', () => {
     assert.equal(r.porMetrica.find((m) => m.metrica === 'lcp')?.peor, 3100)
   })
 
-  test('cuenta errores y muestras del período, y arma la serie ordenada por día', () => {
+  test('cuenta los días y las muestras del período', () => {
     const r = resumirMetricas(dias)
-    assert.equal(r.errores, 6)
     assert.equal(r.muestras, 6)
     assert.equal(r.dias, 3)
-    assert.deepEqual(r.serie.map((s) => s.dia), ['2026-11-01', '2026-11-02', '2026-11-03'])
-    assert.equal(r.serie[0].lcp, 2000)
   })
 
   test('sin días no inventa números', () => {
     const r = resumirMetricas([])
     assert.equal(r.dias, 0)
-    assert.equal(r.errores, 0)
     assert.ok(r.porMetrica.every((m) => m.promedio === null && m.nivel === null))
-    assert.deepEqual(r.serie, [])
   })
 
   test('los nombres de campo son los que el servicio escribe en Firestore', () => {
@@ -278,7 +274,6 @@ describe('resumen por día (lo que dibuja el panel)', () => {
 })
 
 // ─── Bitácora ───────────────────────────────────────────────────────────────
-
 describe('la bitácora de la sesión (breadcrumbs)', () => {
   test('guarda el orden en que pasaron las cosas', () => {
     const b = crearBitacora()
@@ -309,5 +304,50 @@ describe('la bitácora de la sesión (breadcrumbs)', () => {
     assert.ok(texto.every((l) => l.length <= 160), 'ninguna línea puede pasar de 160 caracteres')
     assert.match(texto[0], /^paso-10/)
     assert.match(texto[19], /^paso-29/)
+  })
+})
+
+describe('la serie de errores por día (la MISMA fuente que los grupos)', () => {
+  const ahora = new Date(2026, 10, 3, 12, 0, 0) // 3/11/2026 mediodía, hora local
+
+  test('devuelve TODOS los días del rango, incluidos los que no tienen errores', () => {
+    // Un día sin errores es información: si se omitiera, la tendencia mentiría.
+    assert.deepEqual(serieDeErrores([], 3, ahora), [
+      { dia: '2026-11-01', cantidad: 0 },
+      { dia: '2026-11-02', cantidad: 0 },
+      { dia: '2026-11-03', cantidad: 0 },
+    ])
+  })
+
+  test('cuenta por día LOCAL y suma los repetidos del mismo día', () => {
+    const errores = [
+      { fecha: new Date(2026, 10, 3, 9, 0, 0).toISOString() },
+      { fecha: new Date(2026, 10, 3, 23, 30, 0).toISOString() }, // misma noche: sigue siendo el 3
+      { fecha: new Date(2026, 10, 1, 10, 0, 0).toISOString() },
+    ]
+    const serie = serieDeErrores(errores, 3, ahora)
+    assert.equal(serie.find((s) => s.dia === '2026-11-03')?.cantidad, 2)
+    assert.equal(serie.find((s) => s.dia === '2026-11-01')?.cantidad, 1)
+    assert.equal(serie.find((s) => s.dia === '2026-11-02')?.cantidad, 0)
+  })
+
+  test('lo que cae FUERA del rango no entra (no infla el total del período)', () => {
+    const errores = [
+      { fecha: new Date(2026, 9, 20, 10, 0, 0).toISOString() }, // 20/10, fuera de la ventana
+      { fecha: new Date(2026, 10, 3, 10, 0, 0).toISOString() },
+    ]
+    assert.equal(serieDeErrores(errores, 7, ahora).reduce((s, d) => s + d.cantidad, 0), 1)
+  })
+
+  test('un registro sin fecha o con basura no rompe la serie', () => {
+    const serie = serieDeErrores([{ fecha: '' }, { fecha: 'no es fecha' }, {}], 2, ahora)
+    assert.equal(serie.length, 2)
+    assert.equal(serie.reduce((s, d) => s + d.cantidad, 0), 0)
+  })
+
+  test('el total de la serie coincide con los registros del período (lo que se agrupa)', () => {
+    // Esto es lo que no se podía garantizar cuando la serie salía de un contador aparte.
+    const errores = Array.from({ length: 5 }, () => ({ fecha: new Date(2026, 10, 2, 12, 0, 0).toISOString() }))
+    assert.equal(serieDeErrores(errores, 7, ahora).reduce((s, d) => s + d.cantidad, 0), errores.length)
   })
 })
