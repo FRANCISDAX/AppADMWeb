@@ -31,7 +31,7 @@ export type MedidasWeb = Partial<Record<MetricaWeb, number>>
  * Guarda las medidas de esta visita en el documento del día.
  * `muestras` cuenta **visitas**, no métricas: es el denominador de los promedios.
  */
-export async function registrarMetricas(medidas: MedidasWeb): Promise<void> {
+export async function registrarMetricas(medidas: MedidasWeb, opciones?: { lcpElemento?: string }): Promise<void> {
   const dia = diaDeHoy()
   const ref = doc(db, COL.METRICAS, dia)
   const limpio: MedidasWeb = {}
@@ -55,6 +55,9 @@ export async function registrarMetricas(medidas: MedidasWeb): Promise<void> {
         muestras: numero(previo.muestras) + 1,
         actualizado: new Date().toISOString(),
       }
+      // Sobre qué elemento se midió el LCP (último valor del día): sirve para leer si mide el armazón.
+      const elemento = opciones?.lcpElemento?.trim()
+      if (elemento) payload.lcp_elemento = elemento.slice(0, 60)
       for (const m of METRICAS_WEB) {
         const v = limpio[m]
         if (v === undefined) continue

@@ -14,6 +14,9 @@ import {
   METRICAS_WEB,
   agruparErrores,
   campoDeMetrica,
+  clsDeSaltos,
+  crearMedidorCls,
+  descriptorDeElemento,
   diaDeHoy,
   equipoDe,
   formatoMetrica,
@@ -349,5 +352,62 @@ describe('la serie de errores por día (la MISMA fuente que los grupos)', () => 
     // Esto es lo que no se podía garantizar cuando la serie salía de un contador aparte.
     const errores = Array.from({ length: 5 }, () => ({ fecha: new Date(2026, 10, 2, 12, 0, 0).toISOString() }))
     assert.equal(serieDeErrores(errores, 7, ahora).reduce((s, d) => s + d.cantidad, 0), errores.length)
+  })
+})
+
+describe('CLS: la peor ventana, no la suma del día', () => {
+  test('un salto aislado vale lo que pesa', () => {
+    assert.equal(clsDeSaltos([{ t: 100, valor: 0.12 }]), 0.12)
+  })
+
+  test('saltos seguidos (menos de 1 s) forman UNA ventana y se suman', () => {
+    // Esto es lo que la vista del usuario percibe como «un solo sacudón».
+    assert.equal(clsDeSaltos([{ t: 100, valor: 0.1 }, { t: 600, valor: 0.15 }]), 0.25)
+  })
+
+  test('dos saltos separados por más de 1 s son dos ventanas: se toma la PEOR, no la suma', () => {
+    // 📌 El caso que hacía mentir al panel: el de la mañana y el de la tarde no se acumulan.
+    const cls = clsDeSaltos([{ t: 1000, valor: 0.2 }, { t: 9000, valor: 0.1 }])
+    assert.equal(cls, 0.2)
+    assert.notEqual(cls, 0.3)
+  })
+
+  test('una ráfaga que dura más de 5 s se corta aunque no haya pausas', () => {
+    // Un salto cada 900 ms durante 9 s: la ventana no puede pasar de 5 s.
+    const saltos = Array.from({ length: 10 }, (_, i) => ({ t: i * 900, valor: 0.1 }))
+    const cls = clsDeSaltos(saltos)
+    // 6 saltos entran en 5 s (0, 900, 1800, 2700, 3600, 4500) → 0.6; el resto abre ventana nueva.
+    assert.ok(cls >= 0.6 && cls < 1, `esperaba ~0.6 y dio ${cls}`)
+  })
+
+  test('una sesión larga (8 horas) NO acumula: el número queda en el orden de la peor ventana', () => {
+    // 300 cambios de pantalla repartidos en un día, cada uno con un salto de 0.05 separado 2 min.
+    const saltos = Array.from({ length: 300 }, (_, i) => ({ t: i * 120000, valor: 0.05 }))
+    const cls = clsDeSaltos(saltos)
+    assert.ok(cls < 0.1, `el CLS de un día entero no puede superar la peor ventana; dio ${cls}`)
+  })
+
+  test('valores basura se ignoran (no rompen ni inflan)', () => {
+    assert.equal(clsDeSaltos([{ t: Number.NaN, valor: 0.2 }, { t: 100, valor: Number.NaN }, { t: 100, valor: -1 }]), 0)
+  })
+
+  test('el medidor incremental da lo mismo que procesar la lista completa', () => {
+    const saltos = [{ t: 0, valor: 0.1 }, { t: 500, valor: 0.05 }, { t: 3000, valor: 0.3 }]
+    const medidor = crearMedidorCls()
+    for (const s of saltos) medidor.agregar(s.t, s.valor)
+    assert.equal(medidor.valor(), clsDeSaltos(saltos))
+  })
+})
+
+describe('qué elemento se midió como LCP (para no confundir el armazón con el catálogo)', () => {
+  test('describe etiqueta y primera clase', () => {
+    assert.equal(descriptorDeElemento('DIV', 'brand-grad flex h-9 w-9'), 'div.brand-grad')
+    assert.equal(descriptorDeElemento('IMG', '  h-16  rounded-2xl '), 'img.h-16')
+  })
+
+  test('sin clase o sin etiqueta no inventa nada', () => {
+    assert.equal(descriptorDeElemento('MAIN', ''), 'main')
+    assert.equal(descriptorDeElemento('', 'x'), '')
+    assert.equal(descriptorDeElemento(null, null), '')
   })
 })

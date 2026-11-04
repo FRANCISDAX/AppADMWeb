@@ -173,13 +173,81 @@ export function resumenDeErrores(errores: readonly ErrorObservado[]): {
 
 // ─── Rendimiento: Web Vitals ─────────────────────────────────────────────────
 
+/**
+ * 🔑 **CLS con el algoritmo OFICIAL: la peor «ventana» de saltos, no la suma del día.**
+ *
+ * 📌 **El error que corrige esto** (03/11/2026): la primera versión **sumaba todos los saltos** de la sesión.
+ * En un POS que queda abierto horas, cada cambio de pantalla le sumaba al mismo número, así que el panel
+ * mostró **0,889** (9× el límite de 0,25) donde la realidad rondaba 0,1-0,3 — un número que **miente para
+ * arriba** y que no se puede comparar con el umbral.
+ *
+ * La regla (web.dev): CLS es el **máximo** de las «ventanas de sesión», donde una ventana junta saltos
+ * **mientras no pasen más de 1 s entre uno y otro** y **no dure más de 5 s** en total. Un salto aislado a las
+ * 3 de la tarde no se suma con el de la mañana.
+ */
+export const VENTANA_CLS = { corteMs: 1000, duracionMaximaMs: 5000 } as const
+
+/** Un salto de layout: cuándo ocurrió (ms desde el inicio) y cuánto pesó. */
+export type SaltoDeLayout = { t: number; valor: number }
+
+/** Medidor incremental: O(1) de memoria, así una sesión de 8 horas no acumula miles de entradas. */
+export function crearMedidorCls(opciones: { corteMs: number; duracionMaximaMs: number } = VENTANA_CLS): {
+  agregar: (t: number, valor: number) => void
+  valor: () => number
+} {
+  let mejor = 0
+  let actual = 0
+  let inicio = -1
+  let ultimo = -1
+  return {
+    agregar(t, valor) {
+      if (!Number.isFinite(t) || !Number.isFinite(valor) || valor <= 0) return
+      // Nueva ventana: pasó demasiado tiempo desde el salto anterior, o la ventana ya dura 5 s.
+      const corta = ultimo >= 0 && (t - ultimo > opciones.corteMs || t - inicio > opciones.duracionMaximaMs)
+      if (inicio < 0 || corta) {
+        inicio = t
+        actual = 0
+      }
+      actual += valor
+      ultimo = t
+      if (actual > mejor) mejor = actual
+    },
+    valor() {
+      return mejor
+    },
+  }
+}
+
+/** CLS de una lista de saltos (misma implementación que el medidor incremental). */
+export function clsDeSaltos(
+  saltos: readonly SaltoDeLayout[],
+  opciones: { corteMs: number; duracionMaximaMs: number } = VENTANA_CLS
+): number {
+  const medidor = crearMedidorCls(opciones)
+  for (const s of saltos) medidor.agregar(s.t, s.valor)
+  return medidor.valor()
+}
+
+/**
+ * 🔑 **Qué elemento se está midiendo como LCP.** En una app de una sola página el «contenido más grande» del
+ * arranque puede ser el **armazón** (o el spinner), no el catálogo: sin saber sobre qué se midió, un LCP de
+ * 298 ms se lee como «el catálogo aparece en 298 ms» y eso puede ser falso. Se guarda un descriptor corto
+ * (`div.brand-grad`) para poder leerlo en el panel.
+ */
+export function descriptorDeElemento(etiqueta: string | null | undefined, clases: string | null | undefined): string {
+  const tag = String(etiqueta ?? '').toLowerCase().trim()
+  if (!tag) return ''
+  const primera = String(clases ?? '').trim().split(/\s+/).filter(Boolean)[0]
+  return primera ? `${tag}.${primera}`.slice(0, 60) : tag.slice(0, 60)
+}
+
 /** Las métricas que se capturan (nombres cortos, como los usa el panel y la colección). */
 export type MetricaWeb = 'lcp' | 'inp' | 'cls' | 'fcp' | 'ttfb'
 export const METRICAS_WEB: readonly MetricaWeb[] = ['lcp', 'inp', 'cls', 'fcp', 'ttfb'] as const
 
 /** Cómo se llama cada una en pantalla. */
 export const NOMBRE_METRICA: Record<MetricaWeb, string> = {
-  lcp: 'LCP · aparece el catálogo',
+  lcp: 'LCP · aparece lo más grande',
   inp: 'INP · responde al toque',
   cls: 'CLS · la pantalla no salta',
   fcp: 'FCP · primer pintado',
@@ -256,6 +324,11 @@ export type DiaDeMetricas = {
   peor_cls?: number
   peor_fcp?: number
   peor_ttfb?: number
+  /**
+   * Sobre qué elemento se midió el LCP la última visita (`div.brand-grad`). Sirve para responder «¿ese LCP
+   * de 298 ms es el catálogo o el spinner?» sin adivinar.
+   */
+  lcp_elemento?: string
 }
 
 /** Los dos acumuladores de una métrica, con el nombre real del campo en Firestore. */

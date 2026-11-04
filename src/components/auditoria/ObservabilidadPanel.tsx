@@ -115,6 +115,11 @@ export function ObservabilidadPanel() {
 
   const erroresResumen = React.useMemo(() => resumenDeErrores(errores), [errores])
   const metricas = React.useMemo(() => resumirMetricas(dias), [dias])
+  // Sobre qué elemento se midió el LCP la última visita (el documento del día lo guarda tal cual).
+  const lcpElemento = React.useMemo(() => {
+    const conDato = dias.find((d) => d.lcp_elemento)
+    return conDato?.lcp_elemento ?? ''
+  }, [dias])
   // 🔑 La serie sale de los MISMOS registros que se agrupan: así las barras y la lista no pueden contradecirse.
   const serie = React.useMemo(() => serieDeErrores(errores, DIAS_PANORAMA), [errores])
   // El máximo de la serie sirve para escalar las barras del gráfico.
@@ -168,6 +173,8 @@ export function ObservabilidadPanel() {
         <p className="mt-1 text-xs text-muted-foreground">
           Medido en el equipo donde se cobra, no en el de desarrollo. Umbrales oficiales de Web Vitals
           {metricas.muestras > 0 ? ` · ${metricas.muestras} visita${metricas.muestras === 1 ? '' : 's'} medida${metricas.muestras === 1 ? '' : 's'}` : ''}.
+          El <strong>CLS</strong> es la <strong>peor ventana</strong> de saltos (1 s de pausa / 5 s de techo), no la
+          suma del día: una caja abierta 8 horas no lo infla.
         </p>
 
         {metricas.muestras === 0 ? (
@@ -176,24 +183,33 @@ export function ObservabilidadPanel() {
             de cada equipo.
           </p>
         ) : (
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {metricas.porMetrica.map((m) => (
-              <div key={m.metrica} className="rounded-xl border bg-background/60 p-3">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {NOMBRE_METRICA[m.metrica].split(' · ')[0]}
-                  </span>
-                  <span className={cn('num text-lg font-extrabold', m.nivel ? COLOR_NIVEL[m.nivel] : 'text-muted-foreground')}>
-                    {formatoMetrica(m.metrica, m.promedio)}
-                  </span>
+          <>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {metricas.porMetrica.map((m) => (
+                <div key={m.metrica} className="rounded-xl border bg-background/60 p-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {NOMBRE_METRICA[m.metrica].split(' · ')[0]}
+                    </span>
+                    <span className={cn('num text-lg font-extrabold', m.nivel ? COLOR_NIVEL[m.nivel] : 'text-muted-foreground')}>
+                      {formatoMetrica(m.metrica, m.promedio)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {NOMBRE_METRICA[m.metrica].split(' · ')[1] ?? ''}
+                    {m.peor !== null ? ` · peor ${formatoMetrica(m.metrica, m.peor)}` : ''}
+                  </p>
                 </div>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {NOMBRE_METRICA[m.metrica].split(' · ')[1] ?? ''}
-                  {m.peor !== null ? ` · peor ${formatoMetrica(m.metrica, m.peor)}` : ''}
-                </p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            {lcpElemento && (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                El LCP se midió sobre <strong>{lcpElemento}</strong>: si no es la pantalla que usa el cajero
+                (por ejemplo, un cargando o el encabezado), el número describe el <strong>arranque</strong> del
+                app, no el catálogo.
+              </p>
+            )}
+          </>
         )}
       </section>
 
