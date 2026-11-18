@@ -22,6 +22,11 @@
  * ⚠️ **Los avisos son parte de la tarjeta**: sin costos fijos, con el mes a medias, con mercadería sin costo
  * (margen inflado ⇒ equilibrio demasiado bajo) o con margen ≤ 0, se dice. Un punto de equilibrio que miente
  * es peor que no tenerlo.
+ *
+ * 🔑 **El desglose se puede auditar** (17/11/2026): cada categoría muestra **sus gastos** —fecha,
+ * descripción, medio y monto— y esas líneas **siempre suman** el total del renglón (salen del **mismo**
+ * `resumenDeEgresos`, no de una segunda consulta). Antes solo había totales y la pregunta era inevitable:
+ * *«¿de dónde sale los 185,90?»*.
  */
 import * as React from 'react'
 import { AlertTriangle, Info, Scale, Target } from 'lucide-react'
@@ -40,22 +45,27 @@ import {
   type MesDeEgresos,
 } from '@/lib/punto-equilibrio'
 import { anioDeFecha, mapaDeCostos, margenDelPeriodo, mesDeFecha, type DocDeVenta } from '@/lib/ventas-mensuales'
+import { etiquetaCortaDeMedio } from '@/lib/egresos-medios'
 import { cn } from '@/lib/utils'
 
 const fmt = (n: number) => 'S/ ' + (n ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const claveDeMes = (anio: number, mes: number) => `${anio}-${String(mes).padStart(2, '0')}`
+/** `2026-11-16…` → `16/11`, para el detalle. Lo que no se entiende se muestra tal como vino. */
+const fechaCorta = (fecha: string | null | undefined) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(fecha ?? ''))
+  return m ? `${m[3]}/${m[2]}` : String(fecha ?? '')
+}
 
 /** Cuántos meses se miran para el margen (uno solo es ruidoso). */
 const MESES_PARA_MARGEN = 3
 /** Cuántos meses **terminados** se promedian para los costos fijos. */
 const MESES_PARA_FIJOS = 3
 
-type EgresoDeFecha = EgresoParaFijos & { fecha?: string }
 type Datos = {
   anio: number
   mes: number
-  egresos: EgresoDeFecha[]
+  egresos: EgresoParaFijos[]
   docs: DocDeVenta[]
   mesesMedidos: number
 }
@@ -91,7 +101,7 @@ export function PuntoEquilibrioWidget() {
         setDatos({
           anio,
           mes,
-          egresos: (egresos ?? []) as EgresoDeFecha[],
+          egresos: egresos ?? [],
           docs: docs as DocDeVenta[],
           mesesMedidos: MESES_PARA_MARGEN,
         })
@@ -110,7 +120,7 @@ export function PuntoEquilibrioWidget() {
     const claveActual = claveDeMes(datos.anio, datos.mes)
 
     // 1) Agrupar los egresos por mes (YYYY-MM) para separar el mes en curso de los terminados.
-    const grupos = new Map<string, EgresoDeFecha[]>()
+    const grupos = new Map<string, EgresoParaFijos[]>()
     for (const e of datos.egresos) {
       const a = anioDeFecha(e.fecha)
       const m = mesDeFecha(e.fecha)
@@ -305,16 +315,33 @@ export function PuntoEquilibrioWidget() {
         {desglose.porCategoria.length > 0 && (
           <details className="pt-1">
             <summary className="flex cursor-pointer items-center gap-1 font-semibold">
-              <Info className="h-3 w-3" /> Qué hay cargado este mes por categoría
+              <Info className="h-3 w-3" /> Qué hay cargado este mes por categoría (con el detalle de cada gasto)
             </summary>
-            <ul className="mt-1 space-y-0.5 pl-4">
+            <ul className="mt-1 space-y-1 pl-4">
               {desglose.porCategoria.map((c) => (
-                <li key={c.categoria} className={cn('flex justify-between gap-2', !c.fijo && 'opacity-60')}>
-                  <span>
-                    {c.categoria}
-                    {!c.fijo && ' · mercadería (no es fijo)'}
-                  </span>
-                  <span className="num">{fmt(c.monto)}</span>
+                <li key={c.categoria}>
+                  <div className={cn('flex justify-between gap-2 font-semibold', !c.fijo && 'opacity-60')}>
+                    <span>
+                      {c.categoria}
+                      {!c.fijo && ' · mercadería (no es fijo)'}
+                      {c.lineas.length > 1 && <span className="font-normal"> · {c.lineas.length} gastos</span>}
+                    </span>
+                    <span className="num shrink-0">{fmt(c.monto)}</span>
+                  </div>
+                  {/* El detalle existe para poder auditar el total: estas líneas SIEMPRE suman el renglón de arriba. */}
+                  <ul className="ml-1 space-y-0.5 border-l pl-2">
+                    {c.lineas.map((l, i) => (
+                      <li key={`${c.categoria}-${i}`} className="flex justify-between gap-2">
+                        <span className="min-w-0 truncate" title={l.descripcion}>
+                          {l.fecha ? <span className="num">{fechaCorta(l.fecha)}</span> : <span className="opacity-70">s/f</span>}
+                          {' · '}
+                          {l.descripcion}
+                          <span className="opacity-70"> · {etiquetaCortaDeMedio(l.medio)}</span>
+                        </span>
+                        <span className="num shrink-0">{fmt(l.monto)}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </li>
               ))}
             </ul>

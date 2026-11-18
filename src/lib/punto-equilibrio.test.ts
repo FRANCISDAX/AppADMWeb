@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 
 import {
   CATEGORIAS_FIJAS_TIPICAS,
+  SIN_DESCRIPCION,
   baseDeCostosFijos,
   categoriasAusentes,
   categoriasFijasDe,
@@ -377,5 +378,69 @@ describe('un mes con UN solo egreso no es un mes (el falso "✅ Mes cubierto")',
     const soloAlquiler = [{ categoria: 'Alquiler', monto: 800 }]
     assert.equal(esMesCompleto(soloAlquiler, 1), true)
     assert.equal(esMesCompleto(soloAlquiler, 2), false)
+  })
+})
+
+describe('el desglose dice de QUÉ gasto sale cada total (auditable, 17/11/2026)', () => {
+  // 📌 El caso real que lo motivó: la tarjeta mostraba «Servicios S/ 185,90» y la pregunta fue inevitable
+  // —«¿de dónde sale los 185,90?»—. Son estos tres gastos, y ahora lo dice la pantalla.
+  const servicios = [
+    { categoria: 'Servicios', monto: 127, descripcion: 'INTERNET', fecha: '2026-11-03', tipoPago: 'transferencia' },
+    { categoria: 'Servicios', monto: 42.9, descripcion: 'PAGO DE CELULAR 910615790', fecha: '2026-11-03', tipoPago: 'transferencia' },
+    { categoria: 'Servicios', monto: 16, descripcion: 'AGUA', fecha: '2026-11-16', tipoPago: 'transferencia' },
+  ]
+
+  it('las líneas de la categoría SUMAN el total del renglón', () => {
+    const r = resumenDeEgresos(servicios)
+    assert.equal(r.porCategoria.length, 1)
+    const c = r.porCategoria[0]
+    assert.equal(c.monto, 185.9, '127 + 42,90 + 16')
+    const suma = c.lineas.reduce((s, l) => s + l.monto, 0)
+    // Si el detalle no suma el total, no sirve para auditar: sería otro número que hay que creer.
+    assert.equal(Math.round(suma * 100) / 100, c.monto)
+  })
+
+  it('cada línea guarda descripción, fecha y medio', () => {
+    const internet = resumenDeEgresos(servicios).porCategoria[0].lineas.find((l) => l.monto === 127)
+    assert.deepEqual(internet, { descripcion: 'INTERNET', fecha: '2026-11-03', monto: 127, medio: 'transferencia' })
+  })
+
+  it('van de la más reciente a la más vieja (se lee como un estado de cuenta)', () => {
+    assert.deepEqual(resumenDeEgresos(servicios).porCategoria[0].lineas.map((l) => l.monto), [16, 127, 42.9])
+  })
+
+  it('un gasto sin descripción, sin fecha o sin medio no rompe el detalle (y no se inventa nada)', () => {
+    const c = resumenDeEgresos([
+      { categoria: 'Alquiler', monto: 800 },
+      { categoria: 'Alquiler', monto: 200, descripcion: '   ', fecha: '' },
+    ]).porCategoria[0]
+    assert.equal(c.lineas.length, 2)
+    assert.equal(c.lineas[0].descripcion, SIN_DESCRIPCION, 'sin descripción se dice eso, no se deja vacío')
+    assert.equal(c.lineas[0].fecha, '', 'sin fecha NO se rellena con la de hoy')
+    assert.equal(c.lineas[0].medio, '', 'sin medio NO se asume caja')
+  })
+
+  it('un egreso de monto 0 no aparece en el detalle', () => {
+    const c = resumenDeEgresos([
+      { categoria: 'Servicios', monto: 0, descripcion: 'fila vacía' },
+      { categoria: 'Servicios', monto: 50, descripcion: 'AGUA' },
+    ]).porCategoria[0]
+    assert.equal(c.lineas.length, 1)
+    assert.equal(c.monto, 50)
+  })
+})
+
+describe('🛡️ la pantalla muestra el detalle y no solo el total', () => {
+  const aca = dirname(fileURLToPath(import.meta.url))
+  const widget = readFileSync(join(aca, '..', 'components', 'dashboard', 'PuntoEquilibrioWidget.tsx'), 'utf8')
+
+  it('dibuja las líneas de cada categoría, con su fecha abreviada', () => {
+    assert.match(widget, /c\.lineas\.map\(/)
+    assert.match(widget, /fechaCorta\(l\.fecha\)/)
+  })
+
+  it('el medio sale de la regla única (`etiquetaCortaDeMedio`), no de un string a mano', () => {
+    assert.match(widget, /etiquetaCortaDeMedio\(l\.medio\)/)
+    assert.doesNotMatch(widget, /l\.medio === 'caja'/)
   })
 })

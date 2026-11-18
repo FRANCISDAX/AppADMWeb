@@ -26,6 +26,8 @@ export type MedioDeEgreso = 'caja' | 'transferencia' | 'otro' | 'provision' | 'd
 export type MedioDeEgresoInfo = {
   id: MedioDeEgreso
   label: string
+  /** Etiqueta de una palabra, para renglones angostos (el detalle del punto de equilibrio, listados). */
+  corto: string
   /** Texto corto para la pantalla: qué implica elegirlo. */
   ayuda: string
   /** 🔑 **El ÚNICO que resta del cajón** (y lo hace al marcar pagado). */
@@ -40,6 +42,7 @@ export const MEDIOS_EGRESO: readonly MedioDeEgresoInfo[] = [
   {
     id: 'caja',
     label: 'Efectivo (de la caja)',
+    corto: 'Caja',
     ayuda: 'Sale del cajón: se descuenta del arqueo del turno.',
     tocaCaja: true,
     entraAlTurno: true,
@@ -48,6 +51,7 @@ export const MEDIOS_EGRESO: readonly MedioDeEgresoInfo[] = [
   {
     id: 'transferencia',
     label: 'Transferencia / banco',
+    corto: 'Transferencia',
     ayuda: 'Pagado por banco o billetera: no sale del cajón.',
     tocaCaja: false,
     entraAlTurno: true,
@@ -56,6 +60,7 @@ export const MEDIOS_EGRESO: readonly MedioDeEgresoInfo[] = [
   {
     id: 'dueno',
     label: 'Lo pagó el dueño',
+    corto: 'Dueño',
     ayuda: 'Lo pagó el dueño de su bolsillo: es gasto del mes y NO toca la caja.',
     tocaCaja: false,
     entraAlTurno: false,
@@ -64,6 +69,7 @@ export const MEDIOS_EGRESO: readonly MedioDeEgresoInfo[] = [
   {
     id: 'provision',
     label: 'Provisión · todavía no se pagó',
+    corto: 'Provisión',
     ayuda: 'Cuenta como costo del mes desde ahora. Cuando se pague, se marca y ahí sí sale del medio elegido.',
     tocaCaja: false,
     entraAlTurno: false,
@@ -72,6 +78,7 @@ export const MEDIOS_EGRESO: readonly MedioDeEgresoInfo[] = [
   {
     id: 'otro',
     label: 'Otro',
+    corto: 'Otro',
     ayuda: 'Un pago que no es de caja ni de banco (queda registrado sin mover el arqueo).',
     tocaCaja: false,
     entraAlTurno: true,
@@ -83,6 +90,7 @@ export const MEDIOS_EGRESO: readonly MedioDeEgresoInfo[] = [
 const DESCONOCIDO: MedioDeEgresoInfo = {
   id: 'otro',
   label: 'Medio desconocido',
+  corto: 'Sin medio',
   ayuda: 'El medio guardado no se reconoce: no se descuenta del cajón.',
   tocaCaja: false,
   entraAlTurno: false,
@@ -114,4 +122,9 @@ export function esProvision(medio: string | null | undefined): boolean {
 /** La etiqueta para mostrar (en la lista, en el Excel, en los reportes). */
 export function etiquetaDeMedio(medio: string | null | undefined): string {
   return infoDeMedio(medio).label
+}
+
+/** La etiqueta de una palabra (renglones angostos: el detalle del desglose, los listados apretados). */
+export function etiquetaCortaDeMedio(medio: string | null | undefined): string {
+  return infoDeMedio(medio).corto
 }

@@ -72,11 +72,27 @@ export const CATEGORIAS_FIJAS_TIPICAS: readonly string[] = [
   'transporte',
 ]
 
-/** Lo que este módulo necesita de un egreso. */
+/**
+ * Lo que este módulo necesita de un egreso.
+ *
+ * Los tres últimos campos **no entran en ninguna cuenta**: existen para que el desglose pueda mostrar
+ * **de qué gasto** sale cada total (`lineas`). Sin ellos el widget decía «Servicios S/ 185,90» y no había
+ * forma de saber que eran internet + celular + agua (📌 la pregunta real del usuario, 17/11/2026:
+ * *«¿de dónde sale los 185,90?»*).
+ */
 export type EgresoParaFijos = {
   categoria?: string | null
   monto?: number | null
+  /** Para el detalle del desglose. */
+  descripcion?: string | null
+  /** La fecha del gasto (ISO `YYYY-MM-DD…`), solo para ordenar y mostrar el detalle. */
+  fecha?: string | null
+  /** El medio guardado (`caja`, `transferencia`, `provision`, `dueno`, `otro`); la pantalla lo rotula. */
+  tipoPago?: string | null
 }
+
+/** Lo que se muestra cuando un egreso viejo no tiene descripción: **no se inventa un texto**. */
+export const SIN_DESCRIPCION = '(sin descripción)'
 
 /** **¿Este egreso es un costo fijo?** Todo lo que no sea mercadería, sí. */
 export function esCostoFijo(e: EgresoParaFijos | null | undefined): boolean {
@@ -104,12 +120,30 @@ export function comprasDeEgresos(egresos: readonly EgresoParaFijos[] | null | un
   return redondear2(total)
 }
 
-/** Un renglón del desglose: cuánto hay en cada categoría y si cuenta como fijo. */
-export type CategoriaDeEgreso = { categoria: string; monto: number; fijo: boolean }
+/** Una línea del desglose: el gasto **tal como se cargó**, para poder auditarlo. */
+export type LineaDeEgreso = {
+  descripcion: string
+  /** La fecha guardada, sin tocar (la pantalla la abrevia). Puede venir vacía en datos viejos. */
+  fecha: string
+  monto: number
+  /** El medio guardado, en minúsculas (`caja`, `transferencia`, `provision`, …). Vacío si no tiene. */
+  medio: string
+}
+
+/** Un renglón del desglose: cuánto hay en cada categoría, si cuenta como fijo y **qué gastos lo componen**. */
+export type CategoriaDeEgreso = {
+  categoria: string
+  monto: number
+  fijo: boolean
+  /** 🔑 Las líneas **siempre suman `monto`** (es lo que hace auditable el total). */
+  lineas: LineaDeEgreso[]
+}
 
 /**
  * **El desglose por categoría**, para que se vea *qué* hay cargado (y qué no).
  * 📌 Sin esto, un total de S/ 169,90 no dice nada: no se puede saber que falta el alquiler.
+ * 📌 Y con el total solo, tampoco se sabe **de qué gastos** sale (internet + celular + agua, por ejemplo):
+ * por eso cada categoría trae sus `lineas`, con descripción, fecha y medio.
  */
 export function resumenDeEgresos(egresos: readonly EgresoParaFijos[] | null | undefined): {
   fijos: number
@@ -125,11 +159,24 @@ export function resumenDeEgresos(egresos: readonly EgresoParaFijos[] | null | un
     const fijo = esCostoFijo(e)
     const categoria = String(e?.categoria ?? '').trim() || 'Sin categoría'
     const clave = categoria.toLowerCase()
+    const linea: LineaDeEgreso = {
+      descripcion: String(e?.descripcion ?? '').trim() || SIN_DESCRIPCION,
+      fecha: String(e?.fecha ?? '').trim(),
+      monto: redondear2(monto),
+      medio: String(e?.tipoPago ?? '').trim().toLowerCase(),
+    }
     const actual = mapa.get(clave)
-    if (actual) actual.monto = redondear2(actual.monto + monto)
-    else mapa.set(clave, { categoria, monto: redondear2(monto), fijo })
+    if (actual) {
+      actual.monto = redondear2(actual.monto + monto)
+      actual.lineas.push(linea)
+    } else mapa.set(clave, { categoria, monto: redondear2(monto), fijo, lineas: [linea] })
     if (fijo) fijos += monto
     else mercaderia += monto
+  }
+  // Las líneas van de la **más reciente a la más vieja** (como un estado de cuenta); sin fecha, al final y
+  // ordenadas por monto, para que el detalle no cambie de orden entre dos renders.
+  for (const c of mapa.values()) {
+    c.lineas.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '') || b.monto - a.monto)
   }
   return {
     fijos: redondear2(fijos),

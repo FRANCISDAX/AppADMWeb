@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { MEDIOS_EGRESO, entraAlTurno, esProvision, etiquetaDeMedio, infoDeMedio, tocaLaCaja } from './egresos-medios.ts'
+import { MEDIOS_EGRESO, entraAlTurno, esProvision, etiquetaCortaDeMedio, etiquetaDeMedio, infoDeMedio, tocaLaCaja } from './egresos-medios.ts'
 
 describe('qué medio toca la caja', () => {
   test('SOLO la caja resta del efectivo', () => {
@@ -57,6 +57,19 @@ describe('la etiqueta que se muestra', () => {
     }
     assert.equal(MEDIOS_EGRESO.length, 5, 'caja, transferencia, dueño, provisión, otro')
     assert.equal(infoDeMedio('provision').esProvision, true)
+  })
+
+  test('y una corta, para renglones angostos (el detalle del desglose)', () => {
+    for (const m of MEDIOS_EGRESO) {
+      // Una palabra: el detalle del punto de equilibrio comparte la línea con la descripción y el monto.
+      assert.ok(m.corto.length >= 3 && m.corto.length <= 15, `${m.id}: «${m.corto}» tiene que entrar en un renglón`)
+      assert.ok(!m.corto.includes(' · '), `${m.id}: la corta no lleva separadores (es «${m.corto}»)`)
+      assert.equal(etiquetaCortaDeMedio(m.id), m.corto)
+    }
+    assert.equal(etiquetaCortaDeMedio('provision'), 'Provisión')
+    // Un medio que no se entiende tampoco se disfraza de caja.
+    assert.equal(etiquetaCortaDeMedio('lo-que-sea'), 'Sin medio')
+    assert.equal(etiquetaCortaDeMedio(null), 'Sin medio')
   })
 })
 
