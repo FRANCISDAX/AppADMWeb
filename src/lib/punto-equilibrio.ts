@@ -147,6 +147,38 @@ export function categoriasAusentes(
   return esperadas.filter((c) => !presentes.has(c.toLowerCase()))
 }
 
+/** Las categorías **fijas** que sí están cargadas (sin repetir, sin mayúsculas). Ignora montos en 0: una fila
+ *  vacía no es una categoría cargada. */
+export function categoriasFijasDe(egresos: readonly EgresoParaFijos[] | null | undefined): string[] {
+  const vistas = new Set<string>()
+  for (const e of egresos ?? []) {
+    if (!esCostoFijo(e)) continue
+    if ((Number(e?.monto) || 0) <= 0) continue
+    const categoria = String(e?.categoria ?? '').trim()
+    if (categoria) vistas.add(categoria.toLowerCase())
+  }
+  return [...vistas]
+}
+
+/**
+ * 🔑 **¿El mes sirve como base?** Un mes con **un** egreso suelto de S/ 12 no describe un local: tomarlo como
+ * base hace que el punto de equilibrio diga *«✅ Mes cubierto»* con S/ 54 vendidos.
+ *
+ * 📌 **El caso real** (03/11/2026): septiembre tenía **un** egreso de S/ 12 y el widget lo usó como «mes con
+ * datos» ⇒ equilibrio S/ 52,84 y «cubierto» con S/ 54,60 vendidos. Falsa tranquilidad.
+ *
+ * La regla: hace falta **al menos `minimoCategorias` categorías fijas distintas** (por defecto **2**:
+ * una estructura mínima de local son alquiler + sueldos). Con **provisión** cargada, un mes en curso puede
+ * cumplirla desde el día 1 — y entonces **sí** es una base válida aunque el mes no haya cerrado.
+ */
+export function esMesCompleto(
+  egresos: readonly EgresoParaFijos[] | null | undefined,
+  minimoCategorias = 2
+): boolean {
+  if (costosFijosDe(egresos) <= 0) return false
+  return categoriasFijasDe(egresos).length >= Math.max(1, minimoCategorias)
+}
+
 /** Lo que se cargó en Egresos como impuesto (para avisar del doble conteo con el impuesto a las ventas). */
 export function impuestosEnEgresos(egresos: readonly EgresoParaFijos[] | null | undefined): number {
   let total = 0
@@ -175,11 +207,14 @@ export type MesDeEgresos = { mes: string; egresos: readonly EgresoParaFijos[] | 
 export type BaseDeFijos = {
   /** Con cuánto se calcula. */
   monto: number
-  /** `'promedio'` = meses completos con datos; `'mes-en-curso'` = el mes a medias (mínimo conocido). */
-  fuente: 'promedio' | 'mes-en-curso'
+  /**
+   * De dónde salió: `'promedio'` = meses cerrados con datos; `'provisionado'` = el mes en curso **con sus
+   * provisiones cargadas** (vale como base); `'incompleto'` = el mes en curso a medias (es un **mínimo**).
+   */
+  motivo: 'promedio' | 'provisionado' | 'incompleto'
   /** Los meses (YYYY-MM) que entraron en el promedio, del más viejo al más nuevo. */
   mesesUsados: string[]
-  /** `false` = el número es un **mínimo**: el mes todavía no terminó (o nunca se cargaron gastos antes). */
+  /** `false` = el número es un **mínimo**: el mes está incompleto y nunca se cargaron gastos antes. */
   completo: boolean
 }
 
@@ -187,34 +222,42 @@ export function baseDeCostosFijos({
   mesesCompletos = [],
   mesEnCurso,
   maximoMeses = 3,
+  minimoCategorias = 2,
 }: {
   /** Los meses **ya terminados** (el actual no va acá). */
   mesesCompletos?: readonly MesDeEgresos[]
   /** El mes en curso, como respaldo. */
   mesEnCurso?: MesDeEgresos | null
   maximoMeses?: number
+  /** Categorías fijas distintas que tiene que tener un mes para servir como base. */
+  minimoCategorias?: number
 }): BaseDeFijos {
-  // Solo los meses con fijos > 0: un mes sin cargar no es un mes de gastos cero.
+  // 🔑 Solo los meses que **parecen completos**: con fijos > 0 **y** al menos `minimoCategorias` categorías.
+  // Un mes sin cargar no es un mes de gasto cero; un mes con un egreso suelto tampoco es un mes real.
   const conDatos = mesesCompletos
-    .map((m) => ({ mes: String(m.mes ?? ''), monto: costosFijosDe(m.egresos) }))
-    .filter((m) => m.monto > 0)
+    .map((m) => ({ mes: String(m.mes ?? ''), monto: costosFijosDe(m.egresos), valido: esMesCompleto(m.egresos, minimoCategorias) }))
+    .filter((m) => m.valido)
     .slice(-Math.max(1, maximoMeses))
 
   if (conDatos.length > 0) {
     const suma = conDatos.reduce((s, m) => s + m.monto, 0)
     return {
       monto: redondear2(suma / conDatos.length),
-      fuente: 'promedio',
+      motivo: 'promedio',
       mesesUsados: conDatos.map((m) => m.mes),
       completo: true,
     }
   }
 
+  // Sin meses cerrados válidos: el mes en curso. Sirve como base **si está provisionado** (tiene las
+  // categorías cargadas): con devengo, un mes a medias puede estar completo en costos.
+  const montoMes = costosFijosDe(mesEnCurso?.egresos)
+  const provisionado = esMesCompleto(mesEnCurso?.egresos, minimoCategorias)
   return {
-    monto: costosFijosDe(mesEnCurso?.egresos),
-    fuente: 'mes-en-curso',
+    monto: montoMes,
+    motivo: provisionado ? 'provisionado' : 'incompleto',
     mesesUsados: mesEnCurso?.mes ? [String(mesEnCurso.mes)] : [],
-    completo: false,
+    completo: provisionado,
   }
 }
 

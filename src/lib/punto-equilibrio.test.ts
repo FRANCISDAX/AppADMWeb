@@ -16,9 +16,11 @@ import {
   CATEGORIAS_FIJAS_TIPICAS,
   baseDeCostosFijos,
   categoriasAusentes,
+  categoriasFijasDe,
   comprasDeEgresos,
   costosFijosDe,
   esCostoFijo,
+  esMesCompleto,
   impuestosEnEgresos,
   puntoDeEquilibrio,
   resumenDeEgresos,
@@ -247,12 +249,13 @@ describe('de dónde salen los costos fijos (mes a medias vs meses completos)', (
   it('con meses completos cargados usa el PROMEDIO (el mes en curso no entra)', () => {
     const base = baseDeCostosFijos({
       mesesCompletos: [
-        { mes: '2026-09', egresos: [{ categoria: 'Alquiler', monto: 1000 }] },
-        { mes: '2026-10', egresos: [{ categoria: 'Alquiler', monto: 1400 }] },
+        // Dos categorías por mes: es el criterio de «mes completo» (alquiler + sueldos).
+        { mes: '2026-09', egresos: [{ categoria: 'Alquiler', monto: 600 }, { categoria: 'Sueldos', monto: 400 }] },
+        { mes: '2026-10', egresos: [{ categoria: 'Alquiler', monto: 900 }, { categoria: 'Sueldos', monto: 500 }] },
       ],
       mesEnCurso: nov,
     })
-    assert.equal(base.fuente, 'promedio')
+    assert.equal(base.motivo, 'promedio')
     assert.equal(base.monto, 1200)
     assert.deepEqual(base.mesesUsados, ['2026-09', '2026-10'])
     assert.equal(base.completo, true)
@@ -268,7 +271,7 @@ describe('de dónde salen los costos fijos (mes a medias vs meses completos)', (
       ],
       mesEnCurso: nov,
     })
-    assert.equal(base.fuente, 'mes-en-curso')
+    assert.equal(base.motivo, 'incompleto')
     assert.equal(base.monto, 169.9)
     assert.equal(base.completo, false)
   })
@@ -277,7 +280,7 @@ describe('de dónde salen los costos fijos (mes a medias vs meses completos)', (
     const base = baseDeCostosFijos({
       mesesCompletos: [
         { mes: '2026-08', egresos: [] },
-        { mes: '2026-09', egresos: [{ categoria: 'Sueldos', monto: 900 }] },
+        { mes: '2026-09', egresos: [{ categoria: 'Sueldos', monto: 700 }, { categoria: 'Alquiler', monto: 200 }] },
       ],
       mesEnCurso: nov,
     })
@@ -287,14 +290,15 @@ describe('de dónde salen los costos fijos (mes a medias vs meses completos)', (
   it('respeta el máximo de meses (los más recientes)', () => {
     const base = baseDeCostosFijos({
       mesesCompletos: [
-        { mes: '2026-06', egresos: [{ categoria: 'Alquiler', monto: 100 }] },
-        { mes: '2026-09', egresos: [{ categoria: 'Alquiler', monto: 300 }] },
-        { mes: '2026-10', egresos: [{ categoria: 'Alquiler', monto: 500 }] },
+        { mes: '2026-06', egresos: [{ categoria: 'Alquiler', monto: 100 }, { categoria: 'Sueldos', monto: 100 }] },
+        { mes: '2026-09', egresos: [{ categoria: 'Alquiler', monto: 300 }, { categoria: 'Sueldos', monto: 100 }] },
+        { mes: '2026-10', egresos: [{ categoria: 'Alquiler', monto: 500 }, { categoria: 'Sueldos', monto: 100 }] },
       ],
       mesEnCurso: nov,
       maximoMeses: 2,
     })
-    assert.equal(base.monto, 400)
+    // Los dos más recientes: (400 + 600) ÷ 2 = 500
+    assert.equal(base.monto, 500)
     assert.deepEqual(base.mesesUsados, ['2026-09', '2026-10'])
   })
 
@@ -329,3 +333,49 @@ describe('de dónde salen los costos fijos (mes a medias vs meses completos)', (
       assert.match(widget, /faltanCategorias/)
     })
   })
+
+describe('un mes con UN solo egreso no es un mes (el falso "✅ Mes cubierto")', () => {
+  it('septiembre con un egreso de S/ 12 no sirve como base', () => {
+    // 📌 El caso real: el widget tomó eso como "mes con datos" ⇒ equilibrio S/ 52,84 y "cubierto"
+    // con S/ 54,60 vendidos. Falsa tranquilidad.
+    const septiembre = { mes: '2026-09', egresos: [{ categoria: 'Servicios', monto: 12 }] }
+    assert.equal(esMesCompleto(septiembre.egresos), false, 'una sola categoría no alcanza')
+    const base = baseDeCostosFijos({ mesesCompletos: [septiembre], mesEnCurso: { mes: '2026-11', egresos: [] } })
+    assert.equal(base.motivo, 'incompleto')
+    assert.equal(base.completo, false)
+  })
+
+  it('con alquiler + sueldos sí sirve, y con más también', () => {
+    assert.equal(esMesCompleto([{ categoria: 'Alquiler', monto: 800 }, { categoria: 'Sueldos', monto: 1200 }]), true)
+    assert.equal(esMesCompleto([{ categoria: 'Alquiler', monto: 800 }, { categoria: 'Sueldos', monto: 1200 }, { categoria: 'Servicios', monto: 90 }]), true)
+  })
+
+  it('la mercadería no cuenta como categoría fija', () => {
+    const soloCompras = [{ categoria: 'Compras', monto: 500 }, { categoria: 'pago_proveedor', monto: 300 }]
+    assert.equal(esMesCompleto(soloCompras), false, 'dos categorías pero las dos son mercadería')
+    assert.deepEqual(categoriasFijasDe(soloCompras), [])
+  })
+
+  it('un mes en curso PROVISIONADO vale como base (devengo, decisión del usuario)', () => {
+    // Provisionar el mes lo deja completo en costos aunque no haya cerrado: no hace falta esperar.
+    const base = baseDeCostosFijos({
+      mesesCompletos: [],
+      mesEnCurso: {
+        mes: '2026-11',
+        egresos: [
+          { categoria: 'Alquiler', monto: 800 },
+          { categoria: 'Sueldos', monto: 1200 },
+        ],
+      },
+    })
+    assert.equal(base.motivo, 'provisionado')
+    assert.equal(base.completo, true)
+    assert.equal(base.monto, 2000)
+  })
+
+  it('el mínimo de categorías es configurable (para un local sin sueldos, 1)', () => {
+    const soloAlquiler = [{ categoria: 'Alquiler', monto: 800 }]
+    assert.equal(esMesCompleto(soloAlquiler, 1), true)
+    assert.equal(esMesCompleto(soloAlquiler, 2), false)
+  })
+})

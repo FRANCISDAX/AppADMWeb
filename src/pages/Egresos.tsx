@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input'
 import { useAuth } from '@/context/auth'
 import { usePermisos } from '@/context/permisos'
 import { useNotifications } from '@/components/notifications'
-import { CATEGORIAS_EGRESO, actualizarEgreso, eliminarEgreso, obtenerEgresosPorFecha, registrarEgreso, registrarEgresoEnTurno, type Egreso } from '@/services/egresos'
+import { CATEGORIAS_EGRESO, actualizarEgreso, eliminarEgreso, obtenerEgresosPorFecha, pagarProvisionDeEgreso, registrarEgreso, registrarEgresoEnTurno, type Egreso, type MedioDeEgreso } from '@/services/egresos'
+import { MEDIOS_EGRESO, entraAlTurno, esProvision, etiquetaDeMedio, tocaLaCaja } from '@/lib/egresos-medios'
 import { buscarTurnoAbierto } from '@/services/turnos'
 import { cargarProveedores, type Proveedor } from '@/services/proveedores'
 import { exportarExcel } from '@/lib/excel'
@@ -38,7 +39,7 @@ export default function Egresos() {
   const [formMonto, setFormMonto] = React.useState('')
   const [formDesc, setFormDesc] = React.useState('')
   const [formCat, setFormCat] = React.useState('Servicios')
-  const [formTipo, setFormTipo] = React.useState<'caja' | 'transferencia' | 'otro'>('caja')
+  const [formTipo, setFormTipo] = React.useState<MedioDeEgreso>('caja')
   const [formRuc, setFormRuc] = React.useState('')
   const [formProveedor, setFormProveedor] = React.useState('')
   const [formComprobante, setFormComprobante] = React.useState('')
@@ -129,10 +130,13 @@ export default function Egresos() {
       if (editId) {
         const res = await actualizarEgreso(editId, base)
         if (!res.success) { toast('❌ ' + (res.error || 'Error'), 'error'); setSaving(false); return }
-      } else if (turnoId) {
+      } else if (entraAlTurno(formTipo) && turnoId) {
+        // Caja / transferencia / otro: es un pago del día → va al turno (y `caja` valida el saldo).
         const res = await registrarEgresoEnTurno(base, turnoId)
         if (!res.success) { toast('❌ ' + (res.error || 'Error'), 'error'); setSaving(false); return }
       } else {
+        // 🔑 Provisión y "lo pagó el dueño" (o un pago sin turno abierto): **no tocan el cajón ni el turno**
+        // (`lib/egresos-medios.ts`). Se registran solos y cuentan igual como gasto del mes.
         const res = await registrarEgreso(base)
         if (!res.success) { toast('❌ ' + (res.error || 'Error'), 'error'); setSaving(false); return }
       }
@@ -152,6 +156,31 @@ export default function Egresos() {
     if (!ok) return
     await eliminarEgreso(e.id!)
     toast('✅ Egreso eliminado')
+    cargarEgresos()
+  }
+
+  /**
+   * 🔑 **Marcar una provisión como pagada** (decisión del usuario, 03/11/2026): el gasto ya contaba como
+   * costo del mes; acá se registra **de dónde salió la plata**. `caja` es el único que descuenta del arqueo,
+   * y recién en este momento (`pagarProvisionDeEgreso` valida el saldo y actualiza el turno).
+   */
+  async function handlePagarProvision(e: Egreso, medio: MedioDeEgreso) {
+    const necesitaTurno = tocaLaCaja(medio) || medio === 'transferencia'
+    if (necesitaTurno && !turnoId) {
+      toast('⚠️ No hay turno abierto: abrí el turno para registrar un pago de caja o transferencia', 'warning')
+      return
+    }
+    const ok = await confirm({
+      title: 'Marcar como pagado',
+      message: `"${e.descripcion}" de ${fmt(e.monto)}\nSe va a registrar como: ${etiquetaDeMedio(medio)}.${
+        tocaLaCaja(medio) ? '\n\nSí: esto SÍ se descuenta del efectivo de la caja.' : '\n\nNo se descuenta del efectivo de la caja.'
+      }`,
+      okText: 'Marcar pagado',
+    })
+    if (!ok) return
+    const res = await pagarProvisionDeEgreso(e.id!, { medio, turnoId })
+    if (!res.success) { toast('❌ ' + (res.error || 'No se pudo registrar el pago'), 'error'); return }
+    toast(`✅ Pago registrado en ${etiquetaDeMedio(medio).toLowerCase()}`)
     cargarEgresos()
   }
 
@@ -249,18 +278,39 @@ export default function Egresos() {
                   <td className="px-3 py-2">
                     <span className={cn(
                       'rounded-full px-2 py-0.5 text-[10px] font-bold',
-                      e.tipoPago === 'caja' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                      tocaLaCaja(e.tipoPago) ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
                         : e.tipoPago === 'transferencia' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
+                          : esProvision(e.tipoPago) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                            : e.tipoPago === 'dueno' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'
+                              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
                     )}>
-                      {e.tipoPago}
+                      {etiquetaDeMedio(e.tipoPago)}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-xs">{e.proveedorNombre || e.rucProveedor || '-'}</td>
                   <td className="px-3 py-2 text-xs">{e.comprobante || '-'}</td>
                   <td className="num whitespace-nowrap px-3 py-2 text-right font-semibold">{fmt(e.monto)}</td>
                   <td className="px-3 py-2">
-                    <div className="flex gap-1">
+                    <div className="flex items-center gap-1">
+                      {/* Solo una provisión se puede "pagar"; el resto ya está registrado con su medio. */}
+                      {esProvision(e.tipoPago) && (
+                        <details className="relative">
+                          <summary className="cursor-pointer list-none rounded-md bg-amber-500 px-2 py-1 text-[10px] font-bold text-white">
+                            Marcar pagado ▾
+                          </summary>
+                          <div className="absolute right-0 z-10 mt-1 w-44 space-y-1 rounded-lg border bg-card p-1 shadow-lg">
+                            <button onClick={() => void handlePagarProvision(e, 'caja')} className="block w-full rounded px-2 py-1.5 text-left text-[11px] font-semibold hover:bg-accent cursor-pointer">
+                              Con caja (descuenta)
+                            </button>
+                            <button onClick={() => void handlePagarProvision(e, 'transferencia')} className="block w-full rounded px-2 py-1.5 text-left text-[11px] font-semibold hover:bg-accent cursor-pointer">
+                              Por transferencia
+                            </button>
+                            <button onClick={() => void handlePagarProvision(e, 'dueno')} className="block w-full rounded px-2 py-1.5 text-left text-[11px] font-semibold hover:bg-accent cursor-pointer">
+                              Lo pagó el dueño
+                            </button>
+                          </div>
+                        </details>
+                      )}
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => abrirEdicion(e)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -307,12 +357,20 @@ export default function Egresos() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold">Tipo de pago</label>
-                  <select value={formTipo} onChange={(e) => setFormTipo(e.target.value as typeof formTipo)} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
-                    <option value="caja">Caja</option>
-                    <option value="transferencia">Transferencia</option>
-                    <option value="otro">Otro</option>
+                  <label className="mb-1 block text-xs font-semibold">¿De dónde sale la plata?</label>
+                  <select
+                    value={formTipo}
+                    onChange={(e) => setFormTipo(e.target.value as MedioDeEgreso)}
+                    disabled={Boolean(editId)}
+                    className="h-9 w-full rounded-md border bg-background px-2 text-sm disabled:opacity-60"
+                  >
+                    {MEDIOS_EGRESO.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
                   </select>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    {editId
+                      ? 'El medio de un egreso registrado no se cambia: si era una provisión, usá «Marcar pagado».'
+                      : MEDIOS_EGRESO.find((m) => m.id === formTipo)?.ayuda ?? ''}
+                  </p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -332,9 +390,16 @@ export default function Egresos() {
                 <label className="mb-1 block text-xs font-semibold">Comprobante (opcional)</label>
                 <Input placeholder="N° factura/boleta" value={formComprobante} onChange={(e) => setFormComprobante(e.target.value)} />
               </div>
-              {formTipo === 'caja' && !turnoId && (
+              {entraAlTurno(formTipo) && !turnoId && (
                 <p className="rounded-md bg-yellow-50 p-2 text-xs text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400">
-                  No hay turno abierto. No se descontará de caja.
+                  No hay turno abierto. {tocaLaCaja(formTipo) ? 'No se descontará de caja' : 'Quedará registrado fuera del turno'}.
+                </p>
+              )}
+              {!entraAlTurno(formTipo) && (
+                <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                  {esProvision(formTipo)
+                    ? 'Provisión: cuenta como costo del mes y NO toca la caja. Cuando se pague, marcá «Pagado».'
+                    : 'Lo pagó el dueño: cuenta como costo del mes y NO toca la caja ni el turno.'}
                 </p>
               )}
               <div className="grid grid-cols-2 gap-2 pt-1">

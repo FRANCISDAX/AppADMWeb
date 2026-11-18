@@ -195,9 +195,11 @@ export function PuntoEquilibrioWidget() {
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Costos fijos del mes</div>
           <div className="num text-lg font-extrabold">{fmt(r.costosFijos)}</div>
           <div className="text-[10px] text-muted-foreground">
-            {base.fuente === 'promedio'
+            {base.motivo === 'promedio'
               ? `promedio de ${mesesCortos} (meses cerrados)`
-              : `⚠️ mínimo: día ${diaDeHoy} de ${diasDelMes}, mes sin cerrar`}
+              : base.motivo === 'provisionado'
+                ? `mes en curso con sus provisiones cargadas`
+                : `⚠️ mínimo: día ${diaDeHoy} de ${diasDelMes}, faltan gastos`}
             {desglose.mercaderia > 0 ? ` · (+${fmt(desglose.mercaderia)} de mercadería, no es fijo)` : ''}
           </div>
         </div>
@@ -241,20 +243,29 @@ export function PuntoEquilibrioWidget() {
           </p>
         )}
 
-        {!sinFijos && base.fuente === 'mes-en-curso' && (
+        {!sinFijos && base.motivo === 'incompleto' && (
           <p className="font-semibold text-amber-600">
-            ⚠️ <b>Mínimo conocido, no la realidad</b>: no hay meses cerrados con gastos cargados, así que se usa el mes en curso
-            (día {diaDeHoy} de {diasDelMes}). A medida que cargues los gastos del mes el equilibrio <b>va a subir</b>.
+            ⚠️ <b>Mínimo conocido, no la realidad</b>: el mes va por el día {diaDeHoy} de {diasDelMes} y no hay un
+            mes cerrado con gastos suficientes. Cargá los gastos fijos como <b>provisión</b> (aunque todavía no los
+            pagues) y el equilibrio pasa a ser el del mes completo.
             {faltanCategorias.length > 0 && (
               <> Falta cargar: <b>{faltanCategorias.join(', ')}</b>.</>
             )}
           </p>
         )}
 
-        {!sinFijos && base.fuente === 'promedio' && (
+        {!sinFijos && base.motivo === 'provisionado' && (
           <p>
-            ℹ️ Los costos fijos son el <b>promedio de {mesesCortos}</b> (meses cerrados con gastos cargados). El mes en curso no
-            entra: hasta que no cierra, sus gastos están incompletos.
+            ℹ️ Los costos fijos son los <b>provisionados de este mes</b>: cuentan aunque todavía no se hayan pagado
+            (devengo). Cuando los pagues, marcá cada uno como <b>«Pagado»</b>: solo los de <b>caja</b> se descuentan
+            del efectivo.
+          </p>
+        )}
+
+        {!sinFijos && base.motivo === 'promedio' && (
+          <p>
+            ℹ️ Los costos fijos son el <b>promedio de {mesesCortos}</b> (meses cerrados con gastos cargados). El mes en
+            curso no entra: hasta que no cierra, sus gastos están incompletos.
           </p>
         )}
 
