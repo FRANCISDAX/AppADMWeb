@@ -47,9 +47,30 @@ import { redondear2 } from './dinero.ts'
 
 /**
  * Las categorías de **Egresos que NO son costo fijo**: mercadería. Se comparan sin distinguir
- * mayúsculas ni espacios (`services/egresos.ts` guarda `Compras`).
+ * mayúsculas ni espacios.
+ *
+ * 🔑 **Ampliada el 03/11/2026** (revisión del punto de equilibrio): antes solo tenía `'compras'`, la que se
+ * elige a mano en Gastos. Pero los **pagos a proveedores** (`services/pagos-proveedores.ts`) escriben en
+ * `tblEgresos` con `categoria: 'pago_proveedor'`, y las compras dejan `'compra'` en el gasto del turno:
+ * esas dos **son mercadería**, y su costo **ya está descontado en el margen**. Contarlas como fijas
+ * **duplicaba la mercadería** y el equilibrio pedía vender de más.
  */
-export const CATEGORIAS_VARIABLES: readonly string[] = ['compras']
+export const CATEGORIAS_VARIABLES: readonly string[] = ['compras', 'compra', 'pago_proveedor']
+
+/**
+ * 🔑 **Las categorías de gasto fijo que un negocio suele tener.** Sirven para **decir qué falta** cuando el
+ * mes está incompleto: sin alquiler ni sueldos cargados el punto de equilibrio sale irrealmente bajo —no
+ * porque la cuenta esté mal, sino porque el dato no está—. Se comparan sin mayúsculas.
+ * (Son las mismas que ofrece `services/egresos.ts` en el listado, menos «Compras» y «Otros».)
+ */
+export const CATEGORIAS_FIJAS_TIPICAS: readonly string[] = [
+  'alquiler',
+  'sueldos',
+  'servicios',
+  'impuestos',
+  'mantenimiento',
+  'transporte',
+]
 
 /** Lo que este módulo necesita de un egreso. */
 export type EgresoParaFijos = {
@@ -81,6 +102,120 @@ export function comprasDeEgresos(egresos: readonly EgresoParaFijos[] | null | un
     total += Number(e?.monto) || 0
   }
   return redondear2(total)
+}
+
+/** Un renglón del desglose: cuánto hay en cada categoría y si cuenta como fijo. */
+export type CategoriaDeEgreso = { categoria: string; monto: number; fijo: boolean }
+
+/**
+ * **El desglose por categoría**, para que se vea *qué* hay cargado (y qué no).
+ * 📌 Sin esto, un total de S/ 169,90 no dice nada: no se puede saber que falta el alquiler.
+ */
+export function resumenDeEgresos(egresos: readonly EgresoParaFijos[] | null | undefined): {
+  fijos: number
+  mercaderia: number
+  porCategoria: CategoriaDeEgreso[]
+} {
+  const mapa = new Map<string, CategoriaDeEgreso>()
+  let fijos = 0
+  let mercaderia = 0
+  for (const e of egresos ?? []) {
+    const monto = Number(e?.monto) || 0
+    if (monto === 0) continue
+    const fijo = esCostoFijo(e)
+    const categoria = String(e?.categoria ?? '').trim() || 'Sin categoría'
+    const clave = categoria.toLowerCase()
+    const actual = mapa.get(clave)
+    if (actual) actual.monto = redondear2(actual.monto + monto)
+    else mapa.set(clave, { categoria, monto: redondear2(monto), fijo })
+    if (fijo) fijos += monto
+    else mercaderia += monto
+  }
+  return {
+    fijos: redondear2(fijos),
+    mercaderia: redondear2(mercaderia),
+    porCategoria: [...mapa.values()].sort((a, b) => b.monto - a.monto),
+  }
+}
+
+/** Las categorías fijas típicas que **no** aparecen en los egresos dados (lo que falta cargar). */
+export function categoriasAusentes(
+  categorias: readonly string[] | null | undefined,
+  esperadas: readonly string[] = CATEGORIAS_FIJAS_TIPICAS
+): string[] {
+  const presentes = new Set((categorias ?? []).map((c) => String(c ?? '').trim().toLowerCase()))
+  return esperadas.filter((c) => !presentes.has(c.toLowerCase()))
+}
+
+/** Lo que se cargó en Egresos como impuesto (para avisar del doble conteo con el impuesto a las ventas). */
+export function impuestosEnEgresos(egresos: readonly EgresoParaFijos[] | null | undefined): number {
+  let total = 0
+  for (const e of egresos ?? []) {
+    if (String(e?.categoria ?? '').trim().toLowerCase() !== 'impuestos') continue
+    total += Number(e?.monto) || 0
+  }
+  return redondear2(total)
+}
+
+/**
+ * 🔑 **¿Con qué costos fijos se calcula el equilibrio?** (revisión del 03/11/2026)
+ *
+ * 📌 **El problema**: el widget usaba los Egresos del **mes en curso**. El 3 de noviembre eso son **3 días**
+ * de gastos comparados contra un objetivo de **mes completo** ⇒ el equilibrio salía **irrealmente bajo**
+ * (S/ 751 cuando la verdad podía ser S/ 10.000) y daba una tranquilidad falsa justo cuando el número importa.
+ *
+ * 🔑 **La regla, y lo que NO hace**: usa el **promedio de los meses YA TERMINADOS que tienen gastos
+ * cargados**; si no hay ninguno, cae al mes en curso **marcándolo como incompleto** (`completo: false`).
+ * ⚠️ **Jamás promedia meses vacíos**: con dos meses sin cargar, `(169,90 + 0 + 0) ÷ 3 = 57` **inventaría**
+ * un negocio que no paga nada y hundiría el equilibrio a una cuarta parte. Sin dato, se dice que falta;
+ * no se rellena con ceros.
+ */
+export type MesDeEgresos = { mes: string; egresos: readonly EgresoParaFijos[] | null | undefined }
+
+export type BaseDeFijos = {
+  /** Con cuánto se calcula. */
+  monto: number
+  /** `'promedio'` = meses completos con datos; `'mes-en-curso'` = el mes a medias (mínimo conocido). */
+  fuente: 'promedio' | 'mes-en-curso'
+  /** Los meses (YYYY-MM) que entraron en el promedio, del más viejo al más nuevo. */
+  mesesUsados: string[]
+  /** `false` = el número es un **mínimo**: el mes todavía no terminó (o nunca se cargaron gastos antes). */
+  completo: boolean
+}
+
+export function baseDeCostosFijos({
+  mesesCompletos = [],
+  mesEnCurso,
+  maximoMeses = 3,
+}: {
+  /** Los meses **ya terminados** (el actual no va acá). */
+  mesesCompletos?: readonly MesDeEgresos[]
+  /** El mes en curso, como respaldo. */
+  mesEnCurso?: MesDeEgresos | null
+  maximoMeses?: number
+}): BaseDeFijos {
+  // Solo los meses con fijos > 0: un mes sin cargar no es un mes de gastos cero.
+  const conDatos = mesesCompletos
+    .map((m) => ({ mes: String(m.mes ?? ''), monto: costosFijosDe(m.egresos) }))
+    .filter((m) => m.monto > 0)
+    .slice(-Math.max(1, maximoMeses))
+
+  if (conDatos.length > 0) {
+    const suma = conDatos.reduce((s, m) => s + m.monto, 0)
+    return {
+      monto: redondear2(suma / conDatos.length),
+      fuente: 'promedio',
+      mesesUsados: conDatos.map((m) => m.mes),
+      completo: true,
+    }
+  }
+
+  return {
+    monto: costosFijosDe(mesEnCurso?.egresos),
+    fuente: 'mes-en-curso',
+    mesesUsados: mesEnCurso?.mes ? [String(mesEnCurso.mes)] : [],
+    completo: false,
+  }
 }
 
 export type PuntoDeEquilibrio = {

@@ -12,7 +12,17 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
-import { comprasDeEgresos, costosFijosDe, esCostoFijo, puntoDeEquilibrio } from './punto-equilibrio.ts'
+import {
+  CATEGORIAS_FIJAS_TIPICAS,
+  baseDeCostosFijos,
+  categoriasAusentes,
+  comprasDeEgresos,
+  costosFijosDe,
+  esCostoFijo,
+  impuestosEnEgresos,
+  puntoDeEquilibrio,
+  resumenDeEgresos,
+} from './punto-equilibrio.ts'
 
 describe('esCostoFijo — la mercadería NO es un costo fijo', () => {
   it('alquiler, sueldos, servicios e impuestos son fijos', () => {
@@ -189,3 +199,133 @@ describe('🛡️ el impuesto llega desde la configuración hasta la cuenta', ()
     assert.match(pagina, /set\('impuestoVentasPorcentaje',/)
   })
 })
+
+describe('revisión 03/11/2026 — qué es costo fijo y qué no', () => {
+  it('los pagos a proveedores son MERCADERÍA, no costo fijo (antes duplicaban el costo)', () => {
+    // services/pagos-proveedores.ts escribe en tblEgresos con esta categoría.
+    assert.equal(esCostoFijo({ categoria: 'pago_proveedor' }), false)
+    assert.equal(esCostoFijo({ categoria: 'Pago_Proveedor' }), false, 'sin importar mayúsculas')
+    // Y la de las compras.
+    assert.equal(esCostoFijo({ categoria: 'compra' }), false)
+  })
+
+  it('el alquiler y los sueldos sí son fijos', () => {
+    assert.equal(esCostoFijo({ categoria: 'Alquiler' }), true)
+    assert.equal(esCostoFijo({ categoria: 'Sueldos' }), true)
+  })
+
+  it('el desglose por categoría no pierde plata', () => {
+    const r = resumenDeEgresos([
+      { categoria: 'Alquiler', monto: 800 },
+      { categoria: 'alquiler', monto: 200 },   // misma categoría escrita distinto: se junta
+      { categoria: 'Sueldos', monto: 1200 },
+      { categoria: 'pago_proveedor', monto: 500 },
+      { categoria: '', monto: 50 },            // sin categoría → es fijo
+    ])
+    assert.equal(r.porCategoria.find((c) => c.categoria === 'Alquiler')?.monto, 1000)
+    assert.equal(r.fijos, 800 + 200 + 1200 + 50)
+    assert.equal(r.mercaderia, 500)
+    assert.equal(r.fijos + r.mercaderia, r.porCategoria.reduce((s, c) => s + c.monto, 0))
+  })
+
+  it('dice qué categorías típicas faltan cargar', () => {
+    const faltan = categoriasAusentes(['Alquiler', 'Sueldos'])
+    assert.deepEqual(faltan, ['servicios', 'impuestos', 'mantenimiento', 'transporte'])
+    assert.deepEqual(categoriasAusentes(CATEGORIAS_FIJAS_TIPICAS), [])
+    assert.deepEqual(categoriasAusentes([]), [...CATEGORIAS_FIJAS_TIPICAS])
+  })
+
+  it('detecta el impuesto cargado como Egreso (para avisar del doble conteo)', () => {
+    assert.equal(impuestosEnEgresos([{ categoria: 'Impuestos', monto: 120 }]), 120)
+    assert.equal(impuestosEnEgresos([{ categoria: 'Alquiler', monto: 800 }]), 0)
+  })
+})
+
+describe('de dónde salen los costos fijos (mes a medias vs meses completos)', () => {
+  const nov = { mes: '2026-11', egresos: [{ categoria: 'Alquiler', monto: 169.9 }] }
+
+  it('con meses completos cargados usa el PROMEDIO (el mes en curso no entra)', () => {
+    const base = baseDeCostosFijos({
+      mesesCompletos: [
+        { mes: '2026-09', egresos: [{ categoria: 'Alquiler', monto: 1000 }] },
+        { mes: '2026-10', egresos: [{ categoria: 'Alquiler', monto: 1400 }] },
+      ],
+      mesEnCurso: nov,
+    })
+    assert.equal(base.fuente, 'promedio')
+    assert.equal(base.monto, 1200)
+    assert.deepEqual(base.mesesUsados, ['2026-09', '2026-10'])
+    assert.equal(base.completo, true)
+  })
+
+  it('NUNCA promedia meses vacíos: sin historia, usa el mes en curso y lo marca incompleto', () => {
+    // 📌 El caso real del usuario: no cargó gastos en septiembre ni octubre.
+    // Promediar (169,90 + 0 + 0) ÷ 3 = 57 hundiría el equilibrio a 1/3 y mentiría al revés.
+    const base = baseDeCostosFijos({
+      mesesCompletos: [
+        { mes: '2026-09', egresos: [] },
+        { mes: '2026-10', egresos: [] },
+      ],
+      mesEnCurso: nov,
+    })
+    assert.equal(base.fuente, 'mes-en-curso')
+    assert.equal(base.monto, 169.9)
+    assert.equal(base.completo, false)
+  })
+
+  it('mezcla: los meses vacíos no arrastran el promedio hacia abajo', () => {
+    const base = baseDeCostosFijos({
+      mesesCompletos: [
+        { mes: '2026-08', egresos: [] },
+        { mes: '2026-09', egresos: [{ categoria: 'Sueldos', monto: 900 }] },
+      ],
+      mesEnCurso: nov,
+    })
+    assert.equal(base.monto, 900)
+  })
+
+  it('respeta el máximo de meses (los más recientes)', () => {
+    const base = baseDeCostosFijos({
+      mesesCompletos: [
+        { mes: '2026-06', egresos: [{ categoria: 'Alquiler', monto: 100 }] },
+        { mes: '2026-09', egresos: [{ categoria: 'Alquiler', monto: 300 }] },
+        { mes: '2026-10', egresos: [{ categoria: 'Alquiler', monto: 500 }] },
+      ],
+      mesEnCurso: nov,
+      maximoMeses: 2,
+    })
+    assert.equal(base.monto, 400)
+    assert.deepEqual(base.mesesUsados, ['2026-09', '2026-10'])
+  })
+
+  it('sin nada cargado devuelve 0 pero marco incompleto (la pantalla avisa, no inventa)', () => {
+    const base = baseDeCostosFijos({ mesesCompletos: [], mesEnCurso: { mes: '2026-11', egresos: [] } })
+    assert.equal(base.monto, 0)
+    assert.equal(base.completo, false)
+  })
+})
+
+  describe('🛡️ la base de los costos fijos y los días llegan desde la configuración', () => {
+    const aca = dirname(fileURLToPath(import.meta.url))
+    const widget = readFileSync(join(aca, '..', 'components', 'dashboard', 'PuntoEquilibrioWidget.tsx'), 'utf8')
+
+    it('los fijos se calculan con la regla nueva, no leyendo el mes en curso a mano', () => {
+      // 📌 Si alguien vuelve a `costosFijosDe(egresosDelMes)` directo, el 3 de cada mes el equilibrio
+      // vuelve a salir irrealmente bajo (3 días de gastos contra un objetivo de mes completo).
+      assert.match(widget, /baseDeCostosFijos\(/)
+      assert.doesNotMatch(widget, /fijos: costosFijosDe\(/)
+    })
+
+    it('los días de atención salen de la configuración, con 26 de respaldo', () => {
+      assert.match(widget, /config\.diasAtencionMes/)
+      const def = readFileSync(join(aca, '..', 'constants', 'tributario.ts'), 'utf8')
+      assert.match(def, /diasAtencionMes: 26/, 'el default tiene que estar declarado')
+      const pagina = readFileSync(join(aca, '..', 'pages', 'Configuracion.tsx'), 'utf8')
+      assert.match(pagina, /set\('diasAtencionMes',/, 'y se tiene que poder guardar desde Configuración')
+    })
+
+    it('avisa del doble conteo del impuesto y de las categorías que faltan', () => {
+      assert.match(widget, /impuestoComoEgreso/)
+      assert.match(widget, /faltanCategorias/)
+    })
+  })

@@ -129,6 +129,10 @@ export const CONFIG_POR_DEFECTO = {
   // fijos y el equilibrio saldría corto justo cuando estás lejos de él. ⚠️ **`0` = no hay impuesto**
   // (misma convención que `descuentoMaximoPorcentaje = 0`): una config sin este campo no paga nada.
   impuestoVentasPorcentaje: 0,
+  // 🔑 **Días de atención del mes** (Configuración → Empresa, **26 de fábrica**): el punto de equilibrio del
+  // Dashboard Gerencial reparte el objetivo entre esos días. 26 = un mes de 30 menos los domingos; un local
+  // que abre los 30 días tiene que poner 30, si no el «por día» queda más exigente de lo real.
+  diasAtencionMes: 26,
   servidor: '',
   envioHabilitado: false,
   zonasEnvio: [

@@ -434,6 +434,29 @@ export function Configuracion() {
                 </span>
               </div>
             </div>
+            <div className="mt-4 border-t pt-3">
+              <label className="text-sm font-semibold">Días de atención del mes</label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Se usa en el <b>punto de equilibrio</b> para el «cuánto hay que vender por día»: el objetivo
+                del mes se reparte entre esos días. <b>26</b> = un mes de 30 menos los domingos; si abrís los
+                30 días, poné 30.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={31}
+                  placeholder="26"
+                  value={String(config.diasAtencionMes ?? '')}
+                  onChange={(e) => set('diasAtencionMes', Math.max(1, Math.min(31, Math.round(Number(e.target.value) || 26))))}
+                  className="h-8 w-24 text-xs"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {Number(config.diasAtencionMes) || 26} {((Number(config.diasAtencionMes) || 26) === 1) ? 'día' : 'días'} por mes
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}
